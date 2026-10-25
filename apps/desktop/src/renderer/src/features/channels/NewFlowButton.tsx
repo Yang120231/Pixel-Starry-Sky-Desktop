@@ -79,6 +79,7 @@ export function NewFlowButton({ channel, members }: { channel: Channel; members:
             }}
             className="h-8 rounded-md border border-line bg-surface px-2 text-ui text-fg outline-none focus:border-accent"
           />
+          <p className="text-meta text-fg-faint">{tr('channels.flow.notesHint')}</p>
           <Button variant="primary" className="self-end" disabled={!ready || busy} onClick={create}>
             {tr('channels.flow.create')}
           </Button>

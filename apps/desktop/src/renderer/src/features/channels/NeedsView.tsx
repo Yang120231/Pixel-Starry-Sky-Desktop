@@ -28,6 +28,7 @@ import type { ChannelAlertAction } from '../../../../shared/channels/alerts'
 import { alertActions } from '../../../../shared/channels/alerts'
 import { canMarkNeed } from '../../../../shared/channels/needs'
 import { channelActions, useChannels } from './store'
+import { GateActions } from './GateActions'
 import { snooze, snoozeTimes, useNeeds } from './needs'
 import { STATUS_LABEL, waitingText } from './ChannelTaskCard'
 
@@ -335,7 +336,37 @@ export function NeedsView() {
           </>
         )
       case 'flow':
-        return view
+        return n.pause === 'gate' && n.stepId ? (
+          <>
+            <GateActions
+              disabled={off}
+              onApprove={() =>
+                run(n.key, () =>
+                  channelActions.flow(n.channelId, {
+                    type: 'gate',
+                    messageId: n.messageId!,
+                    stepId: n.stepId!,
+                    decision: 'approve',
+                  }),
+                )
+              }
+              onReject={note =>
+                run(n.key, () =>
+                  channelActions.flow(n.channelId, {
+                    type: 'gate',
+                    messageId: n.messageId!,
+                    stepId: n.stepId!,
+                    decision: 'reject',
+                    note,
+                  }),
+                )
+              }
+            />
+            {view}
+          </>
+        ) : (
+          view
+        )
       case 'alert':
         return (
           <>
@@ -363,7 +394,15 @@ export function NeedsView() {
       return tr('needs.checksDetail', {
         items: [n.detail, n.findings ? tr('checks.findings', { count: n.findings }) : null].filter(Boolean).join(' · '),
       })
-    if (n.kind === 'flow') return tr(n.pause ? `channels.flow.pause.${n.pause}` : 'channels.flow.needsDraft')
+    if (n.kind === 'flow' && n.pause === 'gate') return tr('channels.flow.gate.detail')
+    if (n.kind === 'flow')
+      return tr(
+        n.pause === 'limit' && n.limit
+          ? `channels.flow.pause.limit.${n.limit}`
+          : n.pause && n.pause !== 'gate'
+            ? `channels.flow.pause.${n.pause}`
+            : 'channels.flow.needsDraft',
+      )
     if (n.kind === 'failed' || n.kind === 'decision') return n.detail ? translateMessage(n.detail) : null
     return null
   }

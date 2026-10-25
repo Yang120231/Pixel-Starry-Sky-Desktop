@@ -18,6 +18,7 @@ import { ChannelStore } from '../core/channels/store'
 import { Channels, type MachineLite } from '../core/channels/service'
 import { channelToolsServer } from './channel-mcp'
 import type { CheckRun } from '../../shared/types/checks'
+import type { GitStatus, ProjectCopy } from '../../shared/types/project-tools'
 import type { ChannelAlertAction } from '../../shared/channels/alerts'
 import type {
   AgentInput,
@@ -87,6 +88,14 @@ export async function initChannels(ctx: AppContext): Promise<void> {
           connected: m.status === 'local' || m.status === 'connected',
         }))
       : [{ id: 'local', name: '', connected: true }]
+  // 本机项目工具的操作（流程里的副本、主目录状态；流程只有本机成员）
+  const tool =
+    (name: string) =>
+    async (args: unknown[]): Promise<unknown> => {
+      const op = ctx.toolOps.get(name)
+      if (!op) throw new Error('项目工具还没有就绪')
+      return op(args)
+    }
   const channels = new Channels({
     store,
     call: (channel, args) => {
@@ -119,6 +128,23 @@ export async function initChannels(ctx: AppContext): Promise<void> {
       if (!op) return
       const args = [issueId, input]
       await (ctx.machines ? ctx.machines.invoke('projectTools:syncIssue', args, () => op(args)) : op(args))
+    },
+    // 流程里并行的步骤用 Git 副本（docs/ui/channels-pipeline.md §6.4）：流程只有本机成员，直接走本机的操作表
+    copies: {
+      create: async (projectId, input) => {
+        const copy = (await tool('projectTools:createCopy')([
+          projectId,
+          { existingBranch: false, ...input },
+        ])) as ProjectCopy
+        return { id: copy.id, branch: copy.branch, path: copy.path }
+      },
+      remove: async copyId => {
+        await tool('projectTools:removeCopy')([copyId, false])
+      },
+      dirty: async projectId => {
+        const s = (await tool('projectTools:gitStatus')([{ projectId }])) as GitStatus
+        return s.repo && s.staged.length + s.unstaged.length + s.conflicted.length > 0
+      },
     },
   })
   // 频道工具（pixelsky_channel）：频道派活的本机会话发消息前由扩展准备挂上（docs/ui/channels-collab-v2.md §1）

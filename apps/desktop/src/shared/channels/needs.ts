@@ -78,10 +78,28 @@ export function channelNeeds(
             messageId: m.id,
             taskId: step?.taskId ?? null,
             pause: flow.status === 'paused' ? (flow.paused?.reason ?? null) : null,
+            limit: flow.paused?.limit ?? null,
             text: flow.title,
             detail: step?.title ?? null,
           })
         }
+        // 人工关卡（第 12 项）：每一步等你确认各一条；停止了的流程不算
+        if (flow && (flow.status === 'running' || flow.status === 'paused'))
+          for (const s of flow.steps)
+            if (s.status === 'gated')
+              found.push({
+                ...base,
+                key: `flow:${m.id}:gate:${s.id}`,
+                kind: 'flow',
+                sig: `gate:${s.taskId}:${s.result?.summary ?? ''}`.slice(0, 200),
+                memberId: s.memberId,
+                messageId: m.id,
+                taskId: s.taskId,
+                pause: 'gate',
+                stepId: s.id,
+                text: flow.title,
+                detail: s.title,
+              })
         continue
       }
       if (m.kind !== 'task') continue

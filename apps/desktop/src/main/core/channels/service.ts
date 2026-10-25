@@ -98,6 +98,7 @@ import {
   flowRemindPrompt,
   flowReviewAgainPrompt,
   flowStepPrompt,
+  flowGatePrompt,
   type FlowInput,
   type Handoff,
 } from './prompt'
@@ -106,11 +107,16 @@ import {
   FLOW_MAX_REJECTS,
   FLOW_TITLE_MAX,
   allDelivered,
+  cleanLimits,
   cleanSteps,
+  copyPlan,
+  defaultLimits,
   draftProblem,
+  limitHit,
   planSteps,
   startable,
   withStep,
+  type CopyPlan,
 } from './flow'
 import {
   changedFiles,
@@ -199,6 +205,17 @@ export interface ChannelsDeps {
   ) => Promise<unknown>
   /** false：不开每分钟的提醒巡检（测试） */
   alertTimer?: boolean
+  /** 流程里并行的步骤用 Git 副本（docs/ui/channels-pipeline.md §6.4）；没接时都在主目录做 */
+  copies?: {
+    create(
+      projectId: string,
+      input: { name: string; branch: string; base: string; existingBranch?: boolean },
+    ): Promise<{ id: string; branch: string; path: string }>
+    /** 删掉副本目录（有没提交的改动时报错，留着） */
+    remove(copyId: string): Promise<void>
+    /** 项目主目录有没有没提交的改动（不是 Git 仓库时 false） */
+    dirty(projectId: string): Promise<boolean>
+  }
 }
 
 const terminal = (status: ChannelTask['status']): boolean =>
@@ -244,6 +261,7 @@ const STEP_STATUS: Record<'zh' | 'en', Record<FlowStep['status'], string>> = {
     pending: '没开始',
     running: '进行中',
     asking: '在等回答',
+    gated: '交付了，等用户确认',
     delivered: '已交付',
     failed: '失败',
     stopped: '已停止',
@@ -252,11 +270,15 @@ const STEP_STATUS: Record<'zh' | 'en', Record<FlowStep['status'], string>> = {
     pending: 'not started',
     running: 'in progress',
     asking: 'waiting for an answer',
+    gated: 'delivered, waiting for the user',
     delivered: 'delivered',
     failed: 'failed',
     stopped: 'stopped',
   },
 }
+
+/** 汇合步骤开始前主目录有没提交的改动（第 11 项）：这一步算失败，流程按 dirty 停下 */
+const DIRTY_ERROR = '项目主目录有没提交的改动：先提交或暂存，再继续流程'
 
 /** 频道工具一次最多读这么多条；串里回复最多这么长、一项活最多回复 / 提议几次 */
 const TOOL_READ_DEFAULT = 20
@@ -1541,6 +1563,7 @@ export class Channels {
             answer: run?.answer,
             inbox: run?.inbox,
             reminded: run?.reminded,
+            copyPlan: run?.copyPlan,
           }
         : {}),
       ...extra,
@@ -1710,12 +1733,15 @@ export class Channels {
             ? member.sharedSessionId
             : null
         if (!sessionId) {
+          // 流程里的一步：先定在哪做（并行时建副本），提示词按实际的位置写
+          const ws = current.flow?.stepId ? await this.flowWorkspace(current, member) : null
           sessionId = await this.createSession(
             member,
             task.title,
             current.flow ? (this.flowStepOf(current)?.settings ?? null) : undefined,
+            ws?.copyId,
           )
-          text = current.freshPrompt
+          text = ws?.prompt ?? current.freshPrompt
         } else if (current.round > 1) text = current.freshPrompt
       }
       current = { ...current, sessionId }
@@ -1736,15 +1762,21 @@ export class Channels {
     }
   }
 
-  /** flow：流程里的一步（不用共用会话），带这一步的临时设置 */
-  private async createSession(member: AgentConfig, title: string, flow?: FlowStepSettings | null): Promise<string> {
+  /** flow：流程里的一步（不用共用会话），带这一步的临时设置；copyId：这一步的副本 */
+  private async createSession(
+    member: AgentConfig,
+    title: string,
+    flow?: FlowStepSettings | null,
+    copyId?: string,
+  ): Promise<string> {
+    const copy = copyId ?? member.copyId
     const record = (await this.deps.call('engine:createSession', [
       {
         projectId: member.projectId,
         engine: member.engine,
         ...member.settings,
         ...flow,
-        ...(member.copyId ? { copyId: member.copyId } : {}),
+        ...(copy ? { copyId: copy } : {}),
         // 按成员配置开的会话，不改「记住会话里的选择」的默认值
         rememberChoices: false,
       },
@@ -2168,7 +2200,22 @@ export class Channels {
   }
 
   /** 一步的提示词：整个流程、依赖步骤交上来的、审查的目标；汇总步骤带上所有交付了的 */
-  private stepPrompt(c: StoredChannel, flow: ChannelFlow, step: FlowStep): string {
+  private stepPrompt(c: StoredChannel, flow: ChannelFlow, step: FlowStep, plan?: CopyPlan | null): string {
+    const copy =
+      plan?.kind === 'new'
+        ? { branch: plan.branch, base: plan.base }
+        : plan?.kind === 'reuse'
+          ? { branch: plan.copy.branch, base: null }
+          : step.copy
+            ? { branch: step.copy.branch, base: null }
+            : null
+    const merge =
+      plan?.kind === 'main'
+        ? plan.merge.flatMap(id => {
+            const d = flow.steps.find(x => x.id === id)
+            return d?.copy ? [{ no: this.stepNo(flow, d.id), title: d.title, branch: d.copy.branch }] : []
+          })
+        : []
     const locale = this.deps.locale()
     const status = STEP_STATUS[locale === 'en-US' ? 'en' : 'zh']
     const delivered = flow.steps.filter(s => s.status === 'delivered' && s.id !== step.id && s.id !== step.target)
@@ -2192,6 +2239,8 @@ export class Channels {
       inputs: inputs.map(s => this.flowInput(flow, s)),
       target: target ? this.flowInput(flow, target) : null,
       peers: [...new Set(flow.steps.map(s => s.memberId))].filter(id => id !== step.memberId).map(this.nameOf),
+      copy,
+      merge,
     })
   }
 
@@ -2203,6 +2252,7 @@ export class Channels {
     title: string,
     stepId: string,
     prompt: string,
+    plan?: CopyPlan,
   ): string {
     const now = this.now()
     const flow = { messageId: m.id, stepId }
@@ -2242,6 +2292,7 @@ export class Channels {
       followUps: [],
       notice: null,
       flow,
+      ...(plan ? { copyPlan: plan } : {}),
     })
     this.saveRuns()
     return task.id
@@ -2275,13 +2326,84 @@ export class Channels {
     })
   }
 
-  private pauseFlow(channelId: string, messageId: string, reason: FlowPause, stepId: string): void {
+  private pauseFlow(
+    channelId: string,
+    messageId: string,
+    reason: FlowPause,
+    stepId: string,
+    limit?: 'rounds' | 'time',
+  ): void {
     // 你点了暂停的流程（paused 为空）也记上原因，继续时按原因处理
     this.updateFlow(channelId, messageId, f =>
       f.status === 'running' || (f.status === 'paused' && !f.paused)
-        ? { ...f, status: 'paused', paused: { reason, stepId } }
+        ? { ...f, status: 'paused', paused: { reason, stepId, ...(limit ? { limit } : {}) } }
         : f,
     )
+  }
+
+  /** 流程用了几轮：各步骤任务卡的轮次加起来（提醒、打回、回答、你的追加要求都算） */
+  private flowRoundsUsed(flow: ChannelFlow): number {
+    return flow.steps.reduce((n, s) => n + (s.taskId ? (this.store.task(s.taskId)?.round ?? 1) : 0), 0)
+  }
+
+  /** 到护栏上限了（docs/ui/channels-pipeline.md §6.2）就停下；停了返回 true */
+  private overLimit(channelId: string, messageId: string, stepId: string): boolean {
+    const flow = this.flowMessage(channelId, messageId)?.flow
+    if (!flow || flow.status !== 'running') return false
+    const hit = limitHit(flow, this.flowRoundsUsed(flow), this.now())
+    if (hit) this.pauseFlow(channelId, messageId, 'limit', stepId, hit)
+    return !!hit
+  }
+
+  /**
+   * 流程里这一步在哪做（docs/ui/channels-pipeline.md §6.4）：并行时建副本、沿用前一步的副本，或在主目录（汇合前查主目录有没有
+   * 没提交的改动）。返回副本 id 和按实际位置写的提示词
+   */
+  private async flowWorkspace(run: TaskRun, member: AgentConfig): Promise<{ copyId?: string; prompt: string | null }> {
+    const m = this.flowMessage(run.channelId, run.flow!.messageId)
+    const step = m?.flow.steps.find(x => x.id === run.flow!.stepId)
+    const c = this.store.channels.get(run.channelId)
+    if (!m || !step || !c) return { prompt: null }
+    const prompt = (plan: CopyPlan | null): string => {
+      const head = this.stepPrompt(c, m.flow, step, plan)
+      // 上一轮还没开始就失败、重试原样再发的就是完整的提示词：只发一遍（按现在的位置写）
+      const opening = head.split('\n\n')[0]
+      return run.round > 1 && !run.prompt.startsWith(opening) ? `${head}\n\n${run.prompt}` : head
+    }
+    // 成员自己绑了副本：一直在那里做
+    if (member.copyId) return { copyId: member.copyId, prompt: prompt(null) }
+    const plan: CopyPlan | undefined = step.copy ? { kind: 'reuse', copy: step.copy } : run.copyPlan
+    const copies = this.deps.copies
+    if (!plan || !copies) return { prompt: prompt(null) }
+    if (plan.kind === 'main') {
+      if (plan.merge.length && (await copies.dirty(member.projectId))) throw new Error(DIRTY_ERROR)
+      return { prompt: prompt(plan) }
+    }
+    let copy = plan.kind === 'reuse' ? plan.copy : null
+    if (plan.kind === 'new') {
+      const input = { name: plan.name, branch: plan.branch, base: plan.base ?? '' }
+      try {
+        copy = await copies.create(member.projectId, input)
+      } catch (error) {
+        const text = message(error)
+        // 不是 Git 仓库：在主目录做（同目录的冲突提醒照旧）；上次没建成留下的分支：接着用
+        if (/不是可用的 Git 仓库/.test(text)) return { prompt: prompt(null) }
+        if (!/分支已经存在/.test(text)) throw error
+        copy = await copies.create(member.projectId, { ...input, existingBranch: true })
+      }
+    }
+    const saved = { id: copy!.id, branch: copy!.branch, path: copy!.path }
+    if (step.copy?.id !== saved.id)
+      this.updateFlow(run.channelId, run.flow!.messageId, f => withStep(f, step.id, { copy: saved }))
+    return { copyId: saved.id, prompt: prompt({ kind: 'reuse', copy: saved }) }
+  }
+
+  /** 流程做完了：删掉建的副本目录（有没提交改动的留着，删不掉只记日志）；分支保留 */
+  private async cleanupCopies(flow: ChannelFlow): Promise<void> {
+    const copies = this.deps.copies
+    if (!copies) return
+    for (const id of new Set(flow.steps.flatMap(s => (s.copy ? [s.copy.id] : []))))
+      await copies.remove(id).catch(e => this.deps.log?.('删除流程的副本失败', e))
   }
 
   /** 开始能开始的步骤；全部交付了就结束 */
@@ -2290,13 +2412,16 @@ export class Channels {
     const m = this.flowMessage(channelId, messageId)
     if (!c || !m || m.flow.status !== 'running') return
     if (allDelivered(m.flow)) {
-      this.updateFlow(channelId, messageId, f => ({ ...f, status: 'done', paused: null }))
+      const done = this.updateFlow(channelId, messageId, f => ({ ...f, status: 'done', paused: null }))
+      if (done) void this.cleanupCopies(done)
       return
     }
-    for (const { id } of startable(m.flow)) {
+    const starting = startable(m.flow).map(s => s.id)
+    for (const id of starting) {
       const flow = this.flowMessage(channelId, messageId)?.flow
       const step = flow?.steps.find(s => s.id === id)
       if (!flow || flow.status !== 'running' || step?.status !== 'pending') continue
+      if (this.overLimit(channelId, messageId, id)) return
       const member = this.member(step.memberId)
       if (!member || !c.memberIds.includes(member.id)) {
         this.updateFlow(channelId, messageId, f => withStep(f, id, { status: 'failed' }))
@@ -2313,7 +2438,8 @@ export class Channels {
           })
         continue
       }
-      const taskId = this.flowTask(c, m, member.id, step.title, id, this.stepPrompt(c, flow, step))
+      const plan = copyPlan(flow, messageId, id, starting)
+      const taskId = this.flowTask(c, m, member.id, step.title, id, this.stepPrompt(c, flow, step, plan), plan)
       this.updateFlow(channelId, messageId, f => withStep(f, id, { status: 'running', taskId }))
       void this.pump(member.id)
     }
@@ -2336,7 +2462,7 @@ export class Channels {
     if (!step || step.taskId !== run.taskId) return
     const locale = this.deps.locale()
     if (run.answering) this.routeAnswer(run, finish.status === 'done' ? run.reply : null)
-    else if (step.status === 'delivered') {
+    else if (step.status === 'delivered' || step.status === 'gated') {
       // 交付后在卡上追加的要求：不改交付
     } else if (finish.status !== 'done') {
       // 这一轮问过的问题作废：回答来了也不再发（重试后重新问）
@@ -2344,7 +2470,7 @@ export class Channels {
       this.updateFlow(run.channelId, messageId, f =>
         withStep(f, stepId, { status: finish.status === 'stopped' ? 'stopped' : 'failed' }),
       )
-      this.pauseFlow(run.channelId, messageId, 'failed', stepId)
+      this.pauseFlow(run.channelId, messageId, finish.error === DIRTY_ERROR ? 'dirty' : 'failed', stepId)
     } else if (run.done) this.deliver(run, step)
     else if (run.ask) this.updateFlow(run.channelId, messageId, f => withStep(f, stepId, { status: 'asking' }))
     if (more) return this.advance(run.channelId, messageId)
@@ -2364,8 +2490,9 @@ export class Channels {
         reminded: false,
       })
     } else if (s.status === 'running' && flow.status === 'running') {
-      if (!r.reminded) this.flowRound(run.taskId, flowRemindPrompt(locale), { reminded: true })
-      else this.pauseFlow(run.channelId, messageId, 'no-delivery', stepId)
+      if (r.reminded) this.pauseFlow(run.channelId, messageId, 'no-delivery', stepId)
+      else if (!this.overLimit(run.channelId, messageId, stepId))
+        this.flowRound(run.taskId, flowRemindPrompt(locale), { reminded: true })
     }
     this.advance(run.channelId, messageId)
   }
@@ -2380,10 +2507,13 @@ export class Channels {
       ...(done.verdict ? { verdict: done.verdict, issues: done.issues ?? [] } : {}),
     }
     this.store.runs.set(run.taskId, { ...run, ask: undefined, answer: undefined, reminded: undefined })
+    // 设了关卡的一步先等你确认（第 12 项）；审查打回的照常发回去
+    const gated = !!step.gate && done.verdict !== 'reject'
     const flow = this.updateFlow(run.channelId, messageId, f => {
-      const next = withStep(f, step.id, { status: 'delivered', result })
+      const next = withStep(f, step.id, { status: gated ? 'gated' : 'delivered', result })
       // 停下就是因为这一步（失败后重试、没交付）：交付了接着走；还有别的失败的步骤就改成等它
-      if (f.paused?.stepId !== step.id) return next
+      // 到护栏上限的暂停要你点继续，交付了也不清
+      if (f.paused?.stepId !== step.id || !['failed', 'no-delivery', 'dirty'].includes(f.paused.reason)) return next
       const other = next.steps.find(s => s.status === 'failed' || s.status === 'stopped')
       return other
         ? { ...next, paused: { reason: 'failed', stepId: other.id } }
@@ -2393,7 +2523,8 @@ export class Channels {
     const target = flow.steps.find(s => s.id === step.target)
     if (!target?.taskId) return
     if (target.rejects >= flow.maxRejects) this.pauseFlow(run.channelId, messageId, 'reject-limit', step.id)
-    else this.sendBack(run.channelId, messageId, step.id)
+    // 到护栏上限：先不发回去，继续时补发
+    else if (!this.overLimit(run.channelId, messageId, step.id)) this.sendBack(run.channelId, messageId, step.id)
   }
 
   /** 审查打回：被审的那一步带着问题清单再做一轮，审查这一步等它改完再审 */
@@ -2470,7 +2601,8 @@ export class Channels {
     const { run, ref, c, flow, step } = this.flowCaller(sessionId)
     if (run.done) throw new Error('这一轮已经交付过了，可以结束这一轮')
     if (run.answering) throw new Error('这一轮是在回答别的成员的问题：直接在回复里写回答，不用 task_done')
-    if (step?.status === 'delivered') throw new Error('这一步已经交付过了，这一轮只用回复说明')
+    if (step?.status === 'delivered' || step?.status === 'gated')
+      throw new Error('这一步已经交付过了，这一轮只用回复说明')
     const summary = typeof args.summary === 'string' ? args.summary.trim() : ''
     if (!summary) throw new Error('summary 不能为空')
     const list = (v: unknown, max: number, chars: number): string[] =>
@@ -2480,7 +2612,8 @@ export class Channels {
             .slice(0, max)
             .map(x => x.trim().slice(0, chars))
         : []
-    const done: NonNullable<TaskRun['done']> = { summary: summary.slice(0, 2000), files: list(args.files, 50, 300) }
+    const { files, dropped } = this.workFiles(run, step, list(args.files, 50, 300))
+    const done: NonNullable<TaskRun['done']> = { summary: summary.slice(0, 2000), files }
     if (!ref.stepId) {
       if (flow.status !== 'planning') throw new Error('流程已经不在拆分中了')
       const byName = (name: string): string | null =>
@@ -2500,7 +2633,34 @@ export class Channels {
     }
     this.store.runs.set(run.taskId, { ...run, done })
     this.saveRuns()
-    return ref.stepId ? '已交付，可以结束这一轮了。' : '拆好的流程已交回，等用户确认后开始。可以结束这一轮了。'
+    const note = dropped.length ? `（这些路径不在工作区里，没有记下：${dropped.join('、')}）` : ''
+    return ref.stepId ? `已交付，可以结束这一轮了。${note}` : '拆好的流程已交回，等用户确认后开始。可以结束这一轮了。'
+  }
+
+  /** task_done 的文件（第 10 项）：统一成相对这一步工作区的路径；工作区外的、带 .. 的去掉 */
+  private workFiles(run: TaskRun, step: FlowStep | null, raw: string[]): { files: string[]; dropped: string[] } {
+    const member = this.member(run.memberId)
+    const root = (
+      step?.copy?.path ??
+      (member && !member.copyId ? this.deps.projects().find(x => x.id === member.projectId)?.path : undefined)
+    )
+      ?.replace(/\\/g, '/')
+      .replace(/\/+$/, '')
+    const files: string[] = []
+    const dropped: string[] = []
+    for (const f of raw) {
+      let path = f.replace(/\\/g, '/').replace(/^(\.\/)+/, '')
+      if (/^([a-zA-Z]:)?\//.test(path) && root) {
+        if (!path.toLowerCase().startsWith(`${root.toLowerCase()}/`)) {
+          dropped.push(f)
+          continue
+        }
+        path = path.slice(root.length + 1)
+      }
+      if (!path || path.split('/').includes('..')) dropped.push(f)
+      else files.push(path)
+    }
+    return { files, dropped }
   }
 
   /** member_ask：问流程里别的成员；对方用自己那一步的会话来答，在做时等它这一轮做完 */
@@ -2513,7 +2673,7 @@ export class Channels {
     const peer = this.peerByName(c, member, memberName)
     const question = this.toolRequest(raw)
     const rank = (s: FlowStep) =>
-      s.status === 'running' || s.status === 'asking' ? 0 : s.status === 'delivered' ? 1 : 2
+      s.status === 'running' || s.status === 'asking' ? 0 : s.status === 'delivered' || s.status === 'gated' ? 1 : 2
     const peerStep = flow.steps.filter(s => s.memberId === peer.id && s.taskId).sort((a, b) => rank(a) - rank(b))[0]
     if (!peerStep?.taskId || rank(peerStep) === 2)
       throw new Error(`${peer.name} 在这个流程里还没有开始做的步骤，问不了。先按你的判断做，交付时写明要它确认的地方`)
@@ -2560,6 +2720,10 @@ export class Channels {
   private askTimeouts(c: StoredChannel, now: number): void {
     for (const m of [...(this.store.messages.get(c.id) ?? [])]) {
       if (m.kind !== 'message' || m.flow?.status !== 'running') continue
+      // 护栏的时长（第 13 项）：一分钟查一次
+      // 只在有步骤在做时查：只剩等你确认的步骤时，等你的时间不算
+      const active = m.flow.steps.find(s => s.status === 'running' || s.status === 'asking')
+      if (active && this.overLimit(c.id, m.id, active.id)) continue
       const late = m.flow.steps.find(s => {
         if (s.status !== 'asking' || !s.taskId) return false
         // 运行信息没了（成员被删）：再也等不到
@@ -2607,10 +2771,13 @@ export class Channels {
     const { paused, steps } = m.flow
     const locale = this.deps.locale()
     // 还没开始就失败的（成员当时不在频道里）：回到没开始，成员还不在就再停下
+    // 护栏再给一整份（第 13 项）：要在补发提醒之前，补发的轮次算进新的一份
+    const used = this.flowRoundsUsed(m.flow)
     this.updateFlow(c.id, m.id, f => ({
       ...f,
       status: 'running',
       paused: null,
+      ...(f.limits ? { since: { at: this.now(), rounds: used } } : {}),
       steps: f.steps.map(s => (s.status === 'failed' && !s.taskId ? { ...s, status: 'pending' } : s)),
     }))
     for (const s of steps) {
@@ -2625,7 +2792,14 @@ export class Channels {
         this.flowRound(s.taskId, flowNoAnswerPrompt(locale), { ask: undefined, answer: undefined })
       }
     }
-    if (paused?.reason === 'reject-limit') this.sendBack(c.id, m.id, paused.stepId)
+    // 打回了还没发回去的（停在打回上限、护栏上限）：现在发
+    for (const s of steps) {
+      const flow = this.flowMessage(c.id, m.id)?.flow
+      const review = flow?.steps.find(x => x.id === s.id)
+      const target = flow?.steps.find(x => x.id === review?.target)
+      if (review?.status === 'delivered' && review.result?.verdict === 'reject' && target?.status === 'delivered')
+        this.sendBack(c.id, m.id, review.id)
+    }
     this.advance(c.id, m.id)
   }
 
@@ -2643,6 +2817,7 @@ export class Channels {
     if (a.type === 'create') {
       const title = titleOf(a.title)
       const steps = cleanSteps(a.steps ?? [])
+      const limits = cleanLimits(a.limits)
       const p = (a.planner && typeof a.planner === 'object' ? a.planner : null) as Record<string, unknown> | null
       let planner: ChannelFlow['planner'] = null
       if (p) {
@@ -2663,7 +2838,15 @@ export class Channels {
         text: title,
         format: 'plain',
         mentions: [],
-        flow: { title, status: planner ? 'planning' : 'draft', steps, maxRejects: FLOW_MAX_REJECTS, planner },
+        flow: {
+          title,
+          status: planner ? 'planning' : 'draft',
+          steps,
+          maxRejects: FLOW_MAX_REJECTS,
+          planner,
+          ...(limits ? { limits } : {}),
+          ...(a.isolate === false ? { isolate: false } : {}),
+        },
       }
       await this.store.append(message)
       this.pushMessage(message)
@@ -2692,15 +2875,46 @@ export class Channels {
         if (f.status !== 'draft') throw new Error('流程已经开始了，不能再改')
         const title = a.title === undefined ? f.title : titleOf(a.title)
         const steps = a.steps === undefined ? f.steps : cleanSteps(a.steps)
-        this.updateFlow(channelId, messageId, x => ({ ...x, title, steps }))
+        const limits = cleanLimits(a.limits)
+        this.updateFlow(channelId, messageId, x => ({
+          ...x,
+          title,
+          steps,
+          ...(limits ? { limits } : {}),
+          ...(a.isolate === undefined ? {} : { isolate: a.isolate !== false }),
+        }))
         break
       }
       case 'start': {
         if (f.status !== 'draft') throw new Error('只有草稿能开始')
         const problem = draftProblem(f.steps, this.flowMemberCheck(c))
         if (problem) throw new Error(problem)
-        this.updateFlow(channelId, messageId, x => ({ ...x, status: 'running', paused: null }))
+        // 没设护栏的按默认上限；计数从现在算
+        this.updateFlow(channelId, messageId, x => ({
+          ...x,
+          status: 'running',
+          paused: null,
+          limits: x.limits === undefined ? defaultLimits(x.steps.length) : x.limits,
+          since: { at: this.now(), rounds: 0 },
+        }))
         this.advance(channelId, messageId)
+        break
+      }
+      case 'gate': {
+        // 人工关卡（第 12 项）：通过就接着走；打回要写一句改什么，同一张卡再来一轮
+        const step = f.steps.find(s => s.id === a.stepId)
+        if (!step?.taskId || step.status !== 'gated' || (f.status !== 'running' && f.status !== 'paused'))
+          throw new Error('这一步不在等你确认')
+        const note = typeof a.note === 'string' ? a.note.trim().slice(0, RELAY_REQUEST_CHARS) : ''
+        if (a.decision !== 'approve' && a.decision !== 'reject') throw new Error('不支持的操作')
+        if (a.decision === 'reject' && !note) throw new Error('打回时写一句要改什么')
+        // 等你确认的时间不算进护栏的时长：时钟从现在重新算，轮次不变
+        this.updateFlow(channelId, messageId, x => ({
+          ...withStep(x, step.id, { status: a.decision === 'approve' ? 'delivered' : 'running' }),
+          ...(x.since ? { since: { ...x.since, at: this.now() } } : {}),
+        }))
+        if (a.decision === 'approve') this.advance(channelId, messageId)
+        else this.flowRound(step.taskId, flowGatePrompt(locale, note), { reminded: false })
         break
       }
       case 'pause':
@@ -2719,7 +2933,9 @@ export class Channels {
           ...x,
           status: 'stopped',
           paused: null,
-          steps: x.steps.map(s => (s.status === 'running' || s.status === 'asking' ? { ...s, status: 'stopped' } : s)),
+          steps: x.steps.map(s =>
+            s.status === 'running' || s.status === 'asking' || s.status === 'gated' ? { ...s, status: 'stopped' } : s,
+          ),
         }))
         for (const id of [...f.steps.map(s => s.taskId), f.planner?.taskId]) {
           const run = id ? this.store.runs.get(id) : undefined
@@ -2783,6 +2999,10 @@ export class Channels {
   private sameDirRuns(run: TaskRun): TaskRun[] {
     const member = this.member(run.memberId)
     if (!member) return []
+    // 实际的副本：流程步骤自己的副本优先，其次成员绑的
+    const where = (r: TaskRun, m: AgentConfig) =>
+      (r.flow ? this.flowStepOf(r)?.copy?.id : undefined) ?? m.copyId ?? null
+    const mine = where(run, member)
     return [...this.store.runs.values()].filter(r => {
       if (r.taskId === run.taskId || r.phase !== 'sent' || r.team) return false
       const other = this.member(r.memberId)
@@ -2790,7 +3010,7 @@ export class Channels {
         !!other &&
         other.machineId === member.machineId &&
         other.projectId === member.projectId &&
-        other.copyId === member.copyId
+        where(r, other) === mine
       )
     })
   }

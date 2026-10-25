@@ -413,6 +413,8 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
         title: '登录页新按钮',
         status: 'running',
         maxRejects: 3,
+        limits: { rounds: 12, minutes: 120 },
+        since: { at: at(TODAY, '10:20'), rounds: 0 },
         steps: [
           {
             id: 'f1',
@@ -423,7 +425,21 @@ export const demoChannelMessages: Record<string, ChannelMessage[]> = {
             taskId: 'web-ft1',
             status: 'delivered',
             rejects: 0,
+            copy: { id: 'copy-f1', branch: 'pixelsky/flow-web1-a', path: '.pixelsky/copies/flow-web1-a' },
             result: { summary: '出了 3 张按钮状态图，放在 assets/login。', files: ['assets/login/button.png'] },
+          },
+          {
+            id: 'f5',
+            title: '配按钮音效',
+            memberId: 'a-frontend',
+            deps: [],
+            kind: 'work',
+            gate: true,
+            taskId: null,
+            status: 'gated',
+            rejects: 0,
+            copy: { id: 'copy-f5', branch: 'pixelsky/flow-web1-e', path: '.pixelsky/copies/flow-web1-e' },
+            result: { summary: '点击和悬停各一段音效，放在 assets/audio。', files: ['assets/audio/click.ogg'] },
           },
           {
             id: 'f2',

@@ -3,6 +3,7 @@
 import { diffStat } from '@pixelsky/protocol'
 import type { ApprovalRequest, EngineEvent, Item, SessionSnapshot } from '@pixelsky/protocol'
 import type { ChannelActivity, ChannelStep, ChannelTask, FlowResult, FlowStep } from '../../../shared/types/channels'
+import type { CopyPlan } from './flow'
 
 /** 团队频道派来的活（Phase C §9.1）：任务卡在云端，状态写回云端；本机运行信息照存 runs.json */
 export interface TeamRunRef {
@@ -83,6 +84,8 @@ export interface TaskRun {
   inbox?: FlowQuestion[]
   /** 已经提醒过一次「做完了就 task_done」 */
   reminded?: boolean
+  /** 这一步在哪做（第 11 项）：开始时定下，开会话时才建副本 */
+  copyPlan?: CopyPlan
 }
 
 /** 流程里一个成员问另一个成员的问题 */

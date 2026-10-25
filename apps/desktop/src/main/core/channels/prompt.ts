@@ -377,6 +377,10 @@ export interface FlowStepPromptInput {
   target?: FlowInput | null
   /** 流程里别的成员（member_ask 能问的） */
   peers: string[]
+  /** 这一步在独立的 Git 副本里做（第 11 项）：分支、基于哪个分支（null 是主目录的当前提交） */
+  copy?: { branch: string; base: string | null } | null
+  /** 汇合步骤：前面的步骤各在哪个分支上，要合并进主目录 */
+  merge?: { no: string; title: string; branch: string }[]
 }
 
 function inputText(i: FlowInput, locale: Locale): string {
@@ -416,6 +420,12 @@ export function flowStepPrompt(input: FlowStepPromptInput): string {
       step.kind === 'summary'
         ? 'This is the final step: read what every step delivered, check that the pieces fit together, and write a summary for the user (what was done, which files, anything unresolved).'
         : '',
+      input.copy
+        ? `You work in a separate Git copy on branch ${input.copy.branch}${input.copy.base ? ` (based on ${input.copy.base})` : ''}. Do not switch branches and do not touch the project's main folder. Before task_done, commit your changes and output files to this branch (git add -A && git commit): later steps take your work from the branch.`
+        : '',
+      input.merge?.length
+        ? `Earlier steps worked on their own branches:\n${input.merge.map(m => `- ${m.no} ${m.title}: ${m.branch}`).join('\n')}\nFirst check with git status that this folder is clean, then git merge --no-ff each branch. Resolve conflicts yourself and explain them in the task_done summary; run the checks after merging, then call task_done.`
+        : '',
       `Your step: ${step.no} ${step.title}`,
       `When you are really done, call the task_done tool (summary, files you changed); the flow moves on only after task_done. If you need something from another member${peers ? ` (${peers})` : ''}, call member_ask and then end your turn; the answer will be sent to you as a new message.`,
     ]
@@ -433,6 +443,12 @@ export function flowStepPrompt(input: FlowStepPromptInput): string {
       : '',
     step.kind === 'summary'
       ? '这是最后一步：读每一步交上来的东西，确认它们接得上，给用户写一份总结（做了什么、改了哪些文件、还有什么没解决）。'
+      : '',
+    input.copy
+      ? `你在独立的 Git 副本里做这一步（分支 ${input.copy.branch}${input.copy.base ? `，基于 ${input.copy.base}` : ''}）。别切换分支，别动项目主目录。调用 task_done 之前把改动和产出的文件提交到这个分支（git add -A && git commit），后面的步骤按分支取你的东西。`
+      : '',
+    input.merge?.length
+      ? `前面的步骤各在自己的分支上：\n${input.merge.map(m => `- ${m.no} ${m.title}：${m.branch}`).join('\n')}\n先用 git status 确认当前目录干净，再逐个 git merge --no-ff 这些分支；有冲突自己解决，并在 task_done 的摘要里说明；合并后跑一遍检查再调用 task_done。`
       : '',
     `你这一步：${step.no} ${step.title}`,
     `确实做完了再调用 task_done 工具交付（摘要、你改的文件）；流程只在 task_done 之后往下走。需要别的成员${peers ? `（${peers}）` : ''}提供东西时，调用 member_ask，然后结束这一轮，回答会作为新消息发给你。`,
@@ -514,4 +530,11 @@ export function flowNoAnswerPrompt(locale: Locale): string {
   return en(locale)
     ? 'The answer you asked for did not come. Decide on your own, continue your step and call task_done when it is really done; note what you assumed.'
     : '你问的问题一直没等到回答。自己判断后接着做这一步，确实做完了再调用 task_done，并写明你做了什么假设。'
+}
+
+/** 人工关卡打回（第 12 项）：用户看了交付，要改的地方 */
+export function flowGatePrompt(locale: Locale, note: string): string {
+  return en(locale)
+    ? `The user looked at what you delivered and wants changes:\n${quote(note)}\n\nMake the changes, then call task_done again.`
+    : `用户看了你这一步交上来的东西，要你改：\n${quote(note)}\n\n改好后再调用 task_done。`
 }

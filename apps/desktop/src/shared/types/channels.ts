@@ -284,22 +284,33 @@ export interface FlowStep {
   settings?: FlowStepSettings | null
   /** 开始后对应的任务卡 */
   taskId: string | null
-  /** asking：问了别的成员、在等回答 */
-  status: 'pending' | 'running' | 'asking' | 'delivered' | 'failed' | 'stopped'
+  /** asking：问了别的成员、在等回答；gated：交付了，等你确认（第 12 项） */
+  status: 'pending' | 'running' | 'asking' | 'gated' | 'delivered' | 'failed' | 'stopped'
   /** 被审查打回过几次 */
   rejects: number
   result?: FlowResult | null
+  /** 交付后先等你确认，再开始依赖它的步骤（第 12 项） */
+  gate?: boolean
+  /** 这一步用的 Git 副本（第 11 项，并行时才建）；分支名给汇合步骤合并用 */
+  copy?: { id: string; branch: string; path: string } | null
 }
 
-/** 流程停下的原因：失败、做完没交付、打回到上限、等回答超时 */
-export type FlowPause = 'failed' | 'no-delivery' | 'reject-limit' | 'ask-timeout'
+/** 流程停下的原因：失败、做完没交付、打回到上限、等回答超时、到护栏上限（第 13 项）、汇合前主目录有没提交的改动（第 11 项） */
+export type FlowPause = 'failed' | 'no-delivery' | 'reject-limit' | 'ask-timeout' | 'limit' | 'dirty'
+
+/** 流程的护栏（第 13 项）：null 不限 */
+export interface FlowLimits {
+  rounds: number | null
+  minutes: number | null
+}
 
 /** 流程（docs/ui/channels-pipeline.md §4）：挂在一条文字消息上 */
 export interface ChannelFlow {
   title: string
   /** planning：成员在拆；draft：等你确认 */
   status: 'planning' | 'draft' | 'running' | 'paused' | 'done' | 'stopped'
-  paused?: { reason: FlowPause; stepId: string } | null
+  /** limit：超的是哪一项 */
+  paused?: { reason: FlowPause; stepId: string; limit?: 'rounds' | 'time' } | null
   steps: FlowStep[]
   /** 审查最多打回几次，超了停下 */
   maxRejects: number
@@ -307,17 +318,36 @@ export interface ChannelFlow {
   planner?: { memberId: string; request: string; taskId: string | null } | null
   /** 成员之间问过的问题（算进接力规则） */
   asks?: { from: string; to: string; at: number }[]
+  /** 护栏（第 13 项）；没写 = 不限（第二批之前的流程） */
+  limits?: FlowLimits | null
+  /** 护栏的计数起点：开始运行或上次继续时的时间和已用轮次 */
+  since?: { at: number; rounds: number } | null
+  /** 并行步骤用独立的 Git 副本（第 11 项）；没写 = 开 */
+  isolate?: boolean
 }
 
 /** 建 / 改流程草稿时的一步（channels:flow） */
 export type FlowStepInput = Pick<FlowStep, 'id' | 'title' | 'memberId' | 'deps' | 'kind'> &
-  Partial<Pick<FlowStep, 'target' | 'settings'>>
+  Partial<Pick<FlowStep, 'target' | 'settings' | 'gate'>>
+
+/** 建 / 改草稿时一起改的流程设置 */
+export interface FlowOptions {
+  limits?: FlowLimits | null
+  isolate?: boolean
+}
 
 /** 流程卡上的操作（channels:flow） */
 export type FlowAction =
-  | { type: 'create'; title: string; steps?: FlowStepInput[]; planner?: { memberId: string; request: string } }
-  | { type: 'update'; messageId: string; title?: string; steps?: FlowStepInput[] }
+  | ({
+      type: 'create'
+      title: string
+      steps?: FlowStepInput[]
+      planner?: { memberId: string; request: string }
+    } & FlowOptions)
+  | ({ type: 'update'; messageId: string; title?: string; steps?: FlowStepInput[] } & FlowOptions)
   | { type: 'start' | 'pause' | 'resume' | 'stop' | 'discard'; messageId: string }
+  /** 人工关卡：通过，或打回（note 必填：要改什么） */
+  | { type: 'gate'; messageId: string; stepId: string; decision: 'approve' | 'reject'; note?: string }
 
 /** 系统消息（主动提醒、每日简报）的作者 */
 export const SYSTEM_AUTHOR = 'system'
@@ -569,8 +599,12 @@ export interface ChannelsSnapshot {
 export interface ChannelNeed {
   key: string
   kind: 'approval' | 'proposal' | 'held' | 'decision' | 'checks' | 'failed' | 'alert' | 'flow'
-  /** kind 是 flow 时：草稿等你确认（null），或停下的原因 */
-  pause?: FlowPause | null
+  /** kind 是 flow 时：草稿等你确认（null）、停下的原因，或 gate（一步交付了等你确认，第 12 项） */
+  pause?: FlowPause | 'gate' | null
+  /** kind 是 flow、pause 是 gate 时：等你确认的那一步 */
+  stepId?: string | null
+  /** pause 是 limit 时：超的是哪一项 */
+  limit?: 'rounds' | 'time' | null
   /** kind 是 alert 时：哪条规则（决定有哪些按钮） */
   rule?: ChannelAlertRule
   sig: string

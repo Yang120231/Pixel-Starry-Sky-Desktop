@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineEvent, HostEvent, ProjectRecord, SessionSummary } from '@pixelsky/protocol'
 import type { AgentInput, ChannelFlow, ChannelTask, ChannelTextMessage } from '../../../shared/types/channels'
 import { ChannelStore } from './store'
-import { Channels } from './service'
+import { Channels, type ChannelsDeps } from './service'
 
 const projects: ProjectRecord[] = [{ id: 'p1', name: 'pixel-web', path: 'D:/web' } as ProjectRecord]
 
@@ -23,7 +23,7 @@ const settle = async () => {
   }
 }
 
-async function open(): Promise<Channels> {
+async function open(extra: Partial<ChannelsDeps> = {}): Promise<Channels> {
   const store = new ChannelStore(dir)
   await store.init()
   let n = 0
@@ -50,6 +50,7 @@ async function open(): Promise<Channels> {
     now: () => ++now,
     channelTools: true,
     alertTimer: false,
+    ...extra,
   })
   opened.push(c)
   return c
@@ -97,8 +98,8 @@ async function endTurn(c: Channels, s: string, reply: string): Promise<void> {
   await settle()
 }
 
-async function setup() {
-  const c = await open()
+async function setup(extra: Partial<ChannelsDeps> = {}) {
+  const c = await open(extra)
   const a = await c.saveMember(null, agent('画师'))
   const b = await c.saveMember(null, agent('程序员'))
   const r = await c.saveMember(null, agent('审查员'))
@@ -340,5 +341,178 @@ describe('流程调度', () => {
       steps: [{ id: 's1', title: '', memberId: a, deps: [], kind: 'work' }],
     })
     await expect(c.flowAction(ch, { type: 'start', messageId })).rejects.toThrow('还没写要做什么')
+  })
+})
+
+describe('流程第二批（docs/ui/channels-pipeline.md §6）', () => {
+  it('人工关卡：交付后等你确认，下游不开始；打回要写原因，同一张卡再来一轮；通过后接着走', async () => {
+    const { c, a, b, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '先看贴图',
+      steps: [
+        { id: 's1', title: '画贴图', memberId: a, deps: [], kind: 'work', gate: true },
+        { id: 's2', title: '写代码', memberId: b, deps: ['s1'], kind: 'work' },
+      ],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    c.toolDone(s1, { summary: '三张按钮图' })
+    await endTurn(c, s1, '画好了')
+    expect(stepOf(c, ch, 's1').status).toBe('gated')
+    expect(tasks(c, ch).some(t => t.flow?.stepId === 's2')).toBe(false)
+    expect(c.state().needs?.some(n => n.pause === 'gate' && n.stepId === 's1')).toBe(true)
+    await expect(c.flowAction(ch, { type: 'gate', messageId, stepId: 's1', decision: 'reject' })).rejects.toThrow(
+      '写一句',
+    )
+    await c.flowAction(ch, { type: 'gate', messageId, stepId: 's1', decision: 'reject', note: '按钮再圆一点' })
+    await settle()
+    expect(lastTo(s1).text).toContain('按钮再圆一点')
+    expect(stepOf(c, ch, 's1').status).toBe('running')
+    c.toolDone(s1, { summary: '改圆了' })
+    await endTurn(c, s1, '改好了')
+    expect(stepOf(c, ch, 's1').status).toBe('gated')
+    // 等你确认等了很久：时长不算，通过后接着走
+    now += 300 * 60_000
+    await c.checkAlerts()
+    expect(flowOf(c, ch).status).toBe('running')
+    await c.flowAction(ch, { type: 'gate', messageId, stepId: 's1', decision: 'approve' })
+    await settle()
+    expect(stepOf(c, ch, 's1').status).toBe('delivered')
+    expect(flowOf(c, ch).status).toBe('running')
+    expect(lastTo(sessionOf(c, ch, 's2')).text).toContain('改圆了')
+    await expect(c.flowAction(ch, { type: 'gate', messageId, stepId: 's1', decision: 'approve' })).rejects.toThrow(
+      '不在等你确认',
+    )
+  })
+
+  it('停止流程时等你确认的步骤也停下', async () => {
+    const { c, a, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '停',
+      steps: [{ id: 's1', title: '画贴图', memberId: a, deps: [], kind: 'work', gate: true }],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    c.toolDone(s1, { summary: '好了' })
+    await endTurn(c, s1, '好了')
+    await c.flowAction(ch, { type: 'stop', messageId })
+    expect(stepOf(c, ch, 's1').status).toBe('stopped')
+    expect(c.state().needs?.some(n => n.pause === 'gate')).toBe(false)
+  })
+
+  it('护栏：轮次到上限就停下，继续再给一整份；时长超了巡检时停下', async () => {
+    const { c, a, b, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '护栏',
+      limits: { rounds: 2, minutes: null },
+      steps: [
+        { id: 's1', title: '画贴图', memberId: a, deps: [], kind: 'work' },
+        { id: 's2', title: '写代码', memberId: b, deps: ['s1'], kind: 'work' },
+      ],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    c.toolDone(s1, { summary: '好了' })
+    await endTurn(c, s1, '好了')
+    const s2 = sessionOf(c, ch, 's2')
+    // 用了 2 轮：没交付时不再提醒，停在护栏上
+    await endTurn(c, s2, '写了一半')
+    expect(flowOf(c, ch)).toMatchObject({ status: 'paused', paused: { reason: 'limit', limit: 'rounds' } })
+    const before = sends().length
+    await c.flowAction(ch, { type: 'resume', messageId })
+    await settle()
+    expect(sends()).toHaveLength(before + 1)
+    expect(lastTo(s2).text).toContain('还没有调用 task_done')
+    expect(flowOf(c, ch).since?.rounds).toBe(2)
+    c.toolDone(s2, { summary: '写完了' })
+    await endTurn(c, s2, '写完了')
+    expect(flowOf(c, ch).status).toBe('done')
+
+    // 没设护栏的按默认上限开始；时长到了巡检时停下
+    const other = await c.flowAction(ch, {
+      type: 'create',
+      title: '时长',
+      steps: [{ id: 's1', title: '慢活', memberId: a, deps: [], kind: 'work' }],
+    })
+    await c.flowAction(ch, { type: 'start', messageId: other.messageId })
+    await settle()
+    const f = c.messages(ch).messages.find(m => m.id === other.messageId) as ChannelTextMessage
+    expect(f.flow?.limits).toEqual({ rounds: 12, minutes: 120 })
+    now += 121 * 60_000
+    await c.checkAlerts()
+    const g = c.messages(ch).messages.find(m => m.id === other.messageId) as ChannelTextMessage
+    expect(g.flow?.paused).toMatchObject({ reason: 'limit', limit: 'time' })
+  })
+
+  it('并行的步骤各用一个副本；汇总在主目录合并，主目录有改动时先停下；做完删副本；交付的文件规整成相对路径', async () => {
+    let dirty = true
+    const created: { name: string; branch: string; base: string }[] = []
+    const removed: string[] = []
+    const { c, a, b, r, ch } = await setup({
+      copies: {
+        create: async (_projectId, input) => {
+          created.push(input)
+          return { id: `c${created.length}`, branch: input.branch, path: `D:/copies/${input.name}` }
+        },
+        remove: async id => void removed.push(id),
+        dirty: async () => dirty,
+      },
+    })
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '并行',
+      steps: [
+        { id: 's1', title: '画贴图', memberId: a, deps: [], kind: 'work' },
+        { id: 's2', title: '写代码', memberId: b, deps: [], kind: 'work' },
+        { id: 's3', title: '合并汇总', memberId: r, deps: ['s1', 's2'], kind: 'summary' },
+      ],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const tag = messageId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6)
+    expect(created.map(x => [x.branch, x.base])).toEqual([
+      [`pixelsky/flow-${tag}-a`, ''],
+      [`pixelsky/flow-${tag}-b`, ''],
+    ])
+    const sessionsMade = calls
+      .filter(x => x.channel === 'engine:createSession')
+      .map(x => x.args[0] as { copyId?: string })
+    expect(sessionsMade.map(x => x.copyId)).toEqual(['c1', 'c2'])
+    const s1 = sessionOf(c, ch, 's1')
+    expect(lastTo(s1).text).toContain(`分支 pixelsky/flow-${tag}-a`)
+    expect(stepOf(c, ch, 's1').copy).toMatchObject({ id: 'c1' })
+    const reply = c.toolDone(s1, {
+      summary: '图好了',
+      files: [`D:/copies/flow-${tag}-a/img/btn.png`, '../x', 'C:/other/y'],
+    })
+    expect(reply).toContain('没有记下')
+    await endTurn(c, s1, '好了')
+    expect(stepOf(c, ch, 's1').result?.files).toEqual(['img/btn.png'])
+    const s2 = sessionOf(c, ch, 's2')
+    c.toolDone(s2, { summary: '代码好了' })
+    await endTurn(c, s2, '好了')
+    // 主目录有没提交的改动：汇总这一步先不开始
+    expect(flowOf(c, ch)).toMatchObject({ status: 'paused', paused: { reason: 'dirty', stepId: 's3' } })
+    dirty = false
+    await c.flowAction(ch, { type: 'resume', messageId })
+    await settle()
+    const s3 = sessionOf(c, ch, 's3')
+    const last = calls.filter(x => x.channel === 'engine:createSession').at(-1)!.args[0] as { copyId?: string }
+    expect(last.copyId).toBeUndefined()
+    expect(lastTo(s3).text).toContain(`pixelsky/flow-${tag}-a`)
+    expect(lastTo(s3).text).toContain('git merge --no-ff')
+    // 上一轮没开成会话就失败了：重试时提示词只发一遍
+    expect(lastTo(s3).text.split('这是最后一步').length).toBe(2)
+    c.toolDone(s3, { summary: '合好了' })
+    await endTurn(c, s3, '合好了')
+    expect(flowOf(c, ch).status).toBe('done')
+    await settle()
+    expect(removed.sort()).toEqual(['c1', 'c2'])
   })
 })

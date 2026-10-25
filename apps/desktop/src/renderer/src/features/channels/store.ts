@@ -15,6 +15,7 @@ import type {
   ChannelsSnapshot,
   ChannelTaskAction,
   ChannelFlow,
+  FlowStep,
   FlowAction,
   IssueDispatch,
   JoinSessionInput,
@@ -653,6 +654,14 @@ async function resync(): Promise<void> {
 const demoId = (prefix: string): string => prefix + '-' + crypto.randomUUID().slice(0, 8)
 const DAY = 86_400_000
 
+/** 依赖都交付了的等待中步骤开始运行 */
+const startable = (steps: FlowStep[]): FlowStep[] => {
+  const done = new Set(steps.filter(x => x.status === 'delivered').map(x => x.id))
+  return steps.map(x =>
+    x.status === 'pending' && x.deps.every(d => done.has(d)) ? { ...x, status: 'running' as const } : x,
+  )
+}
+
 const demo = {
   patchTeam(teamId: string, change: (team: TeamInfo) => TeamInfo): void {
     set({ teams: state.teams.map(t => (t.id === teamId ? change(t) : t)) })
@@ -801,6 +810,8 @@ const demo = {
         steps: (action.steps ?? []).map(x => ({ ...x, taskId: null, status: 'pending', rejects: 0 })),
         maxRejects: 3,
         planner: planner ? { ...planner, taskId: null } : null,
+        ...(action.limits !== undefined ? { limits: action.limits } : {}),
+        ...(action.isolate !== undefined ? { isolate: action.isolate } : {}),
       }
       const message = createMessage({
         id,
@@ -831,6 +842,8 @@ const demo = {
         patch(f => ({
           ...f,
           title: action.title ?? f.title,
+          ...(action.limits !== undefined ? { limits: action.limits } : {}),
+          ...(action.isolate !== undefined ? { isolate: action.isolate } : {}),
           steps: action.steps
             ? action.steps.map(x => ({ ...x, taskId: null, status: 'pending', rejects: 0 }))
             : f.steps,
@@ -838,13 +851,25 @@ const demo = {
         break
       case 'start':
       case 'resume':
-        patch(f => {
-          const done = new Set(f.steps.filter(x => x.status === 'delivered').map(x => x.id))
-          const steps = f.steps.map(x =>
-            x.status === 'pending' && x.deps.every(d => done.has(d)) ? { ...x, status: 'running' as const } : x,
-          )
-          return { ...stepStatus(f, 'running'), steps }
-        })
+        patch(f => ({
+          ...stepStatus(f, 'running'),
+          steps: startable(f.steps),
+          // 开始时补默认护栏；继续 = 再给一整份
+          limits: f.limits === undefined ? { rounds: Math.max(12, f.steps.length * 4), minutes: 120 } : f.limits,
+          since: { at: Date.now(), rounds: 0 },
+        }))
+        break
+      case 'gate':
+        patch(f => ({
+          ...f,
+          steps: startable(
+            f.steps.map(x =>
+              x.id === action.stepId && x.status === 'gated'
+                ? { ...x, status: action.decision === 'approve' ? ('delivered' as const) : ('running' as const) }
+                : x,
+            ),
+          ),
+        }))
         break
       case 'pause':
         patch(f => stepStatus(f, 'paused'))

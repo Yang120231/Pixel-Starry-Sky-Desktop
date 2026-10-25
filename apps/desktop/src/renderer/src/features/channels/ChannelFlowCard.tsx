@@ -16,6 +16,7 @@ import type {
   FlowStepSettings,
 } from '../../../../shared/types/channels'
 import { MemberAvatar } from './ChannelMessage'
+import { GateActions } from './GateActions'
 import { channelActions } from './store'
 
 const NUMBERS = '①②③④⑤⑥⑦⑧⑨'
@@ -49,6 +50,7 @@ const toInput = (s: FlowStep | FlowStepInput): FlowStepInput => ({
   deps: s.deps,
   kind: s.kind,
   ...(s.target ? { target: s.target } : {}),
+  ...(s.gate ? { gate: true } : {}),
   ...(s.settings && Object.keys(s.settings).length ? { settings: s.settings } : {}),
 })
 
@@ -57,10 +59,14 @@ function StepSettings({
   member,
   value,
   onChange,
+  gate,
+  onGate,
 }: {
   member: ChannelMember | undefined
   value: FlowStepSettings
   onChange: (next: FlowStepSettings) => void
+  gate: boolean
+  onGate: (next: boolean) => void
 }) {
   useI18n()
   const [open, setOpen] = useState(false)
@@ -84,7 +90,7 @@ function StepSettings({
     { value: '', label: follow },
     ...(caps?.efforts ?? []).map(e => ({ value: e, label: effortLabel(e) })),
   ]
-  const customized = Object.keys(value).length > 0
+  const customized = Object.keys(value).length > 0 || gate
   return (
     <>
       <IconButton
@@ -105,6 +111,10 @@ function StepSettings({
         className="w-64 p-3"
       >
         <div className="flex flex-col gap-2.5">
+          <label className="flex items-center gap-2 text-ui text-fg">
+            <input type="checkbox" checked={gate} onChange={e => onGate(e.target.checked)} />
+            {tr('channels.flow.gateToggle')}
+          </label>
           <label className="flex flex-col gap-1">
             <span className="text-meta font-medium text-fg-muted">{tr('channels.flow.model')}</span>
             <input
@@ -159,6 +169,30 @@ const newStepId = (steps: readonly FlowStepInput[]): string => {
   return id
 }
 
+function LimitInput({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string
+  value: string
+  disabled: boolean
+  onChange: (v: string) => void
+}) {
+  return (
+    <input
+      inputMode="numeric"
+      aria-label={label}
+      placeholder={tr('channels.flow.limitsNone')}
+      value={value}
+      disabled={disabled}
+      onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
+      className="h-6 w-14 rounded-md border border-line bg-surface px-1.5 text-center text-meta text-fg outline-none focus:border-accent"
+    />
+  )
+}
+
 /** 草稿：一行一步，改完自动保存；开始运行前先存一次 */
 function DraftEditor({
   message,
@@ -177,6 +211,12 @@ function DraftEditor({
   const { run, busy } = useFlowRun(message.channelId)
   const [title, setTitle] = useState(flow.title)
   const [steps, setSteps] = useState<FlowStepInput[]>(() => flow.steps.map(toInput))
+  // 旧流程没有护栏 = 不限；草稿里预填默认值（和主进程开始运行时补的一致）
+  const [rounds, setRounds] = useState(() =>
+    String(flow.limits ? (flow.limits.rounds ?? '') : Math.max(12, flow.steps.length * 4)),
+  )
+  const [minutes, setMinutes] = useState(() => String(flow.limits ? (flow.limits.minutes ?? '') : 120))
+  const [isolate, setIsolate] = useState(flow.isolate !== false)
   const dirty = useRef(false)
   const edit = (change: (list: FlowStepInput[]) => FlowStepInput[]) => {
     dirty.current = true
@@ -190,7 +230,14 @@ function DraftEditor({
     messageId: message.id,
     ...(title.trim() ? { title } : {}),
     steps,
+    limits: { rounds: rounds.trim() ? Number(rounds) : null, minutes: minutes.trim() ? Number(minutes) : null },
+    isolate,
   })
+
+  const editLimit = (set: (v: string) => void, v: string) => {
+    dirty.current = true
+    set(v)
+  }
 
   const pending = useRef(false)
   const save = useRef(() => {})
@@ -204,7 +251,7 @@ function DraftEditor({
     pending.current = true
     const t = window.setTimeout(() => save.current(), AUTOSAVE_MS)
     return () => window.clearTimeout(t)
-  }, [title, steps, message.channelId])
+  }, [title, steps, rounds, minutes, isolate, message.channelId])
   // 切走频道时还没存的改动也存上
   useEffect(() => () => save.current(), [])
 
@@ -284,6 +331,8 @@ function DraftEditor({
                 member={membersById.get(s.memberId)}
                 value={s.settings ?? {}}
                 onChange={settings => patchStep(s.id, { settings })}
+                gate={!!s.gate}
+                onGate={gate => patchStep(s.id, { gate })}
               />
               <IconButton
                 icon={X}
@@ -344,6 +393,35 @@ function DraftEditor({
           </li>
         ))}
       </ol>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-meta text-fg-muted">
+        {tr('channels.flow.limitsRow')}
+        <LimitInput
+          label={tr('channels.flow.limitsRoundsLabel')}
+          value={rounds}
+          disabled={readOnly}
+          onChange={v => editLimit(setRounds, v)}
+        />
+        {tr('channels.flow.limitsRounds')} · {tr('channels.flow.limitsMid')}
+        <LimitInput
+          label={tr('channels.flow.limitsMinutesLabel')}
+          value={minutes}
+          disabled={readOnly}
+          onChange={v => editLimit(setMinutes, v)}
+        />
+        {tr('channels.flow.limitsMinutes')}
+        <label className="ml-auto flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={isolate}
+            disabled={readOnly}
+            onChange={e => {
+              dirty.current = true
+              setIsolate(e.target.checked)
+            }}
+          />
+          {tr('channels.flow.isolate')}
+        </label>
+      </div>
       {!readOnly && (
         <div className="mt-2 flex items-center gap-2">
           <Button icon={Plus} className="h-7 px-2.5" onClick={add} disabled={agents.length === 0}>
@@ -361,6 +439,9 @@ function DraftEditor({
     </>
   )
 }
+
+const limitText = (kind: 'Rounds' | 'Minutes', n: number | null): string =>
+  n == null ? tr('channels.flow.limitsNone') : tr(`channels.flow.limitsShown${kind}`, { n })
 
 /** 一步现在的状态文字 */
 function stepStatus(flow: ChannelFlow, step: FlowStep, membersById: Members): { text: string; running: boolean } {
@@ -392,6 +473,8 @@ function stepStatus(flow: ChannelFlow, step: FlowStep, membersById: Members): { 
         running: true,
       }
     }
+    case 'gated':
+      return { text: tr('channels.flow.step.gated'), running: false }
     case 'delivered':
       if (step.kind === 'review')
         return {
@@ -410,6 +493,7 @@ const STEP_TONE: Record<FlowStep['status'], string> = {
   pending: 'bg-subtle text-fg-muted',
   running: 'bg-accent-soft text-accent-fg',
   asking: 'bg-accent-soft text-accent-fg',
+  gated: 'bg-subtle text-warn',
   delivered: 'bg-subtle text-success',
   failed: 'bg-subtle text-danger',
   stopped: 'bg-subtle text-fg-faint',
@@ -433,6 +517,8 @@ export function ChannelFlowCard({
   useI18n()
   const flow = message.flow!
   const { run, busy } = useFlowRun(message.channelId)
+  const gate = (stepId: string, decision: 'approve' | 'reject', note?: string) =>
+    void run({ type: 'gate', messageId: message.id, stepId, decision, ...(note ? { note } : {}) })
   const act = (type: 'pause' | 'resume' | 'stop' | 'discard') => void run({ type, messageId: message.id })
   const agents = channelMembers.filter(m => m.kind === 'agent')
   const planner = flow.planner ? membersById.get(flow.planner.memberId) : undefined
@@ -467,7 +553,13 @@ export function ChannelFlowCard({
               </span>
             </div>
             {flow.status === 'paused' && flow.paused && (
-              <p className="mt-1 text-meta text-warn">{tr(`channels.flow.pause.${flow.paused.reason}`)}</p>
+              <p className="mt-1 text-meta text-warn">
+                {tr(
+                  flow.paused.reason === 'limit' && flow.paused.limit
+                    ? `channels.flow.pause.limit.${flow.paused.limit}`
+                    : `channels.flow.pause.${flow.paused.reason}`,
+                )}
+              </p>
             )}
             {flow.status === 'planning' ? (
               <div className="mt-2 flex items-center gap-2 text-ui text-fg-muted">
@@ -512,10 +604,27 @@ export function ChannelFlowCard({
                             {st.text}
                           </span>
                         </span>
-                        {s.status === 'delivered' && s.result?.summary && (
+                        {s.copy && (
+                          <span className="truncate pl-7 text-meta text-fg-faint">
+                            {tr('channels.flow.copy', { branch: s.copy.branch })}
+                          </span>
+                        )}
+                        {(s.status === 'delivered' || s.status === 'gated') && s.result?.summary && (
                           <span className="truncate pl-7 text-meta text-fg-faint">{s.result.summary}</span>
                         )}
                       </button>
+                      {s.status === 'gated' && !readOnly && (flow.status === 'running' || flow.status === 'paused') && (
+                        <div
+                          className="flex items-center justify-end gap-1.5 pt-0.5 pr-1.5 pb-1.5 pl-8"
+                          data-flow-gate={s.id}
+                        >
+                          <GateActions
+                            disabled={busy}
+                            onApprove={() => gate(s.id, 'approve')}
+                            onReject={note => gate(s.id, 'reject', note)}
+                          />
+                        </div>
+                      )}
                     </li>
                   )
                 })}
@@ -523,13 +632,21 @@ export function ChannelFlowCard({
             )}
             {!readOnly && (flow.status === 'running' || flow.status === 'paused') && (
               <div className="mt-2 flex items-center justify-end gap-2">
+                {flow.limits && (
+                  <span className="mr-auto text-meta text-fg-faint">
+                    {tr('channels.flow.limitsShown', {
+                      rounds: limitText('Rounds', flow.limits.rounds),
+                      minutes: limitText('Minutes', flow.limits.minutes),
+                    })}
+                  </span>
+                )}
                 {flow.status === 'running' ? (
                   <Button className="h-7 px-2.5" disabled={busy} onClick={() => act('pause')}>
                     {tr('channels.flow.pause')}
                   </Button>
                 ) : (
                   <Button variant="primary" className="h-7 px-2.5" disabled={busy} onClick={() => act('resume')}>
-                    {tr('channels.flow.resume')}
+                    {tr(flow.paused?.reason === 'limit' ? 'channels.flow.resumeLimit' : 'channels.flow.resume')}
                   </Button>
                 )}
                 <Button className="h-7 px-2.5" disabled={busy} onClick={() => act('stop')}>

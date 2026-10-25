@@ -1,7 +1,7 @@
 // 流程（docs/ui/channels-pipeline.md §4）的纯函数：清洗草稿、校验、哪些步骤能开始、把拆好的流程变成步骤。
 // 不碰磁盘和引擎；调度（开始一步、交付后接着走）在 service.ts
 import { EFFORTS, type Effort } from '@pixelsky/protocol'
-import type { ChannelFlow, FlowStep, FlowStepKind, FlowStepSettings } from '../../../shared/types/channels'
+import type { ChannelFlow, FlowLimits, FlowStep, FlowStepKind, FlowStepSettings } from '../../../shared/types/channels'
 
 export const FLOW_MAX_STEPS = 9
 export const FLOW_MAX_REJECTS = 3
@@ -41,6 +41,8 @@ export function cleanSteps(raw: unknown): FlowStep[] {
       status: 'pending',
       rejects: 0,
       result: null,
+      ...(r.gate === true ? { gate: true } : {}),
+      copy: null,
     }
   })
   if (new Set(steps.map(s => s.id)).size !== steps.length) throw new Error('步骤 id 重复')
@@ -122,4 +124,81 @@ export function planSteps(raw: unknown, byName: (name: string) => string | null)
       }
     }),
   )
+}
+
+// ── 护栏（docs/ui/channels-pipeline.md §6.2）──────────────────────────────
+
+const ROUNDS_MAX = 200
+const MINUTES_MIN = 5
+const MINUTES_MAX = 1440
+
+/** 没设护栏时开始运行用的默认值 */
+export const defaultLimits = (steps: number): FlowLimits => ({ rounds: Math.max(12, steps * 4), minutes: 120 })
+
+/** 界面传来的护栏（不可信）：没传为 undefined（不改）；空 / null 是不限；数字截到范围里 */
+export function cleanLimits(raw: unknown): FlowLimits | undefined {
+  if (raw === undefined) return undefined
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const num = (v: unknown, min: number, max: number): number | null => {
+    const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : null
+  }
+  return { rounds: num(r.rounds, 1, ROUNDS_MAX), minutes: num(r.minutes, MINUTES_MIN, MINUTES_MAX) }
+}
+
+/** 超了哪一项护栏；used：流程里各步骤任务卡的轮次加起来 */
+export function limitHit(flow: ChannelFlow, used: number, now: number): 'rounds' | 'time' | null {
+  const { limits, since } = flow
+  if (!limits || !since) return null
+  if (limits.rounds !== null && used - since.rounds >= limits.rounds) return 'rounds'
+  if (limits.minutes !== null && now - since.at >= limits.minutes * 60_000) return 'time'
+  return null
+}
+
+// ── 并行步骤用 Git 副本（docs/ui/channels-pipeline.md §6.4）──────────────
+
+/** 一步在哪做：主目录（merge：依赖在副本里，要合并的那几步）、沿用某个副本、新建副本（base：基于哪个分支，null 是主目录的 HEAD） */
+export type CopyPlan =
+  | { kind: 'main'; merge: string[] }
+  | { kind: 'reuse'; copy: NonNullable<FlowStep['copy']> }
+  | { kind: 'new'; name: string; branch: string; base: string | null }
+
+/** 新副本的名字和分支：流程 id 前 6 位 + 步骤字母，重试时还是同一个 */
+export function copyName(messageId: string, flow: ChannelFlow, stepId: string): { name: string; branch: string } {
+  const i = flow.steps.findIndex(s => s.id === stepId)
+  const name = `flow-${messageId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6)}-${String.fromCharCode(97 + Math.max(0, i))}`
+  return { name, branch: `pixelsky/${name}` }
+}
+
+/**
+ * 这一步在哪做。来源 = 依赖所在的地方（主目录或某个副本）：
+ * 依赖分在两处以上 → 汇合，在主目录合并；同一来源下还有别的步骤在做或同时开始 → 新建副本，基于来源分支；
+ * 只有自己 → 沿用来源（副本或主目录）。已经有副本的一步（重试、打回、再审）一直用它
+ */
+export function copyPlan(flow: ChannelFlow, messageId: string, stepId: string, starting: readonly string[]): CopyPlan {
+  const step = flow.steps.find(s => s.id === stepId)!
+  if (step.copy) return { kind: 'reuse', copy: step.copy }
+  const byId = new Map(flow.steps.map(s => [s.id, s]))
+  const where = (s: FlowStep): string => s.copy?.id ?? 'main'
+  const source = (s: FlowStep): string | null => {
+    const set = new Set(
+      s.deps
+        .map(d => byId.get(d))
+        .filter((d): d is FlowStep => !!d)
+        .map(where),
+    )
+    return set.size > 1 ? null : ([...set][0] ?? 'main')
+  }
+  const mine = source(step)
+  if (mine === null) return { kind: 'main', merge: step.deps.filter(d => byId.get(d)?.copy) }
+  if (flow.isolate === false) return { kind: 'main', merge: [] }
+  const busy = flow.steps.some(
+    s =>
+      s.id !== stepId &&
+      (starting.includes(s.id) || s.status === 'running' || s.status === 'asking') &&
+      source(s) === mine,
+  )
+  const from = mine === 'main' ? null : flow.steps.find(s => s.copy?.id === mine)!.copy!
+  if (!busy) return from ? { kind: 'reuse', copy: from } : { kind: 'main', merge: [] }
+  return { kind: 'new', ...copyName(messageId, flow, stepId), base: from?.branch ?? null }
 }
