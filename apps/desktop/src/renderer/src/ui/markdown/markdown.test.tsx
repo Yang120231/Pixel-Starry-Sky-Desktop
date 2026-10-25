@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { I18nProvider } from '@/i18n/I18nProvider'
@@ -52,6 +53,12 @@ describe('公式标记', () => {
     expect(out).toContain('class="katex"')
     expect(out).toContain('katex-display')
     expect(out).not.toContain('\\(a^2')
+  })
+
+  it('KaTeX 样式和 rehype-katex 渲染用的是同一版（0.19 改了类名，混用时字号、分数线、框线全乱）', () => {
+    const require = createRequire(import.meta.url)
+    const renderer = createRequire(require.resolve('rehype-katex'))
+    expect(require('katex').version).toBe(renderer('katex').version)
   })
 
   it('单个 $ 不算公式', () => {

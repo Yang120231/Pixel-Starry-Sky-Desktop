@@ -57,7 +57,7 @@
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "hast-util-to-jsx-runtime": "^2.3.6",
-    "katex": "^0.19.0",
+    "katex": "^0.16.47",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.52.0",
     "mermaid": "^11.17.2",
