@@ -1,14 +1,14 @@
 // 设置 › 反馈 › 列表（docs/ui/feedback.md §2.2、feedback-v2.md §4）：未读横幅、状态分段、搜索、类型标签、卡片
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertCircle, Paperclip, Plus, Search, Users } from 'lucide-react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
-import { Button, Dot, Segmented, Spinner, cn } from '@/ui'
+import { Button, Dot, Segmented, Spinner, cn, useToast } from '@/ui'
 import { SectionTitle, SettingRow } from '../settings/SettingRow'
 import type { FeedbackSummary } from '../../../../shared/types/feedback'
 import { clip, errorText, isAuthExpired, mergeThreads } from './logic'
 import { StatusWord, TypeIcon, friendlyTime } from './parts'
-import { feedbackApi, useFeedback } from './store'
+import { feedbackApi, markAllRead, useFeedback } from './store'
 import { filterThreads, segmentCounts, shortId, type Segment, type TypeFilter } from './view'
 
 const TYPE_FILTERS: TypeFilter[] = ['all', 'bug', 'feature', 'other']
@@ -49,6 +49,27 @@ export function FeedbackList({
     void feedbackApi()
       .refresh()
       .catch(() => {})
+  // 标记已读的状态放在这里：乐观更新会让横幅卸载，横幅里的状态会丢
+  const toast = useToast()
+  const [marking, setMarking] = useState(false)
+  const [markFailed, setMarkFailed] = useState(false)
+  useEffect(() => {
+    if (unread.length === 0) setMarkFailed(false)
+  }, [unread.length])
+  const mark = async (): Promise<void> => {
+    setMarking(true)
+    setMarkFailed(false)
+    const count = unread.length
+    const error = await markAllRead()
+    setMarking(false)
+    if (error) {
+      setMarkFailed(true)
+      if (isAuthExpired(error)) onFailed(error)
+      return
+    }
+    setOlder(current => current.map(t => (t.unread ? { ...t, unread: false } : t)))
+    toast(tr('feedback.markedRead', { p0: count }))
+  }
   const filtering = query.trim() !== '' || type !== 'all'
 
   const loadOlder = async (): Promise<void> => {
@@ -80,7 +101,15 @@ export function FeedbackList({
         }
       />
 
-      {unread.length > 0 && <UnreadBanner unread={unread} onOpen={onOpen} />}
+      {unread.length > 0 && (
+        <UnreadBanner
+          unread={unread}
+          onOpen={onOpen}
+          onMark={() => void mark()}
+          marking={marking}
+          failed={markFailed}
+        />
+      )}
 
       {state.status === 'error' && all.length > 0 && (
         <p className="selectable mb-4 flex items-center gap-2 rounded-md bg-subtle px-3 py-2 text-meta text-danger">
@@ -203,7 +232,19 @@ export function FeedbackList({
 }
 
 /** 有团队回复（或团队关闭）还没看：一条横幅，一条时写标题和预览，多条时写数量，点开第一条 */
-function UnreadBanner({ unread, onOpen }: { unread: FeedbackSummary[]; onOpen: (id: string) => void }) {
+function UnreadBanner({
+  unread,
+  onOpen,
+  onMark,
+  marking,
+  failed,
+}: {
+  unread: FeedbackSummary[]
+  onOpen: (id: string) => void
+  onMark: () => void
+  marking: boolean
+  failed: boolean
+}) {
   useI18n()
   const first = unread[0]
   const preview = clip(first.preview.replace(/\s+/g, ' ').trim(), 120)
@@ -225,8 +266,17 @@ function UnreadBanner({ unread, onOpen }: { unread: FeedbackSummary[]; onOpen: (
         <p className="truncate text-ui font-medium text-fg">
           {unread.length > 1 ? tr('feedback.banner.many', { p0: unread.length }) : tr(oneKey, { p0: first.title })}
         </p>
-        {unread.length === 1 && preview && <p className="truncate text-meta text-fg-muted">{preview}</p>}
+        {failed ? (
+          <p role="alert" data-feedback-mark-error className="truncate text-meta text-danger">
+            {tr('feedback.markReadFailed')}
+          </p>
+        ) : (
+          unread.length === 1 && preview && <p className="truncate text-meta text-fg-muted">{preview}</p>
+        )}
       </div>
+      <Button variant="ghost" data-feedback-mark-read disabled={marking} onClick={onMark}>
+        {unread.length > 1 ? tr('feedback.markAllRead') : tr('feedback.markOneRead')}
+      </Button>
       <Button onClick={() => onOpen(first.id)}>{tr('feedback.attach.view')}</Button>
     </div>
   )

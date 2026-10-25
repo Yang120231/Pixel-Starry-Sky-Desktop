@@ -568,6 +568,7 @@ const feedback: FeedbackBridge = {
   attachment: (threadId, attachmentId) => call('feedback:attachment', threadId, attachmentId),
   pending: () => call('feedback:pending'),
   ack: ids => call('feedback:ack', ids),
+  markAllRead: () => call('feedback:markAllRead'),
   onChange: cb => {
     const listener = (_event: Electron.IpcRendererEvent, value: FeedbackChange): void => cb(value)
     on('feedback:changed', listener)

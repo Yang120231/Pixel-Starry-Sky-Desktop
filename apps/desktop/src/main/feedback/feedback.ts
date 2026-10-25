@@ -32,6 +32,7 @@ import {
   FeedbackError,
   getFeedback,
   listFeedback,
+  markAllFeedbackRead,
   replyFeedback,
 } from './api'
 import { buildAttachFields, buildDiagnostics, buildLogs, checkBody, checkTitle, type MessageDeps } from './attachments'
@@ -136,6 +137,16 @@ export function initFeedback(ctx: AppContext): void {
       if (!Array.isArray(ids) || ids.length > 200 || !ids.every(id => typeof id === 'string' && id.length <= 200))
         throw new Error('参数不对')
       tracker.acknowledge(ids)
+    },
+    deny,
+  )
+  ipc.handle(
+    'feedback:markAllRead',
+    async (): Promise<void> => {
+      requireEmail()
+      await markAllFeedbackRead()
+      // 走现有的检查：feedback:changed 推送新状态；检查失败不算标记失败
+      await tracker.poll().catch(() => undefined)
     },
     deny,
   )

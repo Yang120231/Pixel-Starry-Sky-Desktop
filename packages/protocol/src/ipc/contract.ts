@@ -634,6 +634,7 @@ export const IPC_CONTRACT = {
   'feedback:create': { kind: 'invoke', route: 'local', trust: 'sender' },
   'feedback:get': { kind: 'invoke', route: 'local', trust: 'sender' },
   'feedback:list': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'feedback:markAllRead': { kind: 'invoke', route: 'local', trust: 'sender' },
   'feedback:pending': { kind: 'invoke', route: 'local', trust: 'sender' },
   'feedback:preview': { kind: 'invoke', route: 'local', trust: 'sender' },
   'feedback:refresh': { kind: 'invoke', route: 'local', trust: 'sender' },

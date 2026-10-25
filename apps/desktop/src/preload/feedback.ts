@@ -34,4 +34,6 @@ export interface FeedbackBridge {
   pending(): Promise<FeedbackSummary[]>
   /** 这些新回复处理完了（弹了通知，或者按设置决定不弹）：记成已提醒 */
   ack(ids: string[]): Promise<void>
+  /** 把所有未读反馈标为已读（只动用户侧；成功后主进程重新检查并推送新状态） */
+  markAllRead(): Promise<void>
 }

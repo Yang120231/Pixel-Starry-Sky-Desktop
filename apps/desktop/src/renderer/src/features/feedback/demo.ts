@@ -287,6 +287,16 @@ export function createDemoFeedback(now: () => number = Date.now): FeedbackBridge
     // 演示模式不弹通知
     pending: async () => [],
     ack: async () => {},
+    markAllRead: async () => {
+      let changed = false
+      for (const entry of entries.values()) {
+        if (entry.thread.unread) {
+          entry.thread.unread = false
+          changed = true
+        }
+      }
+      if (changed) emit()
+    },
     get: async id => {
       const entry = find(id)
       if (entry.thread.unread) {

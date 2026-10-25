@@ -23,6 +23,22 @@ describe('demo feedback', () => {
     expect(changes.at(-1)?.fresh).toEqual([])
   })
 
+  it('markAllRead clears every unread thread, notifies once, and stays at zero', async () => {
+    const api = createDemoFeedback()
+    const changes: FeedbackChange[] = []
+    api.onChange(c => changes.push(c))
+    await api.markAllRead()
+    const state = await api.state()
+    expect(state.unreadCount).toBe(0)
+    expect(state.threads.some(t => t.unread)).toBe(false)
+    expect(changes).toHaveLength(1)
+    await api.markAllRead()
+    expect(changes).toHaveLength(1)
+    // 自己再补充不会产生未读（未读只来自团队回复）
+    await api.reply('fb_demo0000000001', { ...input, body: 'more' })
+    expect((await api.state()).unreadCount).toBe(0)
+  })
+
   it('create, reply, close and reopen only touch local state', async () => {
     const api = createDemoFeedback()
     const created = await api.create({ ...input, type: 'bug', title: 'T', body: 'B' })

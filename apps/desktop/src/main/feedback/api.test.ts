@@ -228,6 +228,23 @@ describe('请求', () => {
     expect(mocks.fetch.mock.calls[1]).toEqual(['POST', `/v1/feedback/${ID}/messages`, expect.anything(), 90_000])
   })
 
+  it('全部标为已读：POST /v1/feedback/seen，204 无内容', async () => {
+    mocks.fetch.mockResolvedValue(new Response(null, { status: 204 }))
+    await expect(api.markAllFeedbackRead()).resolves.toBeUndefined()
+    expect(mocks.fetch).toHaveBeenCalledWith('POST', '/v1/feedback/seen', {}, undefined)
+  })
+
+  it('全部标为已读：404 是服务没开，401 登录过期原样抛出，其他非 2xx 是 UNAVAILABLE', async () => {
+    mocks.fetch.mockResolvedValueOnce(reply(404, 'not found'))
+    await expect(api.markAllFeedbackRead()).rejects.toMatchObject({ code: 'NOT_DEPLOYED' })
+    // 401 由 authedFetch 处理：刷新令牌后仍 401 就抛 AUTH_EXPIRED
+    const expired = Object.assign(new Error('登录已失效'), { code: 'AUTH_EXPIRED' })
+    mocks.fetch.mockRejectedValueOnce(expired)
+    await expect(api.markAllFeedbackRead()).rejects.toBe(expired)
+    mocks.fetch.mockResolvedValueOnce(reply(500, { error: '出错' }))
+    await expect(api.markAllFeedbackRead()).rejects.toMatchObject({ code: 'UNAVAILABLE' })
+  })
+
   it('附件取回字节和类型', async () => {
     mocks.fetch.mockResolvedValue(
       reply(200, new Uint8Array([1, 2, 3]), { 'Content-Type': 'text/plain; charset=utf-8' }),

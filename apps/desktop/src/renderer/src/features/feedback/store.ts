@@ -92,3 +92,24 @@ export function onFeedbackChange(fn: (change: FeedbackChange) => void): () => vo
     changeListeners.delete(fn)
   }
 }
+
+/**
+ * 把所有未读标为已读：先在本地清掉红点和未读数，请求失败就恢复并返回错误（成功返回 null）。
+ * 恢复前如果期间又推来了新状态，以新状态为准。
+ */
+export async function markAllRead(): Promise<unknown> {
+  const before = snapshot
+  const optimistic: FeedbackSnapshot = {
+    ...before,
+    unreadCount: 0,
+    threads: before.threads.map(t => (t.unread ? { ...t, unread: false } : t)),
+  }
+  set(optimistic)
+  try {
+    await feedbackApi().markAllRead()
+    return null
+  } catch (e) {
+    if (snapshot === optimistic) set(before)
+    return e
+  }
+}

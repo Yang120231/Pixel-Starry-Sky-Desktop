@@ -296,6 +296,12 @@ export async function closeFeedback(id: string): Promise<FeedbackDetail> {
   return parseDetail(await json(await request('POST', `/v1/feedback/${checkThreadId(id)}/close`, {}, undefined)))
 }
 
+/** 把当前用户所有反馈标为已读（204）；404 是反馈服务没开，和列表一样 */
+export async function markAllFeedbackRead(): Promise<void> {
+  const res = await request('POST', '/v1/feedback/seen', {}, undefined, true)
+  await res.body?.cancel()
+}
+
 /** 附件原始字节和云端给的类型（日志已是解压后的 text/plain） */
 export async function fetchAttachment(
   threadId: string,
