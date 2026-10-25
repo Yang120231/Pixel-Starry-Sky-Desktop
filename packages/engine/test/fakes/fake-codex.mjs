@@ -812,6 +812,9 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
       }
       break
     }
+    case 'thread/unsubscribe':
+      response(m, { status: 'unsubscribed' })
+      break
     default:
       out({ id: m.id, error: { code: -32601, message: 'Unknown method ' + m.method } })
   }

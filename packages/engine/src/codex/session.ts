@@ -1806,12 +1806,34 @@ export class CodexSession implements EngineSession {
     this.ctx.emit({ type: 'turn_started', turnId: active.id, execution: queueSettings(this.ctx.record()) })
   }
 
+  /**
+   * 经网关时 Codex 把线程记下的 provider 改成了 pixelsky（只 resume 不发消息也会改），官方应用的配置里没有它，
+   * 打开就报「Model provider `pixelsky` not found」。关进程前先卸载线程、再用用户自己的 provider resume 一次改回
+   * （已加载的线程直接 resume 不会改；实测 Codex 0.164，约 25 毫秒）。失败不影响关闭，下次用自己账号接着聊时也会改回
+   */
+  private async restoreProvider(): Promise<void> {
+    const proc = this.proc,
+      own = string(this.env.PIXELSKY_CODEX_PROVIDER)
+    if (!this.procViaGateway || !proc?.alive || this.startup !== 'done' || !this.threadId || !own) return
+    try {
+      await proc.request('thread/unsubscribe', { threadId: this.threadId }, 1_000)
+      await proc.request(
+        'thread/resume',
+        { threadId: this.threadId, modelProvider: own, cwd: this.ctx.record().cwd },
+        1_000,
+      )
+    } catch (error) {
+      log.warn('线程的 provider 没改回', { threadId: this.threadId, error: describeError(error) })
+    }
+  }
+
   async close(opts: CloseOptions = {}): Promise<void> {
     this.closed = true
     if (this.mcpTimer) clearTimeout(this.mcpTimer)
     this.mcpReporter.dispose()
     this.own(null)
     await this.interrupt()
+    await this.restoreProvider()
     await this.proc?.close(opts.quick ? QUICK_CLOSE_MS : undefined)
     this.ctx.extensions?.dispose?.()
   }
