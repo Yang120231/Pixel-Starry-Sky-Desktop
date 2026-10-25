@@ -81,7 +81,33 @@ export const projectToolsMessages = {
   },
   'projectTools.annotation': { zh: '批注', en: 'Annotation' },
   'projectTools.annotationPlaceholder': { zh: '写下对当前网页的批注', en: 'Add a note about this page' },
-  'projectTools.sendAnnotation': { zh: '发送到当前会话', en: 'Send to current conversation' },
+  'projectTools.sendAnnotation': { zh: '发到会话', en: 'Send to chat' },
+  'projectTools.sendAnnotationFull': {
+    zh: '发送到当前会话的输入框',
+    en: 'Send to the message box of the current conversation',
+  },
+  'projectTools.annotationHint': {
+    zh: 'Enter 保存 · Shift+Enter 换行',
+    en: 'Enter to save · Shift+Enter for a new line',
+  },
+  'projectTools.annotationEmpty': {
+    zh: '点网页上的元素加批注，或写一条整页的批注',
+    en: 'Click an element on the page to annotate it, or write a note for the whole page',
+  },
+  // 批注栏放在哪（docs/ui/element-annotation.md §7）
+  'projectTools.annotationDock': { zh: '批注位置：{p0}', en: 'Annotation panel: {p0}' },
+  'projectTools.annotationDockAt': { zh: '批注放在', en: 'Place annotations' },
+  'projectTools.dock.top': { zh: '上', en: 'Top' },
+  'projectTools.dock.bottom': { zh: '下', en: 'Bottom' },
+  'projectTools.dock.left': { zh: '左', en: 'Left' },
+  'projectTools.dock.right': { zh: '右', en: 'Right' },
+  'projectTools.annotationDockFallback': {
+    zh: '面板太窄，暂时放在下面；变宽后回到{p0}边',
+    en: 'The panel is too narrow, so it sits at the bottom for now. It moves back to {p0} when there is room',
+  },
+  'projectTools.annotationFold': { zh: '收起批注', en: 'Collapse annotations' },
+  'projectTools.annotationUnfold': { zh: '展开批注', en: 'Expand annotations' },
+  'projectTools.resizeAnnotations': { zh: '批注栏大小', en: 'Annotation panel size' },
   'projectTools.annotationSent': {
     zh: '{p0} 条批注已放进输入框，已从列表移除',
     en: 'Moved {p0} annotation(s) to the message box and removed them from the list',
@@ -91,7 +117,7 @@ export const projectToolsMessages = {
   'projectTools.pickElement': { zh: '选择元素', en: 'Select element' },
   'projectTools.pickElementOff': { zh: '退出选择元素', en: 'Stop selecting elements' },
   'projectTools.elementGone': { zh: '元素已不在', en: 'Element is gone' },
-  'projectTools.clearAnnotations': { zh: '清空', en: 'Clear' },
+  'projectTools.clearAnnotations': { zh: '清空全部批注', en: 'Clear all annotations' },
   'projectTools.annotationShot': { zh: '元素截图', en: 'Element screenshot' },
   'projectTools.pick.hint': { zh: '点击要批注的元素  Esc 退出', en: 'Click an element to annotate  Esc to exit' },
   'projectTools.pick.title': { zh: '添加批注', en: 'Add annotation' },

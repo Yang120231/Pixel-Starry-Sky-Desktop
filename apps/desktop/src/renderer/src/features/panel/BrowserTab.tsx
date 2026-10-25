@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ExternalLink, Globe, MousePointerClick, Plus, RefreshCw, Square, X } from 'lucide-react'
-import { Button, IconButton } from '@/ui'
+import { Button, IconButton, cn } from '@/ui'
 import { MAX_IMAGE_COUNT } from '@pixelsky/protocol'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
@@ -11,6 +11,7 @@ import {
   useRemovedAnnotations,
 } from '@/features/session/attachments/annotationDraft'
 import { OVERLAY_EVENT, collectOverlays, overlayHidesBrowser, pointShowsPlaceholder } from './browserOverlay'
+import { placedDock, useDockPrefs, type AnnotationDock } from './annotationDock'
 import { ElementNotes } from './ElementNotes'
 import { shotImage } from './annotationText'
 import { pickConfig } from './pickConfig'
@@ -22,6 +23,14 @@ import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { demo as demoData } from '@/data/demo'
 import { isPortUrl, parsePort, portUrl, sameService } from '@/features/coding/bottom/portsModel'
 import { usePortState } from '@/features/session/live/portTips'
+
+/** 网页和批注栏按批注栏的位置排（docs/ui/element-annotation.md §7） */
+const DOCK_FLOW: Record<AnnotationDock, string> = {
+  right: 'flex-row',
+  left: 'flex-row-reverse',
+  bottom: 'flex-col',
+  top: 'flex-col-reverse',
+}
 
 export function BrowserTab({
   requested,
@@ -60,12 +69,13 @@ function BrowserBody({
     demo ? structuredClone(demoData().projectTools.browser) : null,
   )
   const [address, setAddress] = useState(''),
-    [note, setNote] = useState(''),
-    [notesOpen, setNotesOpen] = useState(false)
+    [note, setNote] = useState('')
   /** 刚放进输入框、已从列表移除的批注：提示几秒，可以放回列表（也从输入框的批注卡里拿掉） */
   const [sent, setSent] = useState<{ pageId: string; notes: BrowserAnnotation[] } | null>(null)
   /** 面板够宽时批注汇总放右侧（docs/ui/element-annotation.md §2），窄时是底部可折叠的样式 */
   const [wide, setWide] = useState(false)
+  const dockPrefs = useDockPrefs()
+  const placed = placedDock(dockPrefs.dock, wide)
   const root = useRef<HTMLDivElement>(null)
   /** 被弹出层挡住、视图藏起来时铺在占位框里的截图（定格画面）；没有时 null */
   const [snapshot, setSnapshot] = useState<string | null>(null)
@@ -481,7 +491,7 @@ function BrowserBody({
         />
       </div>
       <ToolError error={error || page?.error || ''} />
-      <div className="flex min-h-0 flex-1 gap-2">
+      <div className={cn('flex min-h-0 flex-1 gap-2', DOCK_FLOW[placed])}>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div
             ref={viewport}
@@ -558,36 +568,17 @@ function BrowserBody({
               </div>
             )}
           </div>
-          {page && !wide && (
-            <ElementNotes
-              page={page}
-              side={false}
-              busy={busy}
-              canSend={!!target.sessionId && !demo}
-              note={note}
-              open={notesOpen}
-              sent={sent}
-              onNote={setNote}
-              onToggle={() => setNotesOpen(!notesOpen)}
-              onAnnotate={() => void annotate()}
-              onRemove={id => void removeNote(id)}
-              onClear={() => void clearNotes()}
-              onSend={() => void sendToSession()}
-              onRestore={() => void restoreNotes()}
-            />
-          )}
         </div>
-        {page && wide && (
+        {page && (
           <ElementNotes
             page={page}
-            side={true}
+            dock={placed}
+            fallback={placed !== dockPrefs.dock}
             busy={busy}
             canSend={!!target.sessionId && !demo}
             note={note}
-            open={notesOpen}
             sent={sent}
             onNote={setNote}
-            onToggle={() => setNotesOpen(!notesOpen)}
             onAnnotate={() => void annotate()}
             onRemove={id => void removeNote(id)}
             onClear={() => void clearNotes()}
