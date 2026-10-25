@@ -174,7 +174,11 @@ export function upsertMessage(list: readonly ChannelMessage[], message: ChannelM
 }
 
 function applySnapshot(s: ChannelsSnapshot): void {
-  const visible = getPage() === 'channels' ? (selectedChannel({ ...state, channels: s.channels })?.id ?? null) : null
+  // 开着「需要你」时时间线没显示，选中的频道不算正在看
+  const visible =
+    getPage() === 'channels' && !state.needsOpen
+      ? (selectedChannel({ ...state, channels: s.channels })?.id ?? null)
+      : null
   set({
     ready: true,
     channels: visible ? markRead(s.channels, visible) : s.channels,
@@ -260,7 +264,7 @@ if (channelsBridge) {
   // 回到频道页：正在看的频道标为已读
   subscribePage(() => {
     const c = selectedChannel(state)
-    if (getPage() === 'channels' && c && (c.unread > 0 || c.mentioned)) channelActions.select(c.id)
+    if (getPage() === 'channels' && !state.needsOpen && c && (c.unread > 0 || c.mentioned)) channelActions.select(c.id)
   })
 }
 

@@ -140,6 +140,8 @@ const isRunUser = (run: TaskRun, item: Item): boolean =>
     item.id.startsWith(`${run.clientMessageId}-retry-`) ||
     item.id.startsWith(`${run.clientMessageId}-reconnect-`))
 
+const isReconnect = (run: TaskRun, item: Item): boolean => item.id.startsWith(`${run.clientMessageId}-reconnect-`)
+
 const firstLine = (text: string | null | undefined): string | null => text?.split('\n')[0]?.trim() || null
 
 function progressOf(item: Extract<Item, { kind: 'todo' }>): TaskRun['progress'] {
@@ -259,14 +261,16 @@ export function trackEvent(run: TaskRun, event: EngineEvent, now = Date.now()): 
     return none
   }
   if (event.type === 'item_completed' && isRunUser(run, event.item)) {
+    // 断线重连自动发的「继续」是同一轮接着做（AGENTS.md 反复出现的缺陷）：已经累计的改动和进度留着
+    const resumed = run.started && isReconnect(run, event.item)
     const next: TaskRun = {
       ...run,
       started: true,
       turnId: (event.item.kind === 'user' && event.item.turnId) || run.turnId,
       requests: [],
-      diff: {},
+      diff: resumed ? run.diff : {},
       reply: null,
-      progress: null,
+      progress: resumed ? run.progress : null,
       activity: null,
       notice: null,
     }
@@ -275,7 +279,7 @@ export function trackEvent(run: TaskRun, event: EngineEvent, now = Date.now()): 
     const startedAt = run.round === 1 && event.item.id === run.clientMessageId ? { startedAt: now } : {}
     return {
       run: next,
-      patch: { status: 'running', request: null, progress: null, activity: null, ...startedAt },
+      patch: { status: 'running', request: null, progress: next.progress, activity: null, ...startedAt },
       finish: null,
     }
   }
@@ -320,11 +324,15 @@ export function trackEvent(run: TaskRun, event: EngineEvent, now = Date.now()): 
 export function reconcileRun(run: TaskRun, snapshot: SessionSnapshot | null, now = Date.now()): Tracked {
   if (run.phase !== 'sent') return { run, patch: null, finish: null }
   if (!snapshot) return { run, patch: null, finish: { status: 'failed', error: '会话已删除' } }
+  // 从这一轮最后一次真正开始（不是断线重连的「继续」）的那条起算，重连前的改动也算进来
   let at = -1
   for (let i = snapshot.items.length - 1; i >= 0; i--)
     if (isRunUser(run, snapshot.items[i])) {
-      at = i
-      break
+      if (at < 0) at = i
+      if (!isReconnect(run, snapshot.items[i])) {
+        at = i
+        break
+      }
     }
   if (at < 0) {
     const queued = snapshot.queue.find(q => q.id === run.clientMessageId)
@@ -346,6 +354,11 @@ export function reconcileRun(run: TaskRun, snapshot: SessionSnapshot | null, now
   }
   let last = true
   for (const item of snapshot.items.slice(at + 1)) {
+    // 断线重连的「继续」：同一轮接着做，换成它的轮次编号
+    if (item.kind === 'user' && isReconnect(run, item)) {
+      next = { ...next, turnId: item.turnId ?? next.turnId, reply: null, activity: null, notice: null }
+      continue
+    }
     // 下一条不是这一轮的 user 条目：这一轮已经过去了
     if (item.kind === 'user' && item.turnId !== next.turnId) {
       last = false
@@ -364,8 +377,26 @@ export function reconcileRun(run: TaskRun, snapshot: SessionSnapshot | null, now
   }
   next = { ...next, requests: [] }
   const outcome = last ? snapshot.record.lastOutcome : null
+  // 失败了但还排在队列里、队列没暂停：引擎在等着自动重连续做（和 trackEvent 的 queue 分支一样）。
+  // 暂停了（重启后等你点继续）、状态不确定的照旧按失败收尾，能重试
+  if (
+    outcome === 'failed' &&
+    !snapshot.queuePaused &&
+    snapshot.queue.some(q => q.id === run.clientMessageId && q.status === 'queued')
+  )
+    // 记上 failing：之后引擎放弃重连（队列项标失败或消失）时，queue 事件照实时路径收尾
+    return {
+      run: { ...next, turnId: null, failing: firstLine(next.notice) },
+      patch: { status: 'running', request: null },
+      finish: null,
+    }
   if (outcome === 'failed')
     return { run: next, patch: null, finish: { status: 'failed', error: firstLine(next.notice) } }
   if (outcome === 'interrupted') return { run: next, patch: null, finish: { status: 'stopped' } }
-  return { run: next, patch: null, finish: next.reply ? { status: 'done' } : { status: 'stopped' } }
+  // 正常结束但没有回复文字（只改了文件）也算做完，和实时路径一致。lastOutcome 可能是上一轮的（崩溃时没写），
+  // 只认这一轮自己的统计行（turn_stats，一轮结束时写）
+  const ended = snapshot.items
+    .slice(at + 1)
+    .some(i => i.kind === 'turn_stats' && i.turnId === next.turnId && i.outcome === 'completed')
+  return { run: next, patch: null, finish: next.reply || ended ? { status: 'done' } : { status: 'stopped' } }
 }

@@ -63,6 +63,8 @@ export function TeamNotifier() {
       const channelId = channelOfNotice(id)
       if (!channelId) return
       setPage('channels')
+      // 开着「需要你」时先关掉，让这个频道真的显示出来（显示了才标已读）
+      channelActions.openNeeds(false)
       channelActions.select(channelId)
     })
     return () => {

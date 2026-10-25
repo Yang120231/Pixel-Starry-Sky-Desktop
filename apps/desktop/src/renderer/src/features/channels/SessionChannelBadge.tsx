@@ -22,6 +22,7 @@ export function SessionChannelBadge({ sessionId }: { sessionId: string }) {
       title={tr('channels.join.open')}
       onClick={() => {
         setPage('channels')
+        channelActions.openNeeds(false)
         channelActions.select(channel.id)
       }}
       className="no-drag max-w-[40%] shrink-0 truncate rounded-md bg-accent-soft px-1.5 text-meta leading-5 text-accent-fg hover:bg-accent-soft/70"

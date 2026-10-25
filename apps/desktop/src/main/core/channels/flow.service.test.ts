@@ -17,6 +17,8 @@ let calls: { channel: string; args: unknown[] }[]
 let sessions: SessionSummary[]
 /** 假的用量记录（engine:usageList 按 filter.session 取） */
 let usage: UsageRecord[]
+/** 设了就让 engine:createSession 等它（模拟建会话很慢） */
+let slowCreate: Promise<void> | null
 
 const settle = async () => {
   for (let i = 0; i < 10; i++) {
@@ -34,6 +36,7 @@ async function open(extra: Partial<ChannelsDeps> = {}): Promise<Channels> {
     call: async (channel, args) => {
       calls.push({ channel, args })
       if (channel === 'engine:createSession') {
+        if (slowCreate) await slowCreate
         const id = `s${++n}`
         sessions.push({ record: { id, projectId: 'p1' }, state: 'idle' } as SessionSummary)
         return { id }
@@ -121,6 +124,7 @@ beforeEach(async () => {
   calls = []
   sessions = []
   usage = []
+  slowCreate = null
 })
 afterEach(async () => {
   for (const c of opened) await c.dispose()
@@ -747,5 +751,152 @@ describe('流程第四批（docs/ui/channels-pipeline.md §10）', () => {
     await expect(
       c.update(ch, { schedules: [{ ...schedule, limits: { ...schedule.limits, costUsd: null } }] as never }),
     ).rejects.toThrow('都要设')
+  })
+})
+
+describe('频道问题修复（docs/ui/channels-features.md §8）', () => {
+  const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  const image = {
+    id: 'i',
+    name: 'i.png',
+    mediaType: 'image/png' as const,
+    bytes: 70,
+    width: 1,
+    height: 1,
+    dataBase64: PNG,
+  }
+
+  it('建会话期间追加的要求不丢：这一轮做完接着发', async () => {
+    const { c, a, ch } = await setup()
+    let release!: () => void
+    slowCreate = new Promise(r => (release = r))
+    const { tasks: ids } = await c.post(ch, { text: '@画师 画个按钮', clientId: '1' })
+    await settle()
+    await c.post(ch, { text: '顺便加个阴影', replyToId: ids[0], clientId: '2' })
+    release()
+    await settle()
+    const s = tasks(c, ch)[0].sessionId!
+    expect(sends().filter(x => x.sessionId === s)).toHaveLength(1)
+    await endTurn(c, s, '画好了')
+    expect(lastTo(s).text).toContain('顺便加个阴影')
+    expect(a).toBeTruthy()
+  })
+
+  it('上次退出时正在建会话：重启后放回排队重新开始，成员不被卡住', async () => {
+    const { c, ch } = await setup()
+    slowCreate = new Promise(() => {})
+    await c.post(ch, { text: '@画师 画个按钮', clientId: '1' })
+    await settle()
+    ;(c as unknown as { saveRuns: () => void }).saveRuns()
+    await c.dispose()
+    opened = opened.filter(x => x !== c)
+    slowCreate = null
+    const again = await open()
+    await again.reconcile()
+    await settle()
+    expect(tasks(again, ch)[0].sessionId).toBeTruthy()
+    expect(sends().some(x => x.sessionId === tasks(again, ch)[0].sessionId)).toBe(true)
+  })
+
+  it('已停止的流程里重试步骤卡：卡片自己再做一轮，步骤不被拉回进行中', async () => {
+    const { c, a, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '停止',
+      steps: [{ id: 's1', title: '画贴图', memberId: a, deps: [], kind: 'work' }],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    await c.flowAction(ch, { type: 'stop', messageId })
+    await settle()
+    expect(stepOf(c, ch, 's1').status).toBe('stopped')
+    await c.taskAction(tasks(c, ch)[0].id, 'retry')
+    await settle()
+    expect(flowOf(c, ch).status).toBe('stopped')
+    expect(stepOf(c, ch, 's1').status).toBe('stopped')
+  })
+
+  it('发带附件的消息期间改了频道设置、或删了频道：不被旧的频道对象改回 / 复活', async () => {
+    const { c, ch } = await setup()
+    const p = c.post(ch, { text: '看图', clientId: '1', attachments: [image] })
+    await c.update(ch, { topic: '新主题' })
+    await p
+    expect(c.state().channels.find(x => x.id === ch)?.topic).toBe('新主题')
+    const q = c.post(ch, { text: '再看', clientId: '2', attachments: [{ ...image, id: 'j' }] })
+    await c.delete(ch)
+    await q.catch(() => undefined)
+    expect(c.state().channels.some(x => x.id === ch)).toBe(false)
+  })
+})
+
+describe('频道问题修复第二轮（复审）', () => {
+  it('建会话期间点停止：取消这项活，建好会话后也不发', async () => {
+    const { c, ch } = await setup()
+    let release!: () => void
+    slowCreate = new Promise(r => (release = r))
+    const { tasks: ids } = await c.post(ch, { text: '@画师 画个按钮', clientId: '1' })
+    await settle()
+    await c.taskAction(ids[0], 'stop')
+    release()
+    await settle()
+    expect(tasks(c, ch)[0].status).toBe('stopped')
+    expect(sends()).toHaveLength(0)
+  })
+
+  it('重启时流程恢复刚开始的步骤不被当成上次没建完的：只建一个会话', async () => {
+    const { c, a, b, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '重启',
+      steps: [
+        { id: 's1', title: '画贴图', memberId: a, deps: [], kind: 'work' },
+        { id: 's2', title: '写代码', memberId: b, deps: ['s1'], kind: 'work' },
+      ],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    c.toolDone(s1, { summary: '好了' })
+    await endTurn(c, s1, '好了')
+    // 退出前 ② 还没来得及开始：回到没开始、没有运行记录
+    const inner = c as unknown as {
+      store: ChannelStore
+      updateFlow: (ch: string, id: string, fn: (f: ChannelFlow) => ChannelFlow) => void
+      saveRuns: () => void
+    }
+    const s2Task = stepOf(c, ch, 's2').taskId!
+    inner.updateFlow(ch, messageId, f => ({
+      ...f,
+      steps: f.steps.map(s => (s.id === 's2' ? { ...s, status: 'pending', taskId: null } : s)),
+    }))
+    inner.store.runs.delete(s2Task)
+    inner.saveRuns()
+    await c.dispose()
+    opened = opened.filter(x => x !== c)
+    let release!: () => void
+    slowCreate = new Promise(r => (release = r))
+    const before = calls.filter(x => x.channel === 'engine:createSession').length
+    const again = await open()
+    await again.reconcile()
+    release()
+    await settle()
+    expect(calls.filter(x => x.channel === 'engine:createSession').length - before).toBe(1)
+  })
+})
+
+describe('频道问题修复第二轮复审', () => {
+  it('建会话期间停止又马上重试：旧的那一轮不再发，只发新的一轮', async () => {
+    const { c, ch } = await setup()
+    let release!: () => void
+    slowCreate = new Promise(r => (release = r))
+    const { tasks: ids } = await c.post(ch, { text: '@画师 画个按钮', clientId: '1' })
+    await settle()
+    await c.taskAction(ids[0], 'stop')
+    await c.taskAction(ids[0], 'retry')
+    await settle()
+    release()
+    await settle()
+    expect(sends()).toHaveLength(1)
+    expect(sends()[0].clientMessageId).toContain('-2')
   })
 })

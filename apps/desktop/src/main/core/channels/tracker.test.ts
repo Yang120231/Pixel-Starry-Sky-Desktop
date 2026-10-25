@@ -318,6 +318,76 @@ describe('重启后对账', () => {
     expect(later.finish).toEqual({ status: 'done' })
   })
 
+  it('断线重连的「继续」是同一轮：重连前的改动和进度留着（实时和对账一样）', () => {
+    const edit = (id: string, path: string): Item => ({
+      kind: 'file_change',
+      id,
+      status: 'completed',
+      changes: [{ path, kind: 'update', diff: '', added: 2, removed: 1 }],
+    })
+    const live = feed(run(), [
+      { type: 'item_completed', item: user('ch-t1-1', 'turn1') },
+      { type: 'item_completed', item: edit('f1', 'a') },
+      { type: 'turn_completed', turnId: 'turn1', outcome: 'failed', error: 'ECONNRESET' },
+      { type: 'queue', items: [{ id: 'ch-t1-1', text: '', createdAt: 0, status: 'queued' } as never], paused: false },
+      { type: 'item_completed', item: user('ch-t1-1-reconnect-x', 'turn2') },
+      { type: 'item_completed', item: edit('f2', 'b') },
+    ])
+    expect(diffTotal(live.run)).toEqual({ added: 4, removed: 2 })
+    const again = reconcileRun(
+      run(),
+      snapshot({
+        items: [
+          user('ch-t1-1', 'turn1'),
+          edit('f1', 'a'),
+          user('ch-t1-1-reconnect-x', 'turn2'),
+          edit('f2', 'b'),
+          reply,
+        ],
+      }),
+    )
+    expect(again.finish).toEqual({ status: 'done' })
+    expect(again.run.turnId).toBe('turn2')
+    expect(diffTotal(again.run)).toEqual({ added: 4, removed: 2 })
+  })
+
+  it('失败了但还在队列里（等自动重连）→ 仍在进行（队列暂停了按失败）；没有回复文字时按这一轮的统计行判断完成', () => {
+    const waiting = reconcileRun(
+      run(),
+      snapshot({
+        items: [user('ch-t1-1', 'k')],
+        record: { lastOutcome: 'failed' } as SessionSnapshot['record'],
+        queue: [{ id: 'ch-t1-1', text: '', createdAt: 0, status: 'queued' } as never],
+      }),
+    )
+    expect(waiting.finish).toBeNull()
+    expect(waiting.patch).toMatchObject({ status: 'running' })
+    expect(waiting.run.turnId).toBeNull()
+    // 之后引擎放弃重连（队列项标失败）：按失败收尾，不一直挂在进行中
+    expect(
+      trackEvent(waiting.run, {
+        type: 'queue',
+        paused: true,
+        items: [{ id: 'ch-t1-1', text: '', createdAt: 0, status: 'failed', error: '断开' } as never],
+      }).finish,
+    ).toMatchObject({ status: 'failed' })
+    // 队列暂停了（重启后等你点继续）：按失败收尾，能重试
+    const paused = reconcileRun(
+      run(),
+      snapshot({
+        items: [user('ch-t1-1', 'k')],
+        record: { lastOutcome: 'failed' } as SessionSnapshot['record'],
+        queue: [{ id: 'ch-t1-1', text: '', createdAt: 0, status: 'queued' } as never],
+        queuePaused: true,
+      }),
+    )
+    expect(paused.finish).toMatchObject({ status: 'failed' })
+    // 没有回复文字：这一轮有统计行（正常结束）→ 已完成；只有上一轮留下的 completed（崩溃时没写）→ 已停止
+    const stats = { kind: 'turn_stats', id: 'st', turnId: 'k', outcome: 'completed', usage: {} } as unknown as Item
+    expect(reconcileRun(run(), snapshot({ items: [user('ch-t1-1', 'k'), stats] })).finish).toEqual({ status: 'done' })
+    expect(reconcileRun(run(), snapshot({ items: [user('ch-t1-1', 'k')] })).finish).toEqual({ status: 'stopped' })
+  })
+
   it('应用退出时中断 → 已停止；失败 → 失败（用错误通知）', () => {
     const items: Item[] = [user('ch-t1-1', 'k'), { kind: 'notice', id: 'n', level: 'error', text: '额度不足\n详情' }]
     expect(

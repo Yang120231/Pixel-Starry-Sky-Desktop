@@ -66,6 +66,7 @@ function JoinChannelDialog({ sessionId, title }: { sessionId: string; title: str
             label: tr('channels.join.open'),
             run: () => {
               setPage('channels')
+              channelActions.openNeeds(false)
               channelActions.select(joined)
             },
           },

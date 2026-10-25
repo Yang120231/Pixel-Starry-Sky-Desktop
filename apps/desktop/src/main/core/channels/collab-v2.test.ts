@@ -545,6 +545,11 @@ describe('主动提醒（§6）', () => {
     expect(digests).toHaveLength(1)
     expect(digests[0].text).toContain('每日简报')
     expect(digests[0].mentions).toEqual([])
+    // 发完把钟点改晚：当天不再发第二次
+    await c.update(ch, { digestHour: 18 })
+    now += 9 * 60 * MIN
+    await c.checkAlerts()
+    expect(alerts(c, ch).filter(m => m.alert?.rule === 'digest')).toHaveLength(1)
   })
 })
 

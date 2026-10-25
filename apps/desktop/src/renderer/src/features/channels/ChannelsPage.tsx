@@ -109,10 +109,10 @@ export function ChannelsPage({
       : null
   }, [replyTo, messages, members])
 
-  // 进入页面或切换频道：标为已读，记下「新消息」位置
+  // 进入页面、切换频道、从「需要你」回到时间线：标为已读，记下「新消息」位置（开着「需要你」时时间线没显示，不算看过）
   useEffect(() => {
-    if (channel) channelActions.select(channel.id)
-  }, [channel?.id])
+    if (channel && !needsOpen) channelActions.select(channel.id)
+  }, [channel?.id, needsOpen])
 
   // 从顶栏 / 命令面板切过来时焦点可能落回 body（工作台变成 inert），交给输入框
   useEffect(() => {

@@ -1200,8 +1200,9 @@ export class Channels {
     }
     this.posted.set(clientId, message.id)
     await this.store.append(message)
-    // 发消息就算看过了；AI 互相派活的防刷计数也从这里重新算
-    await this.store.saveChannel({ ...c, readAt: now, relayResetAt: now })
+    // 发消息就算看过了；AI 互相派活的防刷计数也从这里重新算。写附件期间频道可能被改、被删：按最新那份写，删了就不写
+    const latest = this.store.channels.get(channelId)
+    if (latest) await this.store.saveChannel({ ...latest, readAt: now, relayResetAt: now })
     this.pushMessage(message)
     const agents = (message.mentions ?? []).filter(id => this.member(id))
     // 讨论串里：@ 同一个成员 = 追加要求，不 @ 只是留言（docs/ui/channels-collab-v2.md §3）；引用卡片照旧，不 @ 也算追加要求
@@ -1784,7 +1785,10 @@ export class Channels {
           text = ws?.prompt ?? current.freshPrompt
         } else if (current.round > 1) text = current.freshPrompt
       }
-      current = { ...current, sessionId }
+      // 建会话期间可能追加了要求、被停止或删掉：按存着的最新那份写，别用 await 之前的拷贝覆盖
+      const latest = this.store.runs.get(run.taskId)
+      if (!latest || latest.phase !== 'sent' || latest.clientMessageId !== cmid) return
+      current = { ...latest, sessionId }
       this.store.runs.set(run.taskId, current)
       this.patch(run.channelId, run.taskId, { sessionId, status: 'queued' })
       this.saveRuns()
@@ -2361,6 +2365,8 @@ export class Channels {
     const ref = run.flow!
     if (run.answering) return
     this.updateFlow(run.channelId, ref.messageId, f => {
+      // 流程已经结束（停止、完成）：卡片重试 / 追加只是这张卡自己再做一轮，不把步骤拉回进行中
+      if (f.status !== 'running' && f.status !== 'paused') return f
       const s = f.steps.find(x => x.id === ref.stepId)
       return s && (s.status === 'failed' || s.status === 'stopped') ? withStep(f, s.id, { status: 'running' }) : f
     })
@@ -3390,7 +3396,9 @@ export class Channels {
     const due = new Date(now)
     due.setHours(c.digestHour ?? DIGEST_HOUR, 0, 0, 0)
     const dueAt = due.getTime()
-    if (now < dueAt || (c.lastDigestAt ?? c.createdAt) >= dueAt) return
+    // 今天发过就不再发（按日期算：发完把钟点改晚，不会再发一次）；今天到点后才建的频道明天再发
+    const today = new Date(now).setHours(0, 0, 0, 0)
+    if (now < dueAt || (c.lastDigestAt ?? 0) >= today || c.createdAt >= dueAt) return
     // c 是进循环前取的，中间可能改过设置：按现在的存
     const current = this.store.channels.get(c.id)
     if (!current) return
@@ -3567,7 +3575,8 @@ export class Channels {
       return
     }
     if (!run || run.phase === 'ended') return
-    if (run.phase === 'waiting') {
+    // 还在排队，或正在建会话（还没有会话 id）：直接取消；start() 建完会话后看到已结束就不发
+    if (run.phase === 'waiting' || !run.sessionId) {
       this.finish(run, { status: 'stopped', note: 'cancelled' })
       return
     }
@@ -3636,6 +3645,14 @@ export class Channels {
   async reconcile(machine: (id: string) => boolean = () => true): Promise<void> {
     if (!this.flowsResumed) {
       this.flowsResumed = true
+      // 上次退出时正在建会话（还没拿到会话 id）：放回排队，不然这个成员的队列一直被占着。
+      // 只在启动时、恢复流程之前（之后的是这次刚开始建的；重连时也可能正在建）
+      for (const run of this.store.runs.values())
+        if (run.phase === 'sent' && !run.sessionId) {
+          this.store.runs.set(run.taskId, { ...run, phase: 'waiting', clientMessageId: null })
+          this.patch(run.channelId, run.taskId, { status: 'queued' })
+          this.saveRuns()
+        }
       this.resumeFlows()
     }
     for (const run of [...this.store.runs.values()]) {
