@@ -11,6 +11,19 @@ import { nativeText } from '../app/ui-language'
 import type { AppContext } from '../app/context'
 import { machineOf } from '../machines/identity'
 import { browserRemoteUrl, browserTunnelUrl, remoteBrowserPort } from '../machines/browser-url'
+import {
+  PICK_WORLD_ID,
+  SHOT_MAX_EDGE,
+  clampRect,
+  elementExtra,
+  parsePickMessage,
+  pickerScript,
+  sanitizePickConfig,
+  type PickMessage,
+  type PickRect,
+} from './elementPicker'
+
+const ANNOTATION_LIMIT = 100
 
 interface StoredScope {
   pages: BrowserPage[]
@@ -62,13 +75,26 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
       p.error = null
       p.canBack = false
       p.canForward = false
+      p.picking = false
       p.annotations ??= []
     }
-  type View = { view: WebContentsView; scope: string; id: string; owner: BrowserWindow }
+  type View = {
+    view: WebContentsView
+    scope: string
+    id: string
+    owner: BrowserWindow
+    /** 点选脚本回传消息的口令前缀（每个视图一个，只存在主进程和隔离 world 里） */
+    channel: string
+    /** 注入过点选脚本（关掉选取时要通知它） */
+    injected: boolean
+  }
   const views = new Map<string, View>(),
     configured = new Set<string>()
   const bounds = new Map<number, { scope: string; rect: Electron.Rectangle }>()
   const scopeMachines = new Map<string, string>()
+  /** 点选批注：界面最近一次传来的主题色和文案；页面里找不到元素的批注（页面标签 id → 批注 id，只在内存里） */
+  let pickConfig = sanitizePickConfig(null)
+  const missing = new Map<string, Set<string>>()
   /** 本机项目的根目录（file:// 只放行这里面的文件）；远程机器不记 */
   const scopeRoots = new Map<string, string>()
   const scopeOf = (ref: WorkspaceRef): string => {
@@ -94,7 +120,16 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
   }
   const displayState = (value: BrowserState): BrowserState => ({
     ...value,
-    pages: value.pages.map(page => ({ ...page, url: page.remoteUrl ?? page.url })),
+    pages: value.pages.map(page => {
+      const gone = missing.get(page.id)
+      return {
+        ...page,
+        url: page.remoteUrl ?? page.url,
+        annotations: gone?.size
+          ? page.annotations.map(a => (gone.has(a.id) ? { ...a, missing: true as const } : a))
+          : page.annotations,
+      }
+    }),
   })
   const transport = async (scope: string, url: string): Promise<string> => {
     const machine = scopeMachines.get(scope) ?? 'local',
@@ -114,6 +149,76 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
     const show = !!b && b.scope === v.scope && current.activeId === v.id && b.rect.width > 0 && b.rect.height > 0
     if (show && b) v.view.setBounds(b.rect)
     v.view.setVisible(show)
+  }
+  const markersOf = (p: BrowserPage) =>
+    p.annotations.flatMap((a, i) =>
+      a.selector && a.route ? [{ id: a.id, n: i + 1, route: a.route, selector: a.selector }] : [],
+    )
+  /** 把选取状态、编号标记交给网页里的脚本（没有要显示的、也没注入过就不碰网页） */
+  const syncPicker = async (v: View): Promise<void> => {
+    const wc = v.view.webContents,
+      p = state(v.scope).pages.find(item => item.id === v.id)
+    if (!p || wc.isDestroyed()) return
+    const markers = markersOf(p)
+    if (!p.picking && !markers.length && !v.injected) return
+    const code = pickerScript({ config: pickConfig, channel: v.channel, picking: !!p.picking, markers })
+    await wc.executeJavaScriptInIsolatedWorld(PICK_WORLD_ID, [{ code }]).then(
+      () => (v.injected = true),
+      () => {},
+    )
+  }
+  const refreshPicker = (scope: string, id: string): void => {
+    for (const v of views.values()) if (v.scope === scope && v.id === id) void syncPicker(v)
+  }
+  /** 元素区域截图：夹在视图里，长边缩到 SHOT_MAX_EDGE，存成 JPEG */
+  const captureShot = async (v: View, rect: PickRect) => {
+    const size = v.view.getBounds(),
+      r = clampRect(rect, size.width, size.height)
+    const image = r ? await v.view.webContents.capturePage(r).catch(() => null) : null
+    if (!image || image.isEmpty()) return null
+    const { width, height } = image.getSize(),
+      scale = Math.min(1, SHOT_MAX_EDGE / Math.max(width, height))
+    const out =
+      scale < 1
+        ? image.resize({
+            width: Math.max(1, Math.round(width * scale)),
+            height: Math.max(1, Math.round(height * scale)),
+          })
+        : image
+    const done = out.getSize()
+    return {
+      shot: `data:image/jpeg;base64,${out.toJPEG(70).toString('base64')}`,
+      shotSize: { width: done.width, height: done.height },
+    }
+  }
+  /** 网页里点选脚本回传的消息 */
+  const onPick = async (v: View, msg: PickMessage | null): Promise<void> => {
+    const page = state(v.scope).pages.find(item => item.id === v.id)
+    if (!msg || !page) return
+    if (msg.t === 'exit') {
+      page.picking = false
+      broadcast(v.scope)
+    } else if (msg.t === 'missing') {
+      const prior = missing.get(page.id)
+      if (prior?.size === msg.ids.length && msg.ids.every(id => prior.has(id))) return
+      missing.set(page.id, new Set(msg.ids))
+      broadcast(v.scope)
+    } else {
+      try {
+        if (page.annotations.length >= ANNOTATION_LIMIT) throw new Error('批注数量已达到上限')
+        const shot = msg.rect && !msg.extra.off?.includes('shot') ? await captureShot(v, msg.rect) : null
+        const extra = elementExtra({ ...msg.extra, ...shot })
+        await store.transaction(() => {
+          const p = find(v.scope, v.id)
+          if (p.annotations.length >= ANNOTATION_LIMIT) throw new Error('批注数量已达到上限')
+          p.annotations.push({ id: randomUUID(), text: msg.note, url: p.remoteUrl ?? p.url, ...extra })
+        })
+      } catch (error) {
+        page.error = (error as Error).message
+      }
+      broadcast(v.scope)
+      await syncPicker(v)
+    }
   }
   const find = (scope: string, id: string): BrowserPage => {
     const p = state(scope).pages.find(p => p.id === id)
@@ -187,7 +292,14 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
         allowRunningInsecureContent: false,
       },
     })
-    const entry = { view, scope, id: p.id, owner: win }
+    const entry: View = {
+      view,
+      scope,
+      id: p.id,
+      owner: win,
+      channel: 'pixelsky-pick:' + randomUUID() + ':',
+      injected: false,
+    }
     views.set(key, entry)
     win.contentView.addChildView(view)
     view.setVisible(false)
@@ -266,6 +378,8 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
       setImmediate(update)
     })
     wc.on('page-title-updated', update)
+    wc.on('dom-ready', () => void syncPicker(entry))
+    wc.on('console-message', details => void onPick(entry, parsePickMessage(details.message, entry.channel)))
     wc.on('did-fail-load', (_e, code, description, _url, mainFrame) => {
       if (mainFrame && code !== -3) {
         p.error = description
@@ -374,6 +488,7 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
           v.view.webContents.close()
           views.delete(key)
         }
+      missing.delete(id)
       const next = state(scope).activeId
       if (next) place(getView(win, scope, find(scope, next)))
     } else {
@@ -420,13 +535,32 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
     const id = state(scope).activeId
     if (id && rect.width && rect.height) place(getView(win, scope, find(scope, id)))
   })
-  handle('annotate', async (_, scope, rawId, text) => {
+  handle('annotate', async (_, scope, rawId, text, extra) => {
     const id = value(rawId, 200)
     await store.transaction(() => {
       const p = find(scope, id)
-      if (p.annotations.length >= 100) throw new Error('批注数量已达到上限')
-      p.annotations.push({ id: randomUUID(), text: value(text, 4000, true), url: p.remoteUrl ?? p.url })
+      if (p.annotations.length >= ANNOTATION_LIMIT) throw new Error('批注数量已达到上限')
+      p.annotations.push({
+        id: randomUUID(),
+        text: value(text, 4000, true),
+        url: p.remoteUrl ?? p.url,
+        ...elementExtra(extra),
+      })
     })
+    refreshPicker(scope, id)
+    broadcast(scope)
+    return state(scope)
+  })
+  // 点选元素批注（docs/ui/element-annotation.md）：开 / 关选取；config 是界面传来的主题色和文案
+  handle('pick', async (e, scope, rawId, on, rawConfig) => {
+    const page = find(scope, value(rawId, 200)),
+      win = BrowserWindow.fromWebContents(e.sender)!
+    pickConfig = sanitizePickConfig(rawConfig)
+    const was = !!page.picking
+    page.picking = on === true
+    const entry = getView(win, scope, page)
+    await syncPicker(entry)
+    if (page.picking && !was && !entry.view.webContents.isDestroyed()) entry.view.webContents.focus()
     broadcast(scope)
     return state(scope)
   })
@@ -435,6 +569,7 @@ export async function initProjectBrowser(ctx: AppContext, dir: string, host: Too
       const p = find(scope, value(rawId, 200))
       p.annotations = p.annotations.filter(a => a.id !== rawAnnotationId)
     })
+    refreshPicker(scope, value(rawId, 200))
     broadcast(scope)
     return state(scope)
   })

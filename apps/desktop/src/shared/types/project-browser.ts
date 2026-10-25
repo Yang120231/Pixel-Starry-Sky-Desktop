@@ -1,7 +1,25 @@
+/** 点选元素批注里可以取消勾选的项 */
+export type ElementNoteField = 'route' | 'selector' | 'element' | 'shot'
 export interface BrowserAnnotation {
   id: string
   text: string
   url: string
+  // 以下是点选元素批注才有的（docs/ui/element-annotation.md）；整页批注只有上面三项
+  /** 路由（URL 的 path） */
+  route?: string
+  selector?: string
+  /** 标签名.类名，如 button.primary */
+  label?: string
+  /** 元素文字（前 80 字） */
+  element?: string
+  size?: { width: number; height: number }
+  /** 元素截图（JPEG data URL，长边 ≤ 720） */
+  shot?: string
+  shotSize?: { width: number; height: number }
+  /** 用户取消勾选的项：不写进发给会话的文字（截图取消了就不截） */
+  off?: ElementNoteField[]
+  /** 页面里已经找不到这个元素（只在广播里带，不落盘） */
+  missing?: boolean
 }
 export interface BrowserPage {
   id: string
@@ -11,6 +29,8 @@ export interface BrowserPage {
   error: string | null
   canBack: boolean
   canForward: boolean
+  /** 正在点选元素（启动时清零） */
+  picking?: boolean
   annotations: BrowserAnnotation[]
   /** Original remote address; the local SSH forwarding port is never the saved workspace target. */
   remoteUrl?: string

@@ -1,26 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  ArrowLeft,
-  ArrowRight,
-  ExternalLink,
-  Globe,
-  MessageSquareText,
-  Plus,
-  RefreshCw,
-  Square,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { ArrowLeft, ArrowRight, ExternalLink, Globe, MousePointerClick, Plus, RefreshCw, Square, X } from 'lucide-react'
 import { Button, IconButton } from '@/ui'
-import { ConfirmDialog } from '@/ui/ConfirmDialog'
+import { MAX_IMAGE_COUNT } from '@pixelsky/protocol'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
-import { useComposerController } from '@/features/engine'
+import {
+  getAnnotationDraft,
+  setAnnotationDraft,
+  takeRemovedNotes,
+  useRemovedAnnotations,
+} from '@/features/session/attachments/annotationDraft'
 import { OVERLAY_EVENT, collectOverlays, overlayHidesBrowser, pointShowsPlaceholder } from './browserOverlay'
+import { ElementNotes } from './ElementNotes'
+import { shotImage } from './annotationText'
+import { pickConfig } from './pickConfig'
 import { PreviewViewport } from './PreviewViewport'
 import { useProjectContext } from './projectContext'
 import { FIELD, NoProject, ToolError, useOperation } from './ToolsUi'
-import type { BrowserAnnotation, BrowserState } from '../../../../shared/types/project-browser'
+import type { BrowserAnnotation, BrowserPage, BrowserState } from '../../../../shared/types/project-browser'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { demo as demoData } from '@/data/demo'
 import { isPortUrl, parsePort, portUrl, sameService } from '@/features/coding/bottom/portsModel'
@@ -65,16 +62,11 @@ function BrowserBody({
   const [address, setAddress] = useState(''),
     [note, setNote] = useState(''),
     [notesOpen, setNotesOpen] = useState(false)
-  /** 确认框里待发送的批注：发送后只移除这几条，确认期间新加的保留 */
-  const [send, setSend] = useState<{
-    sessionId: string
-    text: string
-    pageId: string
-    notes: BrowserAnnotation[]
-  } | null>(null)
-  /** 刚发出去、已从列表移除的批注：提示几秒，可以放回列表（不撤回已发出的消息） */
+  /** 刚放进输入框、已从列表移除的批注：提示几秒，可以放回列表（也从输入框的批注卡里拿掉） */
   const [sent, setSent] = useState<{ pageId: string; notes: BrowserAnnotation[] } | null>(null)
-  const controller = useComposerController(send?.sessionId ?? target.sessionId ?? null)
+  /** 面板够宽时批注汇总放右侧（docs/ui/element-annotation.md §2），窄时是底部可折叠的样式 */
+  const [wide, setWide] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
   /** 被弹出层挡住、视图藏起来时铺在占位框里的截图（定格画面）；没有时 null */
   const [snapshot, setSnapshot] = useState<string | null>(null)
   const viewport = useRef<HTMLDivElement>(null),
@@ -116,6 +108,12 @@ function BrowserBody({
       void window.pixelsky?.projectBrowser.viewport(target, null).catch(() => {})
     }
   }, [])
+  // 输入框里点 X 移除批注卡：同样给 6 秒放回
+  const hasRemoved = useRemovedAnnotations(target.sessionId)
+  useEffect(() => {
+    const notes = hasRemoved && target.sessionId ? takeRemovedNotes(target.sessionId) : null
+    if (notes && page) setSent({ pageId: page.id, notes })
+  }, [hasRemoved, page?.id])
   useEffect(() => {
     if (!sent) return
     const timer = window.setTimeout(() => setSent(null), 6000)
@@ -306,8 +304,90 @@ function BrowserBody({
       else setState(await window.pixelsky!.projectBrowser.annotate(target, page.id, note))
       setNote('')
     })
+  const patchPage = (id: string, change: (p: BrowserPage) => BrowserPage) =>
+    setState(s => (s ? { ...s, pages: s.pages.map(p => (p.id === id ? change(p) : p)) } : s))
+  const togglePick = () =>
+    run(async () => {
+      if (!page) return
+      const on = !page.picking
+      if (demo) patchPage(page.id, p => ({ ...p, picking: on }))
+      else setState(await window.pixelsky!.projectBrowser.pick(target, page.id, on, pickConfig()))
+    })
+  const removeNote = (id: string) =>
+    run(async () => {
+      if (!page) return
+      if (demo) patchPage(page.id, p => ({ ...p, annotations: p.annotations.filter(n => n.id !== id) }))
+      else setState(await window.pixelsky!.projectBrowser.removeAnnotation(target, page.id, id))
+    })
+  const clearNotes = () =>
+    run(async () => {
+      if (!page) return
+      if (demo) patchPage(page.id, p => ({ ...p, annotations: [] }))
+      else
+        for (const a of page.annotations)
+          setState(await window.pixelsky!.projectBrowser.removeAnnotation(target, page.id, a.id))
+    })
+  /** 「发给会话」：批注从列表移到输入框的批注卡（截图按图片附件），不弹确认框；发送时才合进消息（composeWithAnnotations） */
+  const sendToSession = () =>
+    run(async () => {
+      const sessionId = target.sessionId
+      if (!page || !sessionId) return
+      const notes = page.annotations,
+        prior = getAnnotationDraft(sessionId)
+      setAnnotationDraft(sessionId, {
+        url: prior?.url ?? notes[0]?.url ?? page.url,
+        notes: [...(prior?.notes ?? []), ...notes],
+        shots: [...(prior?.shots ?? []), ...notes.flatMap((a, i) => shotImage(a, i + 1) ?? [])].slice(
+          0,
+          MAX_IMAGE_COUNT,
+        ),
+      })
+      for (const a of notes) setState(await window.pixelsky!.projectBrowser.removeAnnotation(target, page.id, a.id))
+      setSent({ pageId: page.id, notes })
+    })
+  const restoreNotes = () =>
+    run(async () => {
+      if (!page || !sent) return
+      const notes = sent.notes,
+        sessionId = target.sessionId,
+        draft = sessionId ? getAnnotationDraft(sessionId) : null
+      setSent(null)
+      if (sessionId && draft) {
+        const ids = new Set(notes.map(n => n.id)),
+          left = draft.notes.filter(n => !ids.has(n.id))
+        setAnnotationDraft(
+          sessionId,
+          left.length ? { ...draft, notes: left, shots: draft.shots.filter(s => !ids.has(s.id)) } : null,
+        )
+      }
+      for (const a of notes) setState(await window.pixelsky!.projectBrowser.annotate(target, page.id, a.text, a))
+    })
+  useEffect(() => {
+    const el = root.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= 560))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  // Esc 退出选取（网页拿到焦点时由网页里的脚本处理）
+  useEffect(() => {
+    if (!page?.picking) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) void togglePick()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [page?.picking, page?.id])
+  // 编号标记、小框的颜色跟着当前主题：打开有批注的页面时把配色再交给主进程
+  useEffect(() => {
+    if (demo || !page || !(page.picking || page.annotations.some(a => a.selector))) return
+    void window
+      .pixelsky!.projectBrowser.pick(target, page.id, !!page.picking, pickConfig())
+      .then(setState)
+      .catch(() => {})
+  }, [page?.id])
   return (
-    <div data-tools-browser className="flex min-h-0 flex-1 flex-col gap-2 p-3">
+    <div ref={root} data-tools-browser className="flex min-h-0 flex-1 flex-col gap-2 p-3">
       <div className="flex shrink-0 items-center gap-1">
         <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
           {state?.pages.map(p => (
@@ -382,6 +462,14 @@ function BrowserBody({
           </Button>
         </form>
         <IconButton
+          icon={MousePointerClick}
+          active={!!page?.picking}
+          aria-pressed={!!page?.picking}
+          label={tr(page?.picking ? 'projectTools.pickElementOff' : 'projectTools.pickElement')}
+          disabled={busy || !page}
+          onClick={() => void togglePick()}
+        />
+        <IconButton
           icon={ExternalLink}
           label={tr('projectTools.openExternal')}
           disabled={!page || busy || demo}
@@ -393,208 +481,121 @@ function BrowserBody({
         />
       </div>
       <ToolError error={error || page?.error || ''} />
-      <div
-        ref={viewport}
-        data-browser-viewport
-        className="relative flex min-h-24 flex-1 flex-col overflow-hidden rounded-lg border border-line-card bg-surface"
-      >
-        {snapshot && (
-          <img
-            src={snapshot}
-            alt=""
-            aria-hidden
-            data-browser-snapshot
-            draggable={false}
-            className="pointer-events-none absolute inset-0 z-[1] size-full select-none"
-          />
-        )}
-        {demo && page ? (
-          <PreviewViewport />
-        ) : (
-          <div className="pointer-events-none flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center text-meta text-fg-muted">
-            <Globe size={24} />
-            <p>
-              {page
-                ? tr(page.loading ? 'projectTools.loading' : 'projectTools.browserTitle')
-                : tr('projectTools.browserEmpty')}
-            </p>
-            {!page && <p>{tr('projectTools.browserEmptyHint')}</p>}
-            {!page && !demo && (
-              <div data-port-entry className="pointer-events-auto mt-2 flex w-full max-w-72 flex-col gap-2">
-                <p>{tr('portTip.manualHint')}</p>
-                <form
-                  className="flex gap-1"
-                  onSubmit={e => {
-                    e.preventDefault()
-                    openPort(parsePort(port))
-                  }}
-                >
-                  <label className="flex h-8 min-w-0 flex-1 items-center rounded-md border border-line bg-surface px-2.5 font-mono text-list focus-within:border-accent">
-                    <span className="text-fg-faint">localhost:</span>
-                    <input
-                      inputMode="numeric"
-                      value={port}
-                      onChange={e => setPort(e.target.value)}
-                      placeholder={tr('portTip.portPlaceholder')}
-                      aria-label={tr('portTip.portPlaceholder')}
-                      title={tr('portTip.portInvalid')}
-                      className="min-w-0 flex-1 bg-transparent text-fg outline-none"
-                    />
-                  </label>
-                  <Button type="submit" disabled={busy || parsePort(port) === null}>
-                    {tr('projectTools.go')}
-                  </Button>
-                </form>
-                {found.length > 0 && (
-                  <div className="text-left text-fg-faint">
-                    {tr('portTip.found')}
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {found.map(f => (
-                        <button
-                          key={f.port}
-                          type="button"
-                          disabled={busy}
-                          onClick={() => openPort(f.port)}
-                          className="rounded-sm bg-subtle px-1.5 font-mono text-fg-secondary hover:bg-hover"
-                        >
-                          :{f.port}
-                        </button>
-                      ))}
-                    </div>
+      <div className="flex min-h-0 flex-1 gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div
+            ref={viewport}
+            data-browser-viewport
+            className="relative flex min-h-24 flex-1 flex-col overflow-hidden rounded-lg border border-line-card bg-surface"
+          >
+            {snapshot && (
+              <img
+                src={snapshot}
+                alt=""
+                aria-hidden
+                data-browser-snapshot
+                draggable={false}
+                className="pointer-events-none absolute inset-0 z-[1] size-full select-none"
+              />
+            )}
+            {demo && page ? (
+              <PreviewViewport />
+            ) : (
+              <div className="pointer-events-none flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center text-meta text-fg-muted">
+                <Globe size={24} />
+                <p>
+                  {page
+                    ? tr(page.loading ? 'projectTools.loading' : 'projectTools.browserTitle')
+                    : tr('projectTools.browserEmpty')}
+                </p>
+                {!page && <p>{tr('projectTools.browserEmptyHint')}</p>}
+                {!page && !demo && (
+                  <div data-port-entry className="pointer-events-auto mt-2 flex w-full max-w-72 flex-col gap-2">
+                    <p>{tr('portTip.manualHint')}</p>
+                    <form
+                      className="flex gap-1"
+                      onSubmit={e => {
+                        e.preventDefault()
+                        openPort(parsePort(port))
+                      }}
+                    >
+                      <label className="flex h-8 min-w-0 flex-1 items-center rounded-md border border-line bg-surface px-2.5 font-mono text-list focus-within:border-accent">
+                        <span className="text-fg-faint">localhost:</span>
+                        <input
+                          inputMode="numeric"
+                          value={port}
+                          onChange={e => setPort(e.target.value)}
+                          placeholder={tr('portTip.portPlaceholder')}
+                          aria-label={tr('portTip.portPlaceholder')}
+                          title={tr('portTip.portInvalid')}
+                          className="min-w-0 flex-1 bg-transparent text-fg outline-none"
+                        />
+                      </label>
+                      <Button type="submit" disabled={busy || parsePort(port) === null}>
+                        {tr('projectTools.go')}
+                      </Button>
+                    </form>
+                    {found.length > 0 && (
+                      <div className="text-left text-fg-faint">
+                        {tr('portTip.found')}
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {found.map(f => (
+                            <button
+                              key={f.port}
+                              type="button"
+                              disabled={busy}
+                              onClick={() => openPort(f.port)}
+                              className="rounded-sm bg-subtle px-1.5 font-mono text-fg-secondary hover:bg-hover"
+                            >
+                              :{f.port}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
           </div>
-        )}
-      </div>
-      {page && (
-        <div className="flex shrink-0 flex-col gap-2">
-          <button
-            onClick={() => setNotesOpen(!notesOpen)}
-            className="flex items-center gap-2 text-list text-fg-secondary"
-          >
-            <MessageSquareText size={15} />
-            {tr('projectTools.annotation')} ({page.annotations.length})
-          </button>
-          {notesOpen && (
-            <div className="flex max-h-52 flex-col gap-2 overflow-auto">
-              <form
-                onSubmit={e => {
-                  e.preventDefault()
-                  void annotate()
-                }}
-                className="flex gap-2"
-              >
-                <input
-                  value={note}
-                  maxLength={4000}
-                  onChange={e => setNote(e.target.value)}
-                  placeholder={tr('projectTools.annotationPlaceholder')}
-                  className={FIELD}
-                />
-                <Button type="submit" disabled={busy || !note.trim()}>
-                  {tr('projectTools.save')}
-                </Button>
-              </form>
-              {sent?.pageId === page.id && (
-                <div className="flex items-center gap-2 rounded-md bg-accent-soft px-2.5 py-1.5 text-meta text-accent-fg">
-                  <span className="min-w-0 flex-1">
-                    {tr('projectTools.annotationSent', { p0: String(sent.notes.length) })}
-                  </span>
-                  <button
-                    disabled={busy}
-                    className="shrink-0 underline"
-                    onClick={() =>
-                      void run(async () => {
-                        const notes = sent.notes
-                        setSent(null)
-                        for (const a of notes)
-                          setState(await window.pixelsky!.projectBrowser.annotate(target, page.id, a.text))
-                      })
-                    }
-                  >
-                    {tr('projectTools.restoreAnnotation')}
-                  </button>
-                </div>
-              )}
-              {page.annotations.map(a => (
-                <div key={a.id} className="flex items-start gap-2 text-meta text-fg-secondary">
-                  <p className="min-w-0 flex-1 break-words whitespace-pre-wrap" title={a.url}>
-                    {a.text}
-                  </p>
-                  <IconButton
-                    icon={Trash2}
-                    label={tr('projectTools.remove')}
-                    onClick={() =>
-                      void run(async () => {
-                        if (demo)
-                          setState(s =>
-                            s
-                              ? {
-                                  ...s,
-                                  pages: s.pages.map(p =>
-                                    p.id === page.id
-                                      ? { ...p, annotations: p.annotations.filter(n => n.id !== a.id) }
-                                      : p,
-                                  ),
-                                }
-                              : s,
-                          )
-                        else setState(await window.pixelsky!.projectBrowser.removeAnnotation(target, page.id, a.id))
-                      })
-                    }
-                  />
-                </div>
-              ))}
-              <Button
-                disabled={!target.sessionId || !page.annotations.length || busy || demo}
-                title={!target.sessionId ? tr('projectTools.noConversation') : undefined}
-                onClick={() => {
-                  if (target.sessionId)
-                    setSend({
-                      sessionId: target.sessionId,
-                      text: page.annotations
-                        .map(a => tr('projectTools.annotationMessage', { p0: a.url, p1: a.text }))
-                        .join('\n\n'),
-                      pageId: page.id,
-                      notes: page.annotations,
-                    })
-                }}
-              >
-                {tr('projectTools.sendAnnotation')}
-              </Button>
-            </div>
+          {page && !wide && (
+            <ElementNotes
+              page={page}
+              side={false}
+              busy={busy}
+              canSend={!!target.sessionId && !demo}
+              note={note}
+              open={notesOpen}
+              sent={sent}
+              onNote={setNote}
+              onToggle={() => setNotesOpen(!notesOpen)}
+              onAnnotate={() => void annotate()}
+              onRemove={id => void removeNote(id)}
+              onClear={() => void clearNotes()}
+              onSend={() => void sendToSession()}
+              onRestore={() => void restoreNotes()}
+            />
           )}
         </div>
-      )}
-      {send && (
-        <ConfirmDialog
-          title={tr('projectTools.sendAnnotation')}
-          description={
-            <>
-              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-list">{send.text}</pre>
-              <p className="mt-2 text-meta text-fg-muted">{tr('projectTools.annotationSendHint')}</p>
-            </>
-          }
-          confirmLabel={tr('projectTools.sendAnnotation')}
-          cancelLabel={tr('projectTools.cancel')}
-          busy={busy}
-          error={error}
-          onConfirm={() =>
-            void run(async () => {
-              if (!controller) throw new Error(tr('projectTools.noConversation'))
-              await controller.submit(send.text)
-              setSend(null)
-              // 已发送的批注从列表移除，不用再手动删
-              for (const a of send.notes)
-                setState(await window.pixelsky!.projectBrowser.removeAnnotation(target, send.pageId, a.id))
-              setSent({ pageId: send.pageId, notes: send.notes })
-            })
-          }
-          onCancel={() => setSend(null)}
-        />
-      )}
+        {page && wide && (
+          <ElementNotes
+            page={page}
+            side={true}
+            busy={busy}
+            canSend={!!target.sessionId && !demo}
+            note={note}
+            open={notesOpen}
+            sent={sent}
+            onNote={setNote}
+            onToggle={() => setNotesOpen(!notesOpen)}
+            onAnnotate={() => void annotate()}
+            onRemove={id => void removeNote(id)}
+            onClear={() => void clearNotes()}
+            onSend={() => void sendToSession()}
+            onRestore={() => void restoreNotes()}
+          />
+        )}
+      </div>
     </div>
   )
 }

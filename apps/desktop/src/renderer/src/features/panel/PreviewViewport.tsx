@@ -34,7 +34,7 @@ function MiniCard({ rows }: { rows: string[] }) {
 }
 
 /** 批注编号圆点（中心对准 className 给出的 left/top） */
-function AnnotationMarker({ className }: { className?: string }) {
+function AnnotationMarker({ className, n = 1 }: { className?: string; n?: number }) {
   useI18n()
   return (
     <div
@@ -43,7 +43,7 @@ function AnnotationMarker({ className }: { className?: string }) {
         className,
       )}
     >
-      1
+      {n}
     </div>
   )
 }
@@ -108,14 +108,20 @@ export function PreviewViewport() {
 
         <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden px-[8%] pt-3">
           <Bar w="18%" tone="bg-fg-faint" />
-          <Bar w="88%" />
+          <div className="relative">
+            <Bar w="88%" />
+            <AnnotationMarker n={2} className="left-[90%] top-1/2" />
+          </div>
           <Bar w="30%" tone="bg-fg-faint" />
           <div className="flex flex-col gap-1.5 pl-2">
             <Bar w="72%" />
             <Bar w="80%" />
             <Bar w="64%" />
           </div>
-          <MiniCard rows={['40%', '46%', '36%']} />
+          <div className="relative">
+            <MiniCard rows={['40%', '46%', '36%']} />
+            <AnnotationMarker n={3} className="left-[98%] top-0" />
+          </div>
           <div className="ml-auto w-[62%] shrink-0 rounded-md bg-subtle px-2 py-1.5">
             <Bar w="90%" tone="bg-fg-faint" />
           </div>

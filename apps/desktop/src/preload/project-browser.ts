@@ -1,5 +1,10 @@
 import type { WorkspaceRef } from '../shared/types/workspace'
-import type { BrowserState } from '../shared/types/project-browser'
+import type { BrowserAnnotation, BrowserState } from '../shared/types/project-browser'
+
+export interface PickConfigInput {
+  theme: Record<string, string>
+  text: Record<string, string>
+}
 
 export interface BrowserBridge {
   state(ref: WorkspaceRef): Promise<BrowserState>
@@ -15,7 +20,10 @@ export interface BrowserBridge {
     bounds: { x: number; y: number; width: number; height: number } | null,
     opts?: { freeze?: boolean },
   ): Promise<{ snapshot: string | null } | void>
-  annotate(ref: WorkspaceRef, id: string, text: string): Promise<BrowserState>
+  /** extra：点选元素批注的字段（「放回列表」时带回），主进程重新校验 */
+  annotate(ref: WorkspaceRef, id: string, text: string, extra?: Partial<BrowserAnnotation>): Promise<BrowserState>
+  /** 开 / 关点选元素；config 是界面当前主题色和小框文案（注入网页的脚本用） */
+  pick(ref: WorkspaceRef, id: string, on: boolean, config: PickConfigInput): Promise<BrowserState>
   removeAnnotation(ref: WorkspaceRef, id: string, annotationId: string): Promise<BrowserState>
   onChange(cb: (state: BrowserState) => void): () => void
 }

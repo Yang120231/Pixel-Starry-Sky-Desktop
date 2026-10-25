@@ -99,6 +99,28 @@ export const demoToolCopies: ProjectCopy[] = [
     error: null,
   },
 ]
+/** 演示用的元素截图（SVG 色块，真实的是 JPEG；只在演示界面当缩略图用） */
+const demoShot = (fill: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="84" height="48"><rect width="84" height="48" fill="#eee"/><rect x="14" y="26" width="56" height="14" rx="3" fill="${fill}"/></svg>`)}`
+const demoNote = (
+  n: number,
+  text: string,
+  selector: string,
+  label: string,
+  element: string,
+  fill: string,
+): BrowserState['pages'][number]['annotations'][number] => ({
+  id: `demo-note-${n}`,
+  text,
+  url: 'http://127.0.0.1:8330/',
+  route: '/',
+  selector,
+  label,
+  element,
+  size: { width: 186, height: 36 },
+  shot: demoShot(fill),
+  shotSize: { width: 84, height: 48 },
+})
 export const demoToolBrowser: BrowserState = {
   scope: 'demo',
   activeId: 'demo-web',
@@ -111,7 +133,21 @@ export const demoToolBrowser: BrowserState = {
       error: null,
       canBack: false,
       canForward: false,
-      annotations: [],
+      annotations: [
+        demoNote(
+          1,
+          '点击后没有加载状态，用户会连点，加 loading 并禁用。',
+          'form.checkout .summary button.primary',
+          'button.primary',
+          '提交订单',
+          '#2D6151',
+        ),
+        demoNote(2, '输入框太窄，放不下 8 位优惠码。', '.summary input.coupon', 'input.coupon', '优惠码', '#777872'),
+        {
+          ...demoNote(3, '合计字号再大一点，和运费区分开。', '.summary .total', 'div.total', '¥ 328.00', '#B97A36'),
+          missing: true,
+        },
+      ],
     },
   ],
 }

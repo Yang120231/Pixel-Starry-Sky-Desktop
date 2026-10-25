@@ -70,6 +70,14 @@ import { needsConversion } from '@/features/session/attachments/convertImage'
 import { fileSize, isImageFile, readTextFile } from '@/features/session/attachments/files'
 import { discardStaged, releaseStaged, stageFile } from '@/features/session/attachments/stage'
 import { updateFiles, updateImages, useFileDraft, useImageDraft } from '@/features/session/attachments/drafts'
+import { AnnotationCard } from '@/features/session/attachments/AnnotationCard'
+import {
+  composeWithAnnotations,
+  removeAnnotationDraft,
+  setAnnotationDraft,
+  useAnnotationDraft,
+} from '@/features/session/attachments/annotationDraft'
+import { isSlashCommand } from '@/features/panel/annotationText'
 import { Popover, PopoverItem } from '@/ui'
 import { ComposerInput, type ComposerInputHandle } from './composerInput/ComposerInput'
 
@@ -126,6 +134,8 @@ export function Composer({
   const images = imageDraft.images
   const fileDraft = useFileDraft(key)
   const textFiles = fileDraft.files
+  // 浏览器面板「发给会话」放进来的网页批注卡（docs/ui/element-annotation.md）
+  const annotationDraft = useAnnotationDraft(key)
   const [reading, setReading] = useState(0)
   // 正在往目标机器传的文件（远程会话、没有本机路径的文件），显示进度、可以取消
   const [upload, setUpload] = useState<{ name: string; sent: number; total: number } | null>(null)
@@ -378,7 +388,7 @@ export function Composer({
   const hasText = text.trim().length > 0
   const running = !!live?.running
   const stopWithMain = useStopBackgroundAgents()
-  const hasContent = hasText || images.length > 0 || textFiles.length > 0
+  const hasContent = hasText || images.length > 0 || textFiles.length > 0 || !!annotationDraft
   const canSend = hasContent && !busy && !reading && !imageDraft.loading && !fileDraft.loading
 
   /** 读附件排队进行，读的时候发送键不可用 */
@@ -605,13 +615,16 @@ export function Composer({
     if (!canSend || submitting.current || pendingReads.current) return
     submitting.current = true
     const sent = text
-    const imageSignature = [...images, ...textFiles].map(attachment => attachment.id).join(',')
-    if (submission.current?.text !== sent || submission.current.images !== imageSignature)
-      submission.current = { text: sent, images: imageSignature, id: crypto.randomUUID() }
+    // 网页批注卡：文字块和截图并进这条消息；斜杠命令原样发（composeWithAnnotations）
+    const message = composeWithAnnotations(sent, images, annotationDraft)
+    const imageSignature = [...message.images, ...textFiles].map(attachment => attachment.id).join(',')
+    if (submission.current?.text !== message.text || submission.current.images !== imageSignature)
+      submission.current = { text: message.text, images: imageSignature, id: crypto.randomUUID() }
     setBusy(true)
     setError(null)
     try {
-      await live.submit(sent, submission.current.id, images, textFiles)
+      await live.submit(message.text, submission.current.id, message.images, textFiles)
+      if (message.sent) setAnnotationDraft(key, null)
       // 发出去的暂存副本归消息了：之后分叉、回退放回输入框再移除，不能删它
       releaseStaged(textFiles.flatMap(file => (file.staged && file.path ? [file.path] : [])))
       setText(current => (current === sent ? '' : current))
@@ -853,6 +866,21 @@ export function Composer({
                     ))}
                   </div>
                 ))}
+            </div>
+          )}
+          {annotationDraft && (
+            <div className="px-4 pt-3.5">
+              <AnnotationCard
+                draft={annotationDraft}
+                slash={isSlashCommand(text)}
+                onReplace={(id, next) =>
+                  setAnnotationDraft(key, {
+                    ...annotationDraft,
+                    shots: annotationDraft.shots.map(shot => (shot.id === id ? next : shot)),
+                  })
+                }
+                onRemove={() => removeAnnotationDraft(key)}
+              />
             </div>
           )}
           {images.length > 0 && (

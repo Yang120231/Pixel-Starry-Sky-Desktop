@@ -729,6 +729,7 @@ export const IPC_CONTRACT = {
   'projectBrowser:annotate': { kind: 'invoke', route: 'local', trust: 'window' },
   'projectBrowser:changed': { kind: 'push', route: 'push', trust: 'none' },
   'projectBrowser:navigate': { kind: 'invoke', route: 'local', trust: 'window' },
+  'projectBrowser:pick': { kind: 'invoke', route: 'local', trust: 'window' },
   'projectBrowser:removeAnnotation': { kind: 'invoke', route: 'local', trust: 'window' },
   'projectBrowser:select': { kind: 'invoke', route: 'local', trust: 'window' },
   'projectBrowser:state': { kind: 'invoke', route: 'local', trust: 'window' },
