@@ -86,7 +86,6 @@ export const boardMessages = {
   'board.issue.acceptanceCount': { zh: '验收 {done}/{total}', en: 'Accepted {done}/{total}' },
   'board.issue.dispatch': { zh: '交给 {member}', en: 'Send to {member}' },
   'board.issue.redispatch': { zh: '重新派给 {member}', en: 'Send to {member} again' },
-  'board.issue.dispatched': { zh: '已派到 #{channel}', en: 'Sent to #{channel}' },
   'board.issue.openCard': { zh: '查看卡片', en: 'Open card' },
   'board.issue.state.queued': { zh: '排队中', en: 'Queued' },
   'board.issue.state.approval': { zh: '等主人同意', en: 'Awaiting owner' },
@@ -239,6 +238,5 @@ export const boardMessages = {
   'board.schedule.sessionGone': { zh: '会话已被删除', en: 'The session was deleted' },
   'board.schedule.flowTitle': { zh: '# {channel} · 流程', en: '# {channel} · flow' },
   'board.schedule.flowDaily': { zh: '每天 {time}', en: 'Daily {time}' },
-  'board.schedule.flowOpen': { zh: '在频道里编辑', en: 'Edit in channel' },
   'board.schedule.flowOff': { zh: '已关闭', en: 'Off' },
 } as const

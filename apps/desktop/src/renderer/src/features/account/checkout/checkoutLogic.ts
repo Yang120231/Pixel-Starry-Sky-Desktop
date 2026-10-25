@@ -141,11 +141,6 @@ export function orderPhase(status: CheckoutStatus, remaining: number): DialogPha
   }
 }
 
-/** 订单进入这个状态后不用再轮询（终态）；expired 时「我已付款」仍可手动核实 */
-export function isFinalStatus(status: CheckoutStatus): boolean {
-  return status !== 'pending' && status !== 'paid'
-}
-
 /** 状态条的三步：等待付款 → 已付款 → 已到账 */
 export const STEPS = ['waiting', 'paid', 'completed'] as const
 export type Step = (typeof STEPS)[number]

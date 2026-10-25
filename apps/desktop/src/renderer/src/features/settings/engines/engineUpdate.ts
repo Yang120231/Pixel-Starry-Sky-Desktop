@@ -122,10 +122,6 @@ export function installEngine(e: EngineLite): Promise<void> {
   return runJob(e, 'install')
 }
 
-export function clearUpdateResult(engine: EngineId): void {
-  if (states.get(engine)?.result) set(engine, IDLE)
-}
-
 function subscribe(listener: () => void): () => void {
   listen()
   listeners.add(listener)

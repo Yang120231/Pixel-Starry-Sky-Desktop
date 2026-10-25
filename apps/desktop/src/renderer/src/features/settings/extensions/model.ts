@@ -1,4 +1,4 @@
-import { extText, grammarMatchScore, packDescription, packName } from '@pixelsky/protocol'
+import { extText, grammarMatchScore, packName } from '@pixelsky/protocol'
 import type { ExtLocale, ExtPackContributionKind, ExtPackInfo, ExtPackIssue } from '@pixelsky/protocol'
 import { isContributionActive } from '@/features/extpacks/model'
 import { grammarBuiltinConflicts, grammarOverrideKey } from '@/features/editor/code/languageIds'
@@ -12,38 +12,10 @@ const AI_KINDS: ExtPackContributionKind[] = ['skills', 'prompts']
 /** 「包含什么」里的显示顺序 */
 export const KIND_ORDER: ExtPackContributionKind[] = [...CODE_KINDS, ...AI_KINDS]
 
-const hasAny = (p: ExtPackInfo, kinds: ExtPackContributionKind[]): boolean =>
-  kinds.some(k => (p.manifest?.contributes[k]?.length ?? 0) > 0)
-
-export function packCategories(p: ExtPackInfo): Array<'code' | 'ai'> {
-  const out: Array<'code' | 'ai'> = []
-  if (hasAny(p, CODE_KINDS)) out.push('code')
-  if (hasAny(p, AI_KINDS)) out.push('ai')
-  return out
-}
-
 /** 列表里显示的名字：清单名（按语言），读不到清单就退回 id / 路径末段 */
 export function packTitle(p: ExtPackInfo, locale: ExtLocale): string {
   if (p.manifest) return packName(p.manifest, locale)
   return p.id ?? (p.path.split(/[\\/]/).filter(Boolean).pop() || p.key)
-}
-
-export function filterPacks(packs: ExtPackInfo[], group: PackGroup, query: string, locale: ExtLocale): ExtPackInfo[] {
-  const q = query.trim().toLowerCase()
-  return packs.filter(p => {
-    if (group !== 'all' && !packCategories(p).includes(group)) return false
-    if (!q) return true
-    const hay = [
-      packTitle(p, locale),
-      p.id ?? '',
-      p.manifest?.publisher ?? '',
-      p.manifest ? packDescription(p.manifest, locale) : '',
-      ...(p.manifest?.keywords ?? []),
-    ]
-      .join('\n')
-      .toLowerCase()
-    return hay.includes(q)
-  })
 }
 
 function contributionLabel(p: ExtPackInfo, kind: ExtPackContributionKind, index: number, locale: ExtLocale): string {

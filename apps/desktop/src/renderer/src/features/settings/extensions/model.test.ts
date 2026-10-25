@@ -1,44 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { ExtPackIssue } from '@pixelsky/protocol'
 import { fakePack } from '@/features/extpacks/testing'
-import { contributionRows, filterPacks, grammarConflicts, issueText, packCategories } from './model'
+import { contributionRows, grammarConflicts, issueText } from './model'
 
 const grammar = (over: Record<string, unknown> = {}) => ({
   scopeName: 'source.x',
   path: 'g.json',
   samples: [],
   ...over,
-})
-
-describe('packCategories / filterPacks', () => {
-  const code = fakePack({
-    key: 'a',
-    id: 'p.code',
-    contributes: { themes: [{ id: 't', label: '暗', uiTheme: 'dark', path: 't.json' }] },
-  })
-  const ai = fakePack({ key: 'b', id: 'p.ai', contributes: { skills: [{ path: 'skills/x' }] } })
-  const both = fakePack({
-    key: 'c',
-    id: 'p.both',
-    contributes: {
-      snippets: [{ language: 'go', path: 's.json' }],
-      prompts: [{ id: 'p', title: '审查', path: 'p.md' }],
-    },
-  })
-  it('按内容分类，一个包可以两边都在', () => {
-    expect(packCategories(code)).toEqual(['code'])
-    expect(packCategories(ai)).toEqual(['ai'])
-    expect(packCategories(both)).toEqual(['code', 'ai'])
-    expect(packCategories(fakePack({ manifest: null }))).toEqual([])
-  })
-  it('分组和搜索', () => {
-    const all = [code, ai, both]
-    expect(filterPacks(all, 'all', '', 'zh-CN')).toHaveLength(3)
-    expect(filterPacks(all, 'code', '', 'zh-CN').map(p => p.key)).toEqual(['a', 'c'])
-    expect(filterPacks(all, 'ai', '', 'zh-CN').map(p => p.key)).toEqual(['b', 'c'])
-    expect(filterPacks(all, 'all', ' P.AI ', 'zh-CN').map(p => p.key)).toEqual(['b'])
-    expect(filterPacks(all, 'ai', 'p.code', 'zh-CN')).toEqual([])
-  })
 })
 
 describe('contributionRows', () => {

@@ -1,6 +1,5 @@
 export const codingShellMessages = {
   'coding.shell.title': { zh: '代码模式', en: 'Coding mode' },
-  'coding.shell.placeholder': { zh: '制作中', en: 'Coming soon' },
   // ---- W1-A 的段落：coding.shell.*（只在这一段追加）----
   'coding.shell.tooNarrow': {
     zh: '窗口太窄，部分面板已自动收起。拉宽窗口可以恢复。',

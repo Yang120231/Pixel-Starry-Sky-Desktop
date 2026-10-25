@@ -308,12 +308,6 @@ export function isNearLimit(q: AccountQuota, now: number, planLimits?: readonly 
   return [...quotaEntries(q, now), ...planEntries(planLimits, now)].some(e => e.level !== 'normal')
 }
 
-/** 整体级别：最紧一项的级别；blocked 按用完 */
-export function overallLevel(q: AccountQuota, now: number): QuotaLevel {
-  if (q.blocked) return 'full'
-  return tightestEntry(quotaEntries(q, now))?.level ?? 'normal'
-}
-
 // ---------------------------------------------------------------------------
 // 按钮
 // ---------------------------------------------------------------------------
@@ -439,8 +433,6 @@ export function quotaAriaLabel(
   if (!parts.length && credits) parts.push(tr('quota.tip.pair', { p0: tr('quota.card.credits'), p1: credits }))
   return tr('quota.aria.label', { p0: title, p1: parts.join(tr('quota.aria.join')) })
 }
-
-const hasData = (q: AccountQuota): boolean => q.windows.length > 0 || hasExtras(q) || !!q.extras.models?.length
 
 export interface QuotaViewOptions {
   provider: QuotaProvider
@@ -789,9 +781,4 @@ export function quotaAlert(q: AccountQuota, entries: readonly QuotaEntry[], now:
     }
   }
   return null
-}
-
-/** 弹窗里有没有能显示的数据 */
-export function quotaHasData(q: AccountQuota | null): boolean {
-  return !!q && hasData(q)
 }

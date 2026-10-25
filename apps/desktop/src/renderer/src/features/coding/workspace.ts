@@ -1,7 +1,7 @@
 import { isLive } from '@/features/engine'
 import { setCurrentProject } from '@/features/engine/store'
 import { useProjectContext } from '@/features/panel/projectContext'
-import { getPaneState, paneActions, usePaneState } from '@/features/panes/store'
+import { paneActions, usePaneState } from '@/features/panes/store'
 import { focusedTab, isFileTab, isNewTab } from '@/features/panes/tree'
 import { isDemo, projects as demoProjects } from '@/data'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
@@ -32,10 +32,6 @@ export function useCodingChatTab(): string | null {
 export function useCodingSessionId(): string | null {
   const tab = useCodingChatTab()
   return tab && !isNewTab(tab) ? tab : null
-}
-export function getCodingSessionId(): string | null {
-  const tab = focusedTab(getPaneState().layout)
-  return tab && !isFileTab(tab) && !isNewTab(tab) ? tab : null
 }
 
 /** 和 tabHost.tsx、composerTarget.ts 同一条规则：isLive ? tab : `demo:${tab}` */

@@ -97,10 +97,6 @@ export const systemMessages = {
     zh: '服务返回的账号数据异常',
     en: 'Invalid account data returned by service',
   },
-  'system.signInExpiredSign': {
-    zh: '登录已过期，请重新登录',
-    en: 'Sign-in expired. Sign in again.',
-  },
   'system.signInInvalidSign': {
     zh: '登录已失效（已过期或被吊销），请重新登录',
     en: 'Sign-in is no longer valid (expired or revoked). Sign in again.',
@@ -369,10 +365,6 @@ export const systemMessages = {
     zh: '平台模型数据格式异常',
     en: 'Invalid platform model data',
   },
-  'system.thisConversationNowUses': {
-    zh: '这个会话已改用自有额度',
-    en: 'This conversation now uses your own account',
-  },
   'system.platformAccountSignedOut2': {
     zh: '平台账号已退出或切换，请重新登录原账号',
     en: 'Platform account signed out or changed. Sign in to the original account again.',
@@ -409,21 +401,9 @@ export const systemMessages = {
     zh: '项目目标不正确',
     en: 'Invalid project target',
   },
-  'system.usePathRelativeTo': {
-    zh: '请使用项目内的相对路径',
-    en: 'Use a path relative to the project',
-  },
   'system.projectDirectoryNotFound': {
     zh: '项目目录不存在',
     en: 'Project directory not found',
-  },
-  'system.filePathIsOutside': {
-    zh: '文件路径超出项目',
-    en: 'File path is outside the project',
-  },
-  'system.fileOrDirectoryNo': {
-    zh: '文件或目录已不存在',
-    en: 'File or directory no longer exists',
   },
   'system.thisLinkPointsOutside': {
     zh: '此链接指向项目外，无法在软件内打开',
@@ -468,10 +448,6 @@ export const systemMessages = {
   'system.fileChangedReloadIt': {
     zh: '文件已变化，请重新加载',
     en: 'File changed. Reload it.',
-  },
-  'system.anotherProgramChangedThis': {
-    zh: '文件已被其他程序修改，请重新加载后再保存；当前草稿仍保留',
-    en: 'Another program changed this file. Reload before saving. Your draft is preserved.',
   },
   'system.couldNotOpenProject': {
     zh: '打不开项目目录：',
@@ -528,10 +504,6 @@ export const systemMessages = {
   'system.claudeCodeUnavailable': {
     zh: 'Claude Code 不可用',
     en: 'Claude Code unavailable',
-  },
-  'system.platformProxyUnavailableRestart': {
-    zh: '平台代理不可用，请重启应用',
-    en: 'Platform proxy unavailable. Restart the app.',
   },
   'system.claudeCodeNotFound3': {
     zh: '没找到 Claude Code',
@@ -986,10 +958,6 @@ export const systemMessages = {
     zh: '多智能体编排',
     en: 'Multi-agent orchestration',
   },
-  'system.questionForYou': {
-    zh: '向你提问',
-    en: 'Question for you',
-  },
   'system.submitPlan': {
     zh: '提交计划',
     en: 'Submit plan',
@@ -1139,10 +1107,6 @@ export const systemMessages = {
   'system.ended': {
     zh: '已结束',
     en: 'Ended',
-  },
-  'system.contextTooLongEarlier': {
-    zh: '上下文太长，已自动压缩较早的对话',
-    en: 'Context too long. Earlier messages were compacted automatically.',
   },
   'system.requestError': {
     zh: '请求出错（{p0}）',
@@ -1404,10 +1368,6 @@ export const systemMessages = {
     zh: '正在停止当前任务，请稍后继续',
     en: 'Stopping the current task. Continue later.',
   },
-  'system.retryOrWithdrawFailed': {
-    zh: '请先重试或撤回失败及待核对的消息',
-    en: 'Retry or withdraw failed and unverified messages first',
-  },
   'system.stoppingCurrentTaskRetry': {
     zh: '正在停止当前任务，请稍后重试',
     en: 'Stopping the current task. Retry later.',
@@ -1447,14 +1407,6 @@ export const systemMessages = {
   'system.contextDiagnosticsAreRefreshing': {
     zh: '上下文诊断正在刷新，完成后再修改会话设置',
     en: 'Context diagnostics are refreshing. Wait before changing session settings.',
-  },
-  'system.switchCreditSourceAfter': {
-    zh: '这一轮结束后再切换额度来源',
-    en: 'Switch credit source after this turn finishes',
-  },
-  'system.cannotSwitchEnginesFor': {
-    zh: '已经开始对话或有排队任务的会话不能换引擎，请新建会话',
-    en: 'Cannot switch engines for conversations that have started or have queued tasks. Create a new conversation.',
   },
   'system.thisEngineDoesNot': {
     zh: '这个引擎没有智能体追踪',

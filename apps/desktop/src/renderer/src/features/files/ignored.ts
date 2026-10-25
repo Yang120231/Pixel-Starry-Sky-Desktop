@@ -113,11 +113,6 @@ export function isHidingIgnored(map: Record<string, true>, rootPath: string | nu
   return !!rootPath && !!map[hideIgnoredKey(rootPath)]
 }
 
-export function useHideIgnored(rootPath: string | null): [boolean, (v: boolean) => void] {
-  const map = useHideIgnoredMap()
-  return [isHidingIgnored(map, rootPath), (v: boolean) => rootPath && setHideIgnored(rootPath, v)]
-}
-
 // ---- Ctrl+P / 搜索：按 WorkspaceRef 取被忽略的集合，缓存 10 秒 ----
 const IGNORED_TTL_MS = 10_000
 const EMPTY: ReadonlySet<string> = new Set()

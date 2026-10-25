@@ -300,10 +300,6 @@ export const catalog = {
     zh: '恢复原窗口大小和位置',
     en: 'Restore previous window size and position',
   },
-  'panel.PanelTabs.closeTab': {
-    zh: '关闭标签',
-    en: 'Close tab',
-  },
   'panel.RightPanel.comingSoon': {
     zh: '即将推出',
     en: 'Coming soon',
@@ -383,10 +379,6 @@ export const catalog = {
   'session.ChangedFilesCard.review': {
     zh: '审查',
     en: 'Review',
-  },
-  'session.ChangedFilesCard.openFileInPixel': {
-    zh: '在像素星空中打开文件',
-    en: 'Open file in Pixel Starry Sky',
   },
   'session.ChangedFilesCard.openInEditor': {
     zh: '在编辑器中打开',
@@ -552,10 +544,6 @@ export const catalog = {
     zh: '停止',
     en: 'Stop',
   },
-  'session.Composer.stopThisTaskAnd': {
-    zh: '停止当前任务并暂停队列',
-    en: 'Stop this task and pause the queue',
-  },
   'session.Composer.stopThisTaskAndEsc': {
     zh: '停止当前任务并暂停队列（Esc）',
     en: 'Stop this task and pause the queue (Esc)',
@@ -604,10 +592,6 @@ export const catalog = {
     zh: '已开启：{p0}',
     en: 'On: {p0}',
   },
-  'session.ComposerMenus.resetToDefault': {
-    zh: '恢复默认（{p0}）',
-    en: 'Reset to default ({p0})',
-  },
   'session.ComposerMenus.notSupportedByThis': {
     zh: '当前模型不支持',
     en: 'Not supported by this model',
@@ -655,14 +639,6 @@ export const catalog = {
   'session.ComposerStatusBar.chooseProjectFolder': {
     zh: '选择项目文件夹',
     en: 'Choose project folder',
-  },
-  'session.ComposerStatusBar.chooseProject': {
-    zh: '选择项目',
-    en: 'Choose project',
-  },
-  'session.ComposerStatusBar.chooseProjectToStart': {
-    zh: '在哪个项目里开始',
-    en: 'Choose a project to start in',
   },
   'session.contextData.systemPrompt': {
     zh: '系统提示',
@@ -1016,10 +992,6 @@ export const catalog = {
     zh: '（排队中）',
     en: '(queued)',
   },
-  'session.live.AgentTracePanel.timeline': {
-    zh: '时间线',
-    en: 'Timeline',
-  },
   'session.live.AgentTracePanel.duration': {
     zh: '耗时',
     en: 'Duration',
@@ -1027,10 +999,6 @@ export const catalog = {
   'session.live.AgentTracePanel.tools': {
     zh: '工具',
     en: 'Tools',
-  },
-  'session.live.AgentTracePanel.agents': {
-    zh: '{done}/{total} 个智能体',
-    en: '{done}/{total} agents',
   },
   'session.live.AgentTracePanel.toolCall': {
     zh: '{n} 次工具调用',
@@ -1067,22 +1035,6 @@ export const catalog = {
   'session.live.AgentTracePanel.agentActivity': {
     zh: '智能体追踪',
     en: 'Agent activity',
-  },
-  'session.live.AgentTracePanel.orchestration': {
-    zh: '{n} 个编排',
-    en: '{n} orchestration',
-  },
-  'session.live.AgentTracePanel.orchestrations': {
-    zh: '{n} 个编排',
-    en: '{n} orchestrations',
-  },
-  'session.live.AgentTracePanel.subagent': {
-    zh: '{n} 个子智能体',
-    en: '{n} subagent',
-  },
-  'session.live.AgentTracePanel.subagents': {
-    zh: '{n} 个子智能体',
-    en: '{n} subagents',
   },
   'session.live.AgentTracePanel.tokensTotal': {
     zh: '共 {tokens} tokens',
@@ -1268,18 +1220,6 @@ export const catalog = {
     zh: '运行了',
     en: 'Ran',
   },
-  'session.live.ItemRows.openInPixelStarry': {
-    zh: '在像素星空中打开 {p0}',
-    en: 'Open {p0} in Pixel Starry Sky',
-  },
-  'session.live.ItemRows.collapseFileChanges': {
-    zh: '收起文件改动',
-    en: 'Collapse file changes',
-  },
-  'session.live.ItemRows.expandFileChanges': {
-    zh: '展开文件改动',
-    en: 'Expand file changes',
-  },
   'session.live.ItemRows.orchestration': {
     zh: '编排',
     en: 'Orchestration',
@@ -1396,33 +1336,13 @@ export const catalog = {
     zh: '选择模型',
     en: 'Choose model',
   },
-  'session.ModelSourceMenu.platform2': {
-    zh: '平台 {p0}',
-    en: 'Platform {p0}',
-  },
   'session.ModelSourceMenu.engine': {
     zh: '引擎',
     en: 'Engine',
   },
-  'session.ModelSourceMenu.comingSoon': {
-    zh: '{p0} · 即将支持',
-    en: '{p0} · Coming soon',
-  },
   'session.ModelSourceMenu.comingSoon2': {
     zh: '即将支持',
     en: 'Coming soon',
-  },
-  'session.ModelSourceMenu.creditSource': {
-    zh: '额度来源',
-    en: 'Credit source',
-  },
-  'session.ModelSourceMenu.platformCreditsCurrentlySupport': {
-    zh: '平台额度目前只支持 Claude Code',
-    en: 'Platform credits currently support Claude Code only',
-  },
-  'session.ModelSourceMenu.appliesToThisConversation': {
-    zh: '只改这个会话；平台和自有之间切换会重启引擎并接上原对话',
-    en: 'Applies to this conversation only. Switching credit sources restarts the engine and resumes your conversation.',
   },
   'session.ModelSourceMenu.model': {
     zh: '模型',
@@ -1440,29 +1360,9 @@ export const catalog = {
     zh: '没有匹配的模型',
     en: 'No matching models',
   },
-  'session.ModelSourceMenu.routes': {
-    zh: '{p0}{p1} · {p2} 条线路',
-    en: '{p0}{p1} · {p2} routes',
-  },
-  'session.ModelSourceMenu.modelsAppearAfterRoutes': {
-    zh: '读取线路后显示模型',
-    en: 'Models appear after routes load',
-  },
-  'session.ModelSourceMenu.signInToView': {
-    zh: '登录后显示平台模型',
-    en: 'Sign in to view platform models',
-  },
   'session.ModelSourceMenu.modelUsedByThis': {
     zh: '当前会话使用的模型',
     en: 'Model used by this conversation',
-  },
-  'session.ModelSourceMenu.manageModels': {
-    zh: '管理模型…',
-    en: 'Manage models…',
-  },
-  'session.ModelSourceMenu.hidden': {
-    zh: '（已隐藏',
-    en: '(hidden:',
   },
   'session.ModelSourceMenu.text': {
     zh: '个）',
@@ -1479,10 +1379,6 @@ export const catalog = {
   'session.ModelSourceMenu.refreshing': {
     zh: '正在刷新…',
     en: 'Refreshing…',
-  },
-  'session.ModelSourceMenu.signInToPixel': {
-    zh: '登录像素星空账号后使用平台额度',
-    en: 'Sign in to Pixel Starry Sky to use platform credits',
   },
   'session.ModelSourceMenu.loadingRoutes': {
     zh: '正在读取线路…',
@@ -1504,18 +1400,6 @@ export const catalog = {
     zh: '当前账号在这条线路上的计费倍率',
     en: "This account's billing multiplier for this route",
   },
-  'session.ModelSourceMenu.localSignIn': {
-    zh: '本机登录',
-    en: 'Local sign-in',
-  },
-  'session.ModelSourceMenu.version': {
-    zh: '· 版本 {p0}',
-    en: '· Version {p0}',
-  },
-  'session.ModelSourceMenu.signInToFirst': {
-    zh: '需要先登录 {p0}',
-    en: 'Sign in to {p0} first',
-  },
   'session.ModelSourceMenu.isTemporarilyUnavailable': {
     zh: '{p0} 暂时不可用',
     en: '{p0} is temporarily unavailable',
@@ -1523,14 +1407,6 @@ export const catalog = {
   'session.ModelSourceMenu.collapse': {
     zh: '收起',
     en: 'Collapse',
-  },
-  'session.ModelSourceMenu.howToSignIn': {
-    zh: '怎么登录',
-    en: 'How to sign in',
-  },
-  'session.ModelSourceMenu.viewReason': {
-    zh: '查看原因',
-    en: 'View reason',
   },
   'session.ModelSourceMenu.available': {
     zh: '可用）',
@@ -1704,10 +1580,6 @@ export const catalog = {
     zh: '终端',
     en: 'Terminal',
   },
-  'session.SessionHeader.commandPalette': {
-    zh: '命令面板',
-    en: 'Command palette',
-  },
   'session.SessionHeader.switchComputer': {
     zh: '切换机器',
     en: 'Switch computer',
@@ -1743,10 +1615,6 @@ export const catalog = {
   'session.SourceHintBar.futureRequestsUsePlatform': {
     zh: '之后的调用走平台{p0}，从像素星空账号扣费。',
     en: 'Future requests use platform{p0} and are billed to your Pixel Starry Sky account.',
-  },
-  'session.SourceHintBar.route': {
-    zh: '线路「{p0}」',
-    en: 'route "{p0}"',
   },
   'session.SourceHintBar.engineRestartsAndResumes': {
     zh: '引擎会重启并接上原来的对话，从下一条消息生效。',
@@ -1904,10 +1772,6 @@ export const catalog = {
     zh: '暂无会话',
     en: 'No conversations yet',
   },
-  'sidebar.RunStatusPill.newReply': {
-    zh: '新回复',
-    en: 'New reply',
-  },
   'sidebar.Sidebar.addProject': {
     zh: '添加项目',
     en: 'Add project',
@@ -2059,18 +1923,6 @@ export const catalog = {
   'editor.EditorButton.demoModeCannotOpen': {
     zh: '演示模式不打开本机编辑器',
     en: 'Demo mode cannot open local editors',
-  },
-  'editor.EditorButton.requestedToOpenProject': {
-    zh: '已请求 {p0} 打开项目',
-    en: 'Requested {p0} to open the project',
-  },
-  'editor.EditorButton.externalEditor': {
-    zh: '外部编辑器',
-    en: 'External editor',
-  },
-  'editor.EditorButton.chooseProjectFirst': {
-    zh: '先选择项目',
-    en: 'Choose a project first',
   },
   'editor.EditorButton.unavailable': {
     zh: '（不可用）',
@@ -2560,14 +2412,6 @@ export const catalog = {
     zh: '关闭「{p0}」',
     en: 'Close "{p0}"',
   },
-  'panes.PaneView.moveTabLeft': {
-    zh: '标签向左移动',
-    en: 'Move tab left',
-  },
-  'panes.PaneView.moveTabRight': {
-    zh: '标签向右移动',
-    en: 'Move tab right',
-  },
   'panes.PaneView.moveToPane': {
     zh: '移到窗格 {p0}',
     en: 'Move to pane {p0}',
@@ -2607,10 +2451,6 @@ export const catalog = {
   'panes.store.closedRunning': {
     zh: '{p0} 个对话还在后台运行，可以在侧栏里打开',
     en: '{p0} conversations are still running in the background; open them from the sidebar',
-  },
-  'panes.PaneView.moveTo': {
-    zh: '移动到…',
-    en: 'Move to…',
   },
   'panes.PaneView.closeOtherTabs': {
     zh: '关闭其他标签页',
@@ -3844,10 +3684,6 @@ export const catalog = {
     zh: '新会话默认值',
     en: 'New conversation defaults',
   },
-  'settings.engines.EngineDetail.appliesToNewConversations': {
-    zh: '对之后新建的会话生效；已开始的会话在输入框里单独改。会话里改过的选择也会记到这里。',
-    en: 'Applies to new conversations. Change existing conversations in the composer; those selections are also saved here.',
-  },
   'settings.engines.EngineDetail.higherEffortSpendsMore': {
     zh: '越高想得越久，用量也越大。',
     en: 'Higher effort spends more time thinking and uses more credits.',
@@ -4003,10 +3839,6 @@ export const catalog = {
   'settings.engines.engineUpdate.updateTo': {
     zh: '更新到 {p0}',
     en: 'Update to {p0}',
-  },
-  'settings.engines.engineUpdate.updating': {
-    zh: '正在更新，可能要一两分钟…',
-    en: 'Updating, this may take a minute or two…',
   },
   'settings.engines.engineUpdate.updatingShort': {
     zh: '更新中',
@@ -4292,62 +4124,6 @@ export const catalog = {
     zh: '恢复默认字体设置',
     en: 'Reset font settings',
   },
-  'settings.models.ModelsSection.ready': {
-    zh: '已就绪',
-    en: 'Ready',
-  },
-  'settings.models.ModelsSection.modelsCredits': {
-    zh: '模型与额度',
-    en: 'Models & credits',
-  },
-  'settings.models.ModelsSection.defaultsForNewTasks': {
-    zh: '新任务默认用这里的设置。已经开始的会话在输入框的模型菜单里单独改，不影响这里。',
-    en: 'Defaults for new tasks. Existing conversations can change their model menu selections independently.',
-  },
-  'settings.models.ModelsSection.defaultCreditSource': {
-    zh: '默认额度来源',
-    en: 'Default credit source',
-  },
-  'settings.models.ModelsSection.platformBilledThroughPixel': {
-    zh: '平台：走像素星空账号的线路扣费；自有：用本机引擎自己的登录。平台出错时不会自动改用自有。',
-    en: 'Platform: billed through Pixel Starry Sky routes. Own account: uses local engine sign-in. Platform failures never switch automatically to your own account.',
-  },
-  'settings.models.ModelsSection.defaultModel': {
-    zh: '默认模型',
-    en: 'Default model',
-  },
-  'settings.models.ModelsSection.modelsFromYourAvailable': {
-    zh: '来自你能用的平台线路。先选模型，线路自动对齐到包含它、倍率最低的一条。',
-    en: 'Models from your available platform routes. Choose a model and its lowest-multiplier supported route is selected automatically.',
-  },
-  'settings.models.ModelsSection.noModelsAvailable': {
-    zh: '暂无可用模型',
-    en: 'No models available',
-  },
-  'settings.models.ModelsSection.availableAfterSignIn': {
-    zh: '登录后显示',
-    en: 'Available after sign-in',
-  },
-  'settings.models.ModelsSection.defaultRoute': {
-    zh: '默认线路',
-    en: 'Default route',
-  },
-  'settings.models.ModelsSection.onlyRoutesSupportingDefault': {
-    zh: '只列包含默认模型的线路，按倍率从低到高。倍率是当前账号的有效倍率（含专属倍率）。',
-    en: 'Only routes supporting the default model are listed, ordered by effective billing multiplier, including account-specific rates.',
-  },
-  'settings.models.ModelsSection.noRoutesAvailable': {
-    zh: '暂无可用线路',
-    en: 'No routes available',
-  },
-  'settings.models.ModelsSection.claudeCodeModelAliases': {
-    zh: 'Claude Code 的模型别名；「默认」跟随 Claude Code 自己的设置。',
-    en: "Claude Code model aliases. Default follows Claude Code's own settings.",
-  },
-  'settings.models.ModelsSection.signInToPixel': {
-    zh: '登录像素星空账号后，可以使用管理员公开的平台线路。',
-    en: 'Sign in to Pixel Starry Sky to use published platform routes.',
-  },
   'settings.models.ModelsSection.balance': {
     zh: '· 余额 {p0}',
     en: '· Balance {p0}',
@@ -4379,14 +4155,6 @@ export const catalog = {
   'settings.models.ModelsSection.showInMenu': {
     zh: '在菜单里显示 {p0}',
     en: 'Show {p0} in menu',
-  },
-  'settings.models.ModelsSection.ownAccountLocalEngine': {
-    zh: '自有（本机引擎）',
-    en: 'Own account (local engine)',
-  },
-  'settings.models.ModelsSection.engineSettings': {
-    zh: '引擎设置…',
-    en: 'Engine settings…',
   },
   'settings.models.ModelsSection.requestRetries': {
     zh: '请求重试',
@@ -4552,18 +4320,6 @@ export const catalog = {
     zh: '登录 退出登录 余额 套餐 订阅 充值 额度 限额',
     en: 'sign in sign out balance plan subscription credits limits',
   },
-  'settings.searchIndex.platformOwnAccountCredits': {
-    zh: '平台 自有 额度 扣费 来源',
-    en: 'platform own account credits billing source',
-  },
-  'settings.searchIndex.modelNewTaskClaude': {
-    zh: '模型 新任务 claude opus sonnet haiku',
-    en: 'model new task claude opus sonnet haiku',
-  },
-  'settings.searchIndex.routeGroupMultiplierBilling': {
-    zh: '线路 分组 倍率 计费',
-    en: 'route group multiplier billing',
-  },
   'settings.searchIndex.routeGroupMultiplierBalance': {
     zh: '线路 分组 倍率 余额计费 订阅额度 刷新',
     en: 'route group multiplier balance subscription refresh',
@@ -4635,10 +4391,6 @@ export const catalog = {
   'settings.searchIndex.hideEngineMenuShow': {
     zh: '隐藏 引擎 菜单 显示',
     en: 'hide engine menu show',
-  },
-  'settings.searchIndex.pathClaudeExeDetection': {
-    zh: '路径 claude.exe 自动查找 覆盖 启动方式',
-    en: 'path claude.exe detection override launch',
   },
   'settings.searchIndex.envProxyHttpsProxy': {
     zh: 'env 代理 proxy https_proxy key=value 启动方式',
@@ -4743,10 +4495,6 @@ export const catalog = {
   'settings.SettingsDialog.nav.machines': {
     zh: '机器与连接',
     en: 'Machines',
-  },
-  'settings.SettingsDialog.nav.models': {
-    zh: '模型与额度',
-    en: 'Models',
   },
   'settings.SettingsDialog.nav.terminal': {
     zh: '终端设置',
@@ -4968,10 +4716,6 @@ export const catalog = {
     zh: '缓存写（含在输入里）',
     en: 'Cache write (in input)',
   },
-  'settings.usage.DailyChart.text': {
-    zh: '{p0}月{p1}日',
-    en: '{p0}/{p1}',
-  },
   'settings.usage.DailyChart.total': {
     zh: '合计',
     en: 'Total',
@@ -5128,10 +4872,6 @@ export const catalog = {
     zh: '输入（未命中缓存）',
     en: 'Input (cache misses)',
   },
-  'settings.usage.RecordsTable.notReportedByEngine': {
-    zh: '引擎未报告',
-    en: 'Not reported by engine',
-  },
   'settings.usage.RecordsTable.started': {
     zh: '开始',
     en: 'Started',
@@ -5195,10 +4935,6 @@ export const catalog = {
   'settings.usage.RemoteCallsTable.nonStreaming': {
     zh: '非流式',
     en: 'Non-streaming',
-  },
-  'settings.usage.RemoteCallsTable.noBillingInformation': {
-    zh: '无计费信息',
-    en: 'No billing information',
   },
   'settings.usage.RemoteCallsTable.timeToFirstToken': {
     zh: '首字延迟',

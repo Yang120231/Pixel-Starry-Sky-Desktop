@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FeedbackMessage, FeedbackSummary, FeedbackThread } from '../../../../shared/types/feedback'
-import {
-  badgeText,
-  fieldErrors,
-  filterThreads,
-  newReplyIndex,
-  progressSteps,
-  segmentCounts,
-  shortId,
-  statusKind,
-} from './view'
+import { fieldErrors, filterThreads, newReplyIndex, progressSteps, segmentCounts, shortId, statusKind } from './view'
 
 const summary = (id: string, over: Partial<FeedbackSummary> = {}): FeedbackSummary => ({
   id,
@@ -129,11 +120,6 @@ describe('filterThreads', () => {
 })
 
 describe('small helpers', () => {
-  it('badgeText caps at 9+', () => {
-    expect(badgeText(3)).toBe('3')
-    expect(badgeText(9)).toBe('9')
-    expect(badgeText(10)).toBe('9+')
-  })
   it('shortId', () => expect(shortId('fb_7xq2abcdef')).toBe('#7xq2ab'))
   it('fieldErrors', () => {
     const base = { titleMax: 5, bodyMax: 10 }

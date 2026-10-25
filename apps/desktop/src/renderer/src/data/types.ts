@@ -8,20 +8,6 @@ import type {
   TeamsConnection,
 } from '../../../shared/types/channels'
 
-export interface CurrentUser {
-  name: string
-}
-
-export interface RailItem {
-  id: string
-  label: string
-  /** 图标名，由图标栏组件映射到具体 lucide 图标 */
-  icon: 'workbench' | 'machines' | 'channels' | 'skills'
-  badge?: number
-  /** 红色提醒小圆点 */
-  notify?: boolean
-}
-
 export type SessionStatus = 'idle' | 'running' | 'unread'
 
 export interface Session {
@@ -122,27 +108,11 @@ export interface Attachment {
   label: string
 }
 
-export interface BrowserPage {
-  id: string
-  kind: 'site' | 'preview'
-  title: string
-}
-
-export interface Annotation {
-  id: number
-  text: string
-}
-
 /** 一整套界面数据。empty.ts 是新用户的空界面，demo.ts 是照参考图写的演示数据 */
 export interface AppData {
-  /** 当前用户，null 表示未登录 */
-  currentUser: CurrentUser | null
-  railItems: RailItem[]
   pinned: PinnedItem[]
   projects: Project[]
   recent: RecentItem[]
-  /** 侧边栏底部「N 运行中 / N 新回复」，null 时不显示 */
-  runStatus: { running: number; newReplies: number } | null
   /** 默认选中的会话，null 表示新会话（显示欢迎页） */
   defaultSessionId: string | null
   /** 会话顶部的改动统计，null 时不显示 */
@@ -158,10 +128,6 @@ export interface AppData {
   composerStatus: { machine: string; branch: string | null; contextPercent: number | null }
   /** 启动时右侧面板是否打开 */
   defaultPanelOpen: boolean
-  browserPages: BrowserPage[]
-  /** 空字符串表示没有打开网页 */
-  browserUrl: string
-  annotations: Annotation[]
   /** 协作频道（docs/ui/channels.md §9）；空界面没有频道 */
   channels: Channel[]
   channelMembers: ChannelMember[]

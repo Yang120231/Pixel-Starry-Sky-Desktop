@@ -187,9 +187,18 @@ describe('IPC contract vs preload', () => {
   it('listens to every push channel', () => {
     expect(found.on).toEqual(keys(spec => spec.kind === 'push'))
   })
+  // 界面不用、只有主进程内部或手机端调的通道：preload 不暴露
+  const noPreload = new Set([
+    'engine:openSessionTail',
+    'engine:itemDetail',
+    'projectTools:syncIssue',
+    'projectTools:gitCommitContext',
+  ])
   it('reaches every non-push channel', () => {
     const used = new Set([...found.invoke, ...found.send, ...found.sendSync])
-    expect(keys(spec => spec.kind !== 'push').filter(channel => !used.has(channel))).toEqual([])
+    expect(keys(spec => spec.kind !== 'push').filter(channel => !used.has(channel) && !noPreload.has(channel))).toEqual(
+      [],
+    )
   })
 })
 

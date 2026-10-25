@@ -13,7 +13,6 @@ export const teamMessages = {
     en: 'Sign in to join a team and share channels with teammates',
   },
   'team.signIn': { zh: '登录', en: 'Sign in' },
-  'team.connecting': { zh: '正在连接云端…', en: 'Connecting to the cloud…' },
   'team.offline': { zh: '连不上云端，正在重试', en: "Can't reach the cloud, retrying" },
   'team.offlineSynced': {
     zh: '连不上云端，正在重试 · 上次同步 {time}',
@@ -94,7 +93,6 @@ export const teamMessages = {
   'team.panel.addMine': { zh: '添加我的 AI 成员', en: 'Add my AI member' },
   'team.panel.invite': { zh: '邀请成员', en: 'Invite members' },
   'team.panel.policyLabel': { zh: '派活', en: 'Dispatch' },
-  'team.panel.ownerOffline': { zh: '{owner}的电脑离线', en: "{owner}'s computer is offline" },
   'team.seen.minutes': { zh: '{count} 分钟前在线', en: 'Online {count} min ago' },
   'team.seen.hours': { zh: '{count} 小时前在线', en: 'Online {count} h ago' },
   'team.seen.days': { zh: '{count} 天前在线', en: 'Online {count} d ago' },
@@ -127,7 +125,6 @@ export const teamMessages = {
   'team.event.removed': { zh: '{actor} 移出了 {name}', en: '{actor} removed {name}' },
   'team.event.agentAdded': { zh: '{actor} 把 {name} 加进频道', en: '{actor} added {name} to the channel' },
   'team.event.agentRemoved': { zh: '{actor} 把 {name} 移出频道', en: '{actor} removed {name} from the channel' },
-  'team.event.invited': { zh: '{actor} 邀请了 {name}', en: '{actor} invited {name}' },
   // ── 任务卡 ──
   'team.task.approval': { zh: '等 {owner} 同意', en: 'Waiting for {owner} to approve' },
   'team.task.waitingOwner': { zh: '等 {owner} 确认', en: 'Waiting for {owner} to confirm' },
@@ -147,7 +144,6 @@ export const teamMessages = {
   'team.composer.offline': { zh: '连上云端后才能发送', en: 'You can send once the cloud is reachable' },
   'team.mention.observer': { zh: '观察者不能派活', en: "Observers can't assign work" },
   'team.mention.needsApproval': { zh: '需要 {owner} 同意后开工', en: 'Needs approval from {owner} to start' },
-  'team.mention.ownerOffline': { zh: '{owner}的电脑离线', en: "{owner}'s computer is offline" },
   // ── 新建频道 ──
   'team.channel.inTeam': { zh: '团队：{name}', en: 'Team: {name}' },
   // ── 系统通知 ──
@@ -157,5 +153,4 @@ export const teamMessages = {
   // ── 错误 ──
   'team.error.emailEmpty': { zh: '请输入邮箱', en: 'Enter an email address' },
   'team.error.emailInvalid': { zh: '邮箱格式不对', en: 'That email address looks invalid' },
-  'team.error.nameEmpty': { zh: '名字不能为空', en: 'Enter a name' },
 } as const

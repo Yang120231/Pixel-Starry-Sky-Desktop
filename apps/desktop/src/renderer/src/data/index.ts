@@ -11,15 +11,10 @@ export { isDemo }
 
 const DATA: AppData = isDemo ? demo().appData : empty
 
-export const brandName = 'Pixel Starry Sky'
-
 export const {
-  currentUser,
-  railItems,
   pinned,
   projects,
   recent,
-  runStatus,
   defaultSessionId,
   sessionDiff,
   toolCalls,
@@ -30,9 +25,6 @@ export const {
   composer,
   composerStatus,
   defaultPanelOpen,
-  browserPages,
-  browserUrl,
-  annotations,
   channels,
   channelMembers,
   channelMessages,

@@ -351,11 +351,6 @@ export function useResumeHint(projectId: string | null | undefined, fetch = true
   return hint
 }
 
-/** 某个项目的会话数（见 useResumeHint）。projectId 为 null 时一直是 null */
-export function useResumeCounts(projectId: string | null | undefined, fetch = true): ResumeCounts | null {
-  return useResumeHint(projectId, fetch)?.counts ?? null
-}
-
 /** 打开某个项目的 /resume 选择器（列指定引擎的会话）；onOpened：选好会话、打开了新对话之后（比如关掉设置窗口） */
 export function openResumeFor(projectId: string, engine: HintEngine = 'claude', onOpened?: () => void): void {
   openResumePicker({ projectId, engine, ...(onOpened ? { onOpened } : {}) })

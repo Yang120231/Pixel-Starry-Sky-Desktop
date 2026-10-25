@@ -108,9 +108,6 @@ export function filterThreads(
 /** 列表元信息里的 ID 前几位（fb_ 后 6 位） */
 export const shortId = (id: string): string => `#${id.replace(/^fb_/, '').slice(0, 6)}`
 
-/** 未读数角标：超过 9 显示 9+ */
-export const badgeText = (count: number): string => (count > 9 ? '9+' : String(count))
-
 /** 表单里「第一次点提交后才显示红字」的逐项错误 */
 export interface FieldErrors {
   title: 'titleEmpty' | 'titleLong' | null

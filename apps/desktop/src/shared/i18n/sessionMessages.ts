@@ -361,50 +361,6 @@ export const sessionMessages = {
     zh: '推理强度 High，Ultracode、Fast 关，显示思考摘要开',
     en: 'Effort High, Ultracode and Fast off, thinking summaries on',
   },
-  // 设置 › 模型与额度：按引擎分别设默认（docs/ui/engine-defaults.md）
-  'engineDefaults.defaultEngine': { zh: '新任务默认引擎', en: 'Default engine for new tasks' },
-  'engineDefaults.defaultEngineHint': {
-    zh: '输入框里没选引擎时用它；和「本机引擎」里的「设为默认」是同一个设置。',
-    en: 'Used when no engine is picked in the composer. Same setting as "Set as default" under Local engines.',
-  },
-  'engineDefaults.cannotDefault': {
-    zh: '{name} {status}，装好后才能设为默认。',
-    en: '{name}: {status}. Install it before making it the default.',
-  },
-  'engineDefaults.forEngine': { zh: '各引擎的默认', en: 'Defaults per engine' },
-  'engineDefaults.isDefault': { zh: '默认', en: 'default' },
-  'engineDefaults.unavailable': {
-    zh: '{name} {status}，装好后才能设置它的默认。',
-    en: '{name}: {status}. Install it to set its defaults.',
-  },
-  'engineDefaults.followCurrent': { zh: '{label}（当前 {model}）', en: '{label} (currently {model})' },
-  'engineDefaults.platformModelHint': {
-    zh: '只列 {name} 能用的线路里的模型。',
-    en: 'Only models from routes that {name} can use.',
-  },
-  'engineDefaults.selfModelHint': {
-    zh: '{name} 目录里的模型。默认跟随 {name} 自己的设置。',
-    en: "Models from {name}'s catalog. Default follows {name}'s own settings.",
-  },
-  'engineDefaults.effort': { zh: '默认推理强度', en: 'Default reasoning effort' },
-  'engineDefaults.effortHint': {
-    zh: '档位按上面选的模型列出；和「本机引擎 › 详情」里是同一个设置。',
-    en: 'Levels follow the model chosen above. Same setting as Local engines › Details.',
-  },
-  'engineDefaults.effortUnsupported': {
-    zh: '所选模型不支持「{effort}」，新任务会跟随 {name} 的设置。',
-    en: 'The chosen model does not support "{effort}", so new tasks follow {name}\'s own setting.',
-  },
-  'engineDefaults.signedIn': { zh: '已登录 {name}', en: 'Signed in to {name}' },
-  'engineDefaults.signInCodex': {
-    zh: '还没登录 Codex：在终端运行 codex login',
-    en: 'Not signed in to Codex: run codex login in a terminal',
-  },
-  'engineDefaults.signInClaude': {
-    zh: '还没登录 Claude Code：在终端运行 claude，按提示登录',
-    en: 'Not signed in to Claude Code: run claude in a terminal and follow the sign-in prompt',
-  },
-  'engineDefaults.recheck': { zh: '重新检测', en: 'Check again' },
   // 运行中换额度来源：当前这一轮不变，下一条消息起换（SourceHintBar）
   'session.SourceHintBar.nextMessageUses': {
     zh: '下一条消息使用 {p0}，当前回复仍用原来的额度来源',

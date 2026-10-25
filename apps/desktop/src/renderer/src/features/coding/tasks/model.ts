@@ -260,9 +260,6 @@ export function mergeGradleFull(state: RunTaskState, fulls: ReadonlyMap<string, 
   return changed ? { ...state, groups } : state
 }
 
-/** 组头显示的名字：子文件夹写文件夹，根目录写文件名 */
-export const groupTitle = (group: RunTaskGroup): string => (group.dir ? group.dir : group.file)
-
 /** 文件名是不是会产生任务（编辑器保存后要重新读）；extra 是扩展任务模板认的文件名 */
 export function isTaskFile(path: string, extra?: ReadonlySet<string>): boolean {
   const name = path.replaceAll('\\', '/').split('/').pop() ?? ''

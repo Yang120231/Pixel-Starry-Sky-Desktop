@@ -73,7 +73,6 @@ import {
   redetectEngines,
   refreshDefaults,
   setCurrentProject,
-  setViewing,
   startEngineStore,
   useEngineState,
 } from './store'
@@ -87,11 +86,6 @@ export const isLive = !!bridge
 /** 在应用启动时调用一次 */
 export function useEngineBoot(): void {
   useEffect(() => startEngineStore(), [])
-}
-
-/** 当前正在看的会话（用于「有新回复」标记） */
-export function useViewing(id: string | null): void {
-  useEffect(() => setViewing(id), [id])
 }
 
 export function useSession(id: string | null): SessionSnapshot | null {

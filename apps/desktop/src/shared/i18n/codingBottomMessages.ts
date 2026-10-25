@@ -27,11 +27,9 @@ export const codingBottomMessages = {
   'coding.bottom.service.running': { zh: '运行中', en: 'Running' },
   'coding.bottom.service.stopped': { zh: '已停止', en: 'Stopped' },
   'coding.bottom.service.failed': { zh: '失败', en: 'Failed' },
-  'coding.bottom.service.pending': { zh: '启动或停止中', en: 'Starting or stopping' },
   'coding.bottom.ai.list': { zh: '命令列表', en: 'Command list' },
   'coding.bottom.ai.empty': { zh: '当前对话还没有执行过命令', en: 'This conversation has not run any commands yet' },
   'coding.bottom.ai.noSession': { zh: '没有打开的对话', en: 'No conversation is open' },
-  'coding.bottom.ai.pick': { zh: '选一条命令看输出', en: 'Pick a command to see its output' },
   'coding.bottom.ai.noOutput': { zh: '没有输出', en: 'No output' },
   'coding.bottom.ai.runningNote': {
     zh: 'Claude 引擎跑完才有输出',

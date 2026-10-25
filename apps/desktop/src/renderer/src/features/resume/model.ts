@@ -66,14 +66,6 @@ export type RowStatus = 'terminal' | 'other' | 'maybe' | null
 /** 状态标签：登记里有进程开着按来源分两种；读不到登记、只看修改时间的是「可能还开着」 */
 export const rowStatus = (row: Pick<NativeSessionSummary, 'live'>): RowStatus => row.live
 
-/** 选中一行按 Enter 做什么：open 跳到已有的对话；copy 复制一份接着聊（正开着）；inplace 原地接着 */
-export type RowAction = 'open' | 'copy' | 'inplace'
-
-export function rowAction(row: Pick<NativeSessionSummary, 'ownerId' | 'live'>): RowAction {
-  if (row.ownerId) return 'open'
-  return row.live === 'terminal' || row.live === 'other' ? 'copy' : 'inplace'
-}
-
 /** 选中时行下面要不要展开选择：正开着、可能还开着的行 */
 export const needsChoice = (row: Pick<NativeSessionSummary, 'ownerId' | 'live'>): boolean =>
   !row.ownerId && row.live !== null

@@ -9,7 +9,6 @@ export {
   useSessionTitle,
   useSidebarData,
   useStatusBar,
-  useViewing,
   type ComposerController,
   type QueueController,
   type SidebarData,

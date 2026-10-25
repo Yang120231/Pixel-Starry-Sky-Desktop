@@ -69,10 +69,6 @@ export function packByKey(key: string): ExtPackInfo | undefined {
   return getPackState().packs.find(p => p.key === key)
 }
 
-export function packById(id: string): ExtPackInfo | undefined {
-  return getPackState().packs.find(p => p.id === id)
-}
-
 export function contributionsOf<K extends ExtPackContributionKind>(kind: K): Array<ContributionRef<K>> {
   return contributionsFrom(getPackState(), kind)
 }

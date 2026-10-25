@@ -122,11 +122,6 @@ export function usePathTarget(text: string | null): PathTarget | null {
   return found && found.text === text ? found.target : null
 }
 
-/** 打开文件；没有上下文时为 null */
-export function useOpenPath(): ((target: PathTarget) => void) | null {
-  return useContext(PathLinksContext)?.open ?? null
-}
-
 /** 路径的点击处理和悬停提示：单击打开、双击在文件夹中显示；没有上下文时为 null */
 export function usePathClick(
   target: PathTarget | null,

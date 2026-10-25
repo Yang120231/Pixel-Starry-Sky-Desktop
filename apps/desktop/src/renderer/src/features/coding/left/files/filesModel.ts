@@ -30,12 +30,6 @@ export function demoStatuses(
   return out
 }
 
-/** 这个目录下面有没有改动 */
-export function dirHasChanges(statuses: Record<string, string>, dir: string): boolean {
-  const prefix = dir.replace(/\/$/, '') + '/'
-  return Object.keys(statuses).some(p => p.startsWith(prefix))
-}
-
 export type SearchScope = 'name' | 'content'
 
 /** 文件名模式只留 line 为 null 的，内容模式只留有行号的 */

@@ -23,6 +23,3 @@ export function useEnterCodingMode(): void {
     }
   }, [])
 }
-
-/** W0 桩留下的名字，W1-A 的 CodingLayout 可能还在用 */
-export const useCodingEnter = useEnterCodingMode

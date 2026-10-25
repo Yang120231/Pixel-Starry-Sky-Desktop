@@ -111,13 +111,6 @@ export interface EngineBridge {
   ): Promise<SessionRecord>
   /** 打开会话：返回快照和序号，之后只应用 onEvent 里序号更大的会话事件 */
   openSession(id: string): Promise<OpenedSession>
-  /** 只取最后一段条目（手机端用，docs/mobile-remote.md §5.2） */
-  openSessionTail(
-    id: string,
-    opts?: { limit?: number; before?: string },
-  ): Promise<import('../shared/types/mobile').SessionTail>
-  /** 一条的完整内容；会话或条目不存在时为 null */
-  itemDetail(id: string, itemId: string): Promise<import('../shared/types/mobile').ItemDetail | null>
   /** 一张图的原图：桌面界面的快照里图片不带数据，显示、复制、重发时按需取；找不到为 null */
   image(id: string, itemId: string, imageId: string): Promise<import('@pixelsky/protocol').ImageAttachment | null>
   send(id: string, input: string | MessageInput): Promise<SendReceipt>

@@ -180,10 +180,6 @@ export async function detectBuiltin(): Promise<TerminalProfile[]> {
   ])
 }
 
-export async function detectProfiles(custom: TerminalProfile[] = []): Promise<TerminalProfile[]> {
-  const [builtin, extra] = await Promise.all([detectBuiltin(), probeCustom(custom)])
-  return [...builtin, ...extra]
-}
 export function terminalTitle(value: unknown): string {
   if (
     typeof value !== 'string' ||

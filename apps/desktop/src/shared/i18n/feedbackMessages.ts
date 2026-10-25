@@ -45,10 +45,6 @@ export const feedbackMessages = {
   'feedback.type.other': { zh: '其他', en: 'Other' },
   'feedback.team': { zh: '像素星空团队', en: 'Pixel Starry Sky team' },
   'feedback.you': { zh: '你', en: 'You' },
-  'feedback.previewTeam': { zh: '团队：{p0}', en: 'Team: {p0}' },
-  'feedback.previewYou': { zh: '你：{p0}', en: 'You: {p0}' },
-  'feedback.unreadReply': { zh: '有新回复', en: 'New reply' },
-  'feedback.unreadNav': { zh: '有未读回复', en: 'Unread replies' },
 
   'feedback.signedOut': {
     zh: '登录像素星空账号后即可提交反馈，并在这里收到团队的回复',
@@ -171,7 +167,6 @@ export const feedbackMessages = {
     zh: '关闭后，之后发送补充会重新打开它。',
     en: 'You can reopen it later by sending a follow-up.',
   },
-  'feedback.thread.closing': { zh: '正在关闭…', en: 'Closing…' },
   'feedback.thread.closedByUser': { zh: '你关闭了此反馈', en: 'You closed this feedback' },
   'feedback.thread.closedByTeam': { zh: '团队关闭了此反馈', en: 'The team closed this feedback' },
   'feedback.thread.reopenedByUser': { zh: '你补充后重新打开了此反馈', en: 'You reopened this feedback' },

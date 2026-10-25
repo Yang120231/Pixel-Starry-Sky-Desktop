@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FileHit } from '@/features/search/fileSearch'
-import { demoStatuses, dirHasChanges, filterHits, groupHits, kindTone, sortTurnFiles } from './filesModel'
+import { demoStatuses, filterHits, groupHits, kindTone, sortTurnFiles } from './filesModel'
 
 const ref = { projectId: 'p' }
 const hit = (path: string, line: number | null): FileHit => ({
@@ -42,16 +42,6 @@ describe('demoStatuses', () => {
       conflicted: [change('c.ts', 'U')],
     })
     expect(s).toEqual({ 'a.ts': 'M', 'n.ts': 'A', 'd.ts': 'D', 'r.ts': 'M', 'u.md': '?', 'c.ts': '!' })
-  })
-})
-
-describe('dirHasChanges', () => {
-  it('看目录下面有没有改动', () => {
-    const s = { 'src/a/b.ts': 'M' }
-    expect(dirHasChanges(s, 'src')).toBe(true)
-    expect(dirHasChanges(s, 'src/a')).toBe(true)
-    expect(dirHasChanges(s, 'src/ab')).toBe(false)
-    expect(dirHasChanges(s, 'docs')).toBe(false)
   })
 })
 

@@ -12,7 +12,6 @@ import {
   loadingImportedEngine,
   parseResumeCommand,
   resumeModel,
-  rowAction,
   unreadableText,
   type ResumeRow,
 } from './model'
@@ -116,14 +115,7 @@ describe('groupRows', () => {
   })
 })
 
-describe('rowAction / needsChoice', () => {
-  it('占用 → 跳过去；终端 / 别的程序正开着 → 复制；可能还开着和没开着 → 原地', () => {
-    expect(rowAction({ ownerId: 'x', live: 'terminal' })).toBe('open')
-    expect(rowAction({ ownerId: null, live: 'terminal' })).toBe('copy')
-    expect(rowAction({ ownerId: null, live: 'other' })).toBe('copy')
-    expect(rowAction({ ownerId: null, live: 'maybe' })).toBe('inplace')
-    expect(rowAction({ ownerId: null, live: null })).toBe('inplace')
-  })
+describe('needsChoice', () => {
   it('正开着和可能还开着的行选中时展开选择', () => {
     expect(needsChoice({ ownerId: null, live: 'maybe' })).toBe(true)
     expect(needsChoice({ ownerId: null, live: null })).toBe(false)

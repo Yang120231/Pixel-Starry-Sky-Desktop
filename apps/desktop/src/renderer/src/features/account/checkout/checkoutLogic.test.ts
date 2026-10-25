@@ -16,7 +16,6 @@ import {
   focusTrapTarget,
   formatCountdown,
   inExpiredWatchWindow,
-  isFinalStatus,
   loadMethod,
   nextRadioIndex,
   orderPhase,
@@ -70,12 +69,6 @@ describe('状态映射', () => {
     expect(orderPhase('expired', 9 * MIN)).toBe('expired')
     for (const s of ['cancelled', 'failed', 'refunding', 'refunded', 'unknown'] as const)
       expect(orderPhase(s, MIN)).toBe('ended')
-  })
-  it('终态：不再轮询；待付和已付款还在路上', () => {
-    expect(isFinalStatus('pending')).toBe(false)
-    expect(isFinalStatus('paid')).toBe(false)
-    for (const s of ['completed', 'expired', 'cancelled', 'failed', 'refunding', 'refunded', 'unknown'] as const)
-      expect(isFinalStatus(s)).toBe(true)
   })
   it('状态条走到第几步', () => {
     expect(stepIndex('waiting')).toBe(0)

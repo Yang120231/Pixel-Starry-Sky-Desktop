@@ -1,7 +1,7 @@
 // 演示数据：照参考图 docs/reference/workbench-session.jpg 写的，品牌名已替换。
 // 用 `pnpm dev:demo` 启动时显示，用来对照参考图调样式。
 import type { AppData } from '@/data/types'
-import { COMPOSER, RAIL_ITEMS } from '@/data/constants'
+import { COMPOSER } from '@/data/constants'
 import { DEMO_TEAMS, demoChannelData } from './channels'
 import { SHOWCASE_PROJECT, SHOWCASE_SESSIONS, showcaseSnapshots } from './conversations'
 import { CODING_SESSION } from './coding'
@@ -101,8 +101,6 @@ export const demoIdleDays: Record<string, number> = {
 }
 
 export const demo: AppData = {
-  currentUser: { name: '林夏' },
-  railItems: RAIL_ITEMS,
   pinned: [],
   projects: [
     {
@@ -151,7 +149,6 @@ export const demo: AppData = {
     { id: 'r-channel-quote', title: '频道话题支持引用回复', project: 'pixel-channel', time: '1时', hasPr: true },
     { id: 'r-changelog', title: '整理 10 月更新日志', project: 'docs-site', time: '3时' },
   ],
-  runStatus: { running: 2, newReplies: 1 },
   defaultSessionId: 's-hhh',
   sessionDiff: { added: 42, removed: 10 },
   toolCalls: [
@@ -198,13 +195,6 @@ export const demo: AppData = {
   composer: { ...COMPOSER, placeholder: '继续追问或提出修改，@ 添加文件，/ 输入命令' },
   composerStatus: { machine: '这台电脑', branch: 'main', contextPercent: 12 },
   defaultPanelOpen: true,
-  browserPages: [
-    { id: 'p-web', kind: 'site', title: 'pixel-web' },
-    { id: 'p-learn', kind: 'site', title: 'Features | Learn' },
-    { id: 'p-preview', kind: 'preview', title: '预览 · workbench-1440.png' },
-  ],
-  browserUrl: '127.0.0.1:8330/',
-  annotations: [{ id: 1, text: '侧栏分组标题再淡一点' }],
   // 协作频道的角标由未读数计算（features/channels/store.ts），不再写在 BADGES 里
   // 团队先关着（docs/ui/channels-local-ai.md §1），DEMO_TEAMS 改成 true 能看到团队示例
   ...demoChannelData(DEMO_TEAMS),

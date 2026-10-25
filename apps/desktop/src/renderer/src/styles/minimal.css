@@ -11,11 +11,10 @@
   --shadow-sm: none;
   --shadow-float: 0 0 0 1px var(--border-card);
   --shadow-composer: none;
-  --shadow-workbench: none;
 }
 
 /* 圆角收小：大卡片 8px、中等 6px（Tailwind 用 @theme inline，改 --radius-* 不生效，只能盖类名） */
-:root[data-minimal='on'] :is(.rounded-xl, .rounded-2xl, .rounded-3xl) {
+:root[data-minimal='on'] :is(.rounded-xl, .rounded-2xl) {
   border-radius: 8px;
 }
 :root[data-minimal='on'] .rounded-lg {

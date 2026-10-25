@@ -66,8 +66,3 @@ export function useApprovalWait(itemId: string): { sessionId: string; requestId:
   const requestId = value?.byItem.get(itemId)
   return value && requestId ? { sessionId: value.sessionId, requestId } : null
 }
-
-/** 测试用 */
-export function resetApprovalFocus(): void {
-  state = { locate: null, selected: null }
-}

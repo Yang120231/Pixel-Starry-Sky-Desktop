@@ -219,9 +219,6 @@ importers:
       vscode-textmate:
         specifier: ^9.3.2
         version: 9.3.2
-      yaml:
-        specifier: ^2.9.1
-        version: 2.9.1
 
   apps/mobile:
     dependencies:

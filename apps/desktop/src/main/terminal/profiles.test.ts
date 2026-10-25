@@ -26,7 +26,7 @@ vi.mock('node:child_process', () => ({
     setTimeout(() => callback(null, disk.installed), 0)
   },
 }))
-import { detectBuiltin, detectProfiles, executable, powerShell7, probeCustom } from './profiles'
+import { detectBuiltin, executable, powerShell7, probeCustom } from './profiles'
 
 beforeEach(() => {
   disk.files.clear()
@@ -72,7 +72,7 @@ describe('PowerShell installation discovery', () => {
     disk.files.add(nativeShell)
     disk.files.add(real)
     disk.installed = JSON.stringify([real])
-    expect((await detectProfiles()).find(p => p.id === 'pwsh')).toMatchObject({ available: true, command: real })
+    expect((await detectBuiltin()).find(p => p.id === 'pwsh')).toMatchObject({ available: true, command: real })
     const probe = disk.calls.find(call => call[0] === nativeShell)!
     expect(probe).toContain('-NoProfile')
     expect(probe).toContain('-NonInteractive')
@@ -80,12 +80,12 @@ describe('PowerShell installation discovery', () => {
   it('does not enable a missing installation just because metadata lists it', async () => {
     disk.files.add(nativeShell)
     disk.installed = JSON.stringify(['C:\\deleted\\pwsh.exe', 'relative.exe'])
-    expect((await detectProfiles()).find(p => p.id === 'pwsh')?.available).toBe(false)
+    expect((await detectBuiltin()).find(p => p.id === 'pwsh')?.available).toBe(false)
   })
   it('keeps Windows PowerShell available when PowerShell 7 metadata cannot be read', async () => {
     disk.files.add(nativeShell)
     disk.installed = 'invalid output'
-    const profiles = await detectProfiles()
+    const profiles = await detectBuiltin()
     expect(profiles.find(p => p.id === 'pwsh')?.available).toBe(false)
     expect(profiles.find(p => p.id === 'powershell')).toMatchObject({ available: true, command: nativeShell })
   })

@@ -270,11 +270,6 @@ export async function openSession(id: string): Promise<void> {
   }
 }
 
-/** 切换正在看的会话，清掉它的「新回复」标记 */
-export function setViewing(id: string | null): void {
-  setViewingSet(id ? [id] : [])
-}
-
 /** 这个会话现在是否显示在某个窗格里（通知判断用，docs/ui/notifications.md） */
 export const isViewingSession = (id: string): boolean => viewing.has(id)
 

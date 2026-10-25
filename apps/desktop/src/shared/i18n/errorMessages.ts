@@ -30,8 +30,6 @@ export const errorMessages = {
     en: 'Can’t move to a location on another disk',
   },
   'errors.files.queryInvalid': { zh: '搜索内容为空或太长', en: 'The search text is empty or too long' },
-  'errors.terminal.scriptNotFound': { zh: '找不到脚本：{name}', en: 'Script not found: {name}' },
-  'errors.terminal.commandInvalid': { zh: '要运行的命令不正确', en: 'The command to run is invalid' },
   'errors.tasks.notFound': { zh: '任务已不存在', en: 'The task no longer exists' },
   // 取消授权后引擎仍然可用（docs/ui/model-channels.md §3）
   'errors.engine.logoutProvider': {

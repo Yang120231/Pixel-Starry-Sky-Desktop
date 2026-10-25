@@ -84,22 +84,6 @@ export const shortModel = (model: string): string =>
     .replace(/^.*\//, '')
     .replace(/^claude-/, '') || model
 
-/** 每个智能体的时间线条在共用时间轴上的位置（百分比） */
-export function timeline(agents: AgentRun[], now: number): Map<string, { left: number; width: number }> {
-  const timed = agents.filter(a => a.startedAt > 0)
-  const bars = new Map<string, { left: number; width: number }>()
-  if (timed.length === 0) return bars
-  const start = Math.min(...timed.map(a => a.startedAt))
-  const end = Math.max(...timed.map(a => a.startedAt + elapsed(a, runState(a.state), now)))
-  const span = Math.max(1, end - start)
-  for (const a of timed) {
-    const left = Math.min(((a.startedAt - start) / span) * 100, 99.2)
-    const width = Math.max(0.8, (elapsed(a, runState(a.state), now) / span) * 100)
-    bars.set(a.id || a.label, { left, width: Math.min(width, 100 - left) })
-  }
-  return bars
-}
-
 /** 编排的智能体按阶段分组（不在任何阶段里的放最后） */
 export function byPhase(run: WorkflowRun): { title: string; agents: AgentRun[] }[] {
   const groups = run.phases.map(p => ({ index: p.index, title: p.title, agents: [] as AgentRun[] }))
@@ -173,15 +157,6 @@ export function phaseRows(agents: readonly AgentRun[], all: boolean): { shown: A
   }
   const shown = agents.filter(a => urgent.has(a))
   return { shown, hidden: agents.length - shown.length }
-}
-
-/** 编排里完成了几个 / 一共几个 */
-export function progress(run: WorkflowRun): { done: number; total: number } {
-  const finished = run.agents.filter(a => {
-    const s = runState(a.state)
-    return s !== 'running' && s !== 'queued'
-  })
-  return { done: finished.length, total: run.agents.length }
 }
 
 export function anyRunning(workflows: WorkflowRun[], agents: AgentRun[]): boolean {

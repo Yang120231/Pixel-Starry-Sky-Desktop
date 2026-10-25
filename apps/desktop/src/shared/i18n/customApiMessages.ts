@@ -6,7 +6,6 @@ export const customApiMessages = {
     en: 'Run Claude Code / Codex / Pixel Starry Sky against your own endpoint and API key, billed to your own account (Chat Completions–compatible endpoints work with Pixel Starry Sky only). Keys are stored with system encryption and never handed to the engine process.',
   },
   'customApi.add': { zh: '添加接口', en: 'Add endpoint' },
-  'customApi.addEllipsis': { zh: '添加接口…', en: 'Add endpoint…' },
   'customApi.empty': { zh: '还没有接口。', en: 'No endpoints yet.' },
   'customApi.edit': { zh: '编辑', en: 'Edit' },
   'customApi.delete': { zh: '删除', en: 'Delete' },
@@ -35,12 +34,6 @@ export const customApiMessages = {
   'customApi.name': { zh: '名称', en: 'Name' },
   'customApi.namePlaceholder': { zh: '例如 DeepSeek 兼容', en: 'e.g. DeepSeek compatible' },
   'customApi.protocol': { zh: '协议', en: 'Protocol' },
-  'customApi.protocolForClaude': { zh: '给 Claude Code、像素星空用', en: 'For Claude Code and Pixel Starry Sky' },
-  'customApi.protocolForCodex': { zh: '给 Codex、像素星空用', en: 'For Codex and Pixel Starry Sky' },
-  'customApi.protocolForChat': {
-    zh: '给 DeepSeek、OpenRouter 等兼容接口用；只有像素星空能用（Claude Code 需要 Anthropic，Codex 需要 Responses）',
-    en: 'For DeepSeek, OpenRouter and other compatible APIs; only Pixel Starry Sky can use it (Claude Code needs Anthropic, Codex needs Responses)',
-  },
   'customApi.protocolLocked': {
     zh: '已有接口不能换协议，要换请新建一个',
     en: 'An existing endpoint cannot change protocol; create a new one instead',
@@ -203,39 +196,21 @@ export const customApiMessages = {
   },
   'customApi.discard': { zh: '放弃改动', en: 'Discard changes' },
   'customApi.keepEditing': { zh: '继续编辑', en: 'Keep editing' },
-  'customApi.defaultEndpoint': { zh: '默认接口', en: 'Default endpoint' },
-  'customApi.defaultEndpointHint': {
-    zh: '新任务用哪个接口和模型。Claude Code 只列 Anthropic 协议的接口，Codex 只列 Responses 的',
-    en: 'Endpoint and model for new tasks. Claude Code lists Anthropic endpoints only; Codex lists Responses endpoints only',
-  },
   'customApi.noEndpointForEngine': { zh: '还没有这个引擎能用的接口', en: 'No endpoint for this engine yet' },
   'customApi.manage': { zh: '管理接口', en: 'Manage endpoints' },
   'customApi.endpointDeleted': { zh: '这个会话用的接口已删除', en: 'The endpoint used by this session was deleted' },
   'customApi.switchEndpoint': { zh: '换接口', en: 'Switch endpoint' },
   'customApi.editEndpoint': { zh: '编辑接口', en: 'Edit endpoint' },
-  'customApi.useCustom': { zh: '改用自定义', en: 'Use custom API' },
   'customApi.futureRequests': {
     zh: '之后的请求发往自定义接口「{p0}」，费用记在你自己的账号上',
     en: 'Later requests go to the custom endpoint “{p0}” and are billed to your own account',
   },
   'customApi.queued': { zh: '自定义 · {p0}', en: 'Custom · {p0}' },
-  'customApi.costEstimate': {
-    zh: '按官方 {p0} 定价估算，实际以接口账单为准',
-    en: "Estimated at official {p0} pricing; your endpoint's bill is authoritative",
-  },
-  'customApi.costNoPrice': {
-    zh: '这个模型对不上官方价格，只显示 token；可以在接口设置里选「计价参照」',
-    en: 'This model has no official price, so only tokens are shown; set a pricing reference in the endpoint settings',
-  },
   'customApi.costEstimateShort': {
     zh: '按官方模型定价估算，实际以接口账单为准',
     en: "Estimated at official model pricing; your endpoint's bill is authoritative",
   },
   'customApi.route': { zh: '自定义 API', en: 'Custom API' },
-  'customApi.envReserved': {
-    zh: '接口地址和 Key 请在「自定义 API」里配置：{p0}',
-    en: 'Configure base URLs and keys under Custom API instead: {p0}',
-  },
   'customApi.envBanner': {
     zh: '环境变量里有 API Key 或接口地址，建议迁到自定义 API（加密保存、可按会话切换）。',
     en: 'Environment variables contain an API key or base URL. Move them to Custom API (encrypted, switchable per session).',
@@ -245,17 +220,11 @@ export const customApiMessages = {
   'customApi.envMigrated': { zh: '已迁到自定义 API「{p0}」', en: 'Moved to custom endpoint “{p0}”' },
   'customApi.envMigratedName': { zh: '{p0} 环境变量', en: '{p0} environment' },
   'customApi.envMigratedNameVendor': { zh: '{p0} 环境变量（{p1}）', en: '{p0} environment ({p1})' },
-  'customApi.envLocked': {
-    zh: '这几项只能删除或迁移，不能再修改：{p0}',
-    en: 'These can only be removed or migrated, not changed: {p0}',
-  },
   'customApi.keyRejected': {
     zh: '自定义接口拒绝了这个 Key，请检查接口设置',
     en: 'The custom endpoint rejected this key; check the endpoint settings',
   },
-  'customApi.platformExempt': { zh: '自定义 API 不需要登录引擎', en: 'Custom API does not need an engine sign-in' },
   'customApi.err.name': { zh: '请填写名称', en: 'Enter a name' },
-  'customApi.err.baseUrl': { zh: '请填写接口地址', en: 'Enter a base URL' },
   'customApi.err.baseUrlFormat': {
     zh: '接口地址格式不对，例如 https://api.example.com',
     en: 'Invalid base URL, e.g. https://api.example.com',

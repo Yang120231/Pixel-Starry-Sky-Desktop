@@ -7,10 +7,6 @@ export const codexMessages = {
     zh: '允许当前操作，并将本会话切换为完全放行；可在输入框的权限菜单中改回',
     en: 'Allow this operation and enable full access for this session. Change it back in the composer permission menu.',
   },
-  'codex.nextTurn': {
-    zh: '模型、强度和权限修改从下一轮生效',
-    en: 'Model, effort and permission changes apply next turn',
-  },
   'codex.permission.ask': {
     zh: '不受信任的命令需要确认；项目写入受沙箱约束',
     en: 'Untrusted commands require approval; workspace writes are sandboxed',
@@ -47,22 +43,14 @@ export const codexMessages = {
   },
   'engineConfigWarnings.badge': { zh: '{p0} 条配置提示', en: '{p0} config warnings' },
   'codex.mcpInput': { zh: '填写 MCP 请求的数据（JSON）', en: 'Enter the data requested by MCP (JSON)' },
-  'codex.mcpInputInvalid': { zh: '请输入有效的 JSON 对象', en: 'Enter a valid JSON object' },
   'codex.noRoutes': {
     zh: '没有可用的 Codex Responses 平台线路，请公开兼容的 OpenAI 分组或主动选择自有',
     en: 'No Codex Responses route is available. Publish a compatible OpenAI group or choose your own account.',
   },
-  'codex.defaultEffort': {
-    zh: '该模型不支持原强度，已切换到模型默认强度',
-    en: 'The model does not support the previous effort; switched to its default',
-  },
-  'codex.nativeSkill': { zh: 'Codex 技能使用 $名称 调用', en: 'Invoke Codex skills with $name' },
   'codex.authMissing': {
     zh: 'Codex 未登录，请在本机运行 codex login 后重新检测',
     en: 'Codex is not signed in. Run codex login locally, then check again.',
   },
-  'codex.compacted': { zh: 'Codex 上下文压缩完成', en: 'Codex context compaction completed' },
-  'codex.compacting': { zh: 'Codex 正在压缩上下文', en: 'Codex is compacting context' },
   'codex.commandApproval': { zh: 'Codex 命令审批', en: 'Codex command approval' },
   'codex.fileApproval': { zh: 'Codex 文件修改', en: 'Codex file changes' },
   'codex.networkApproval': { zh: 'Codex 网络访问', en: 'Codex network access' },
@@ -90,7 +78,6 @@ export const codexMessages = {
     zh: '此 Codex 模型不支持当前强度',
     en: 'This Codex model does not support the selected effort',
   },
-  'codex.gatewayUnavailable': { zh: 'Codex 平台代理不可用，请重启应用', en: 'Codex platform gateway is unavailable' },
   'codex.protocolRoute': {
     zh: '线路协议与当前引擎不兼容',
     en: 'The route protocol is incompatible with the selected engine',

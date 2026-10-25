@@ -89,9 +89,6 @@ export const baseHighlight = syntaxHighlighting(
   ]),
 )
 
-/** 兼容旧用法：外观 + 默认着色 */
-export const editorTheme = [editorChrome, baseHighlight]
-
 /**
  * 键名上色（JSON、YAML、properties 的键），和对话里代码块的属性名同色（--syn-type）。
  * 只在传入的语言里生效：TS / JS 的成员访问也是属性名，全局上色会满屏都是这个颜色

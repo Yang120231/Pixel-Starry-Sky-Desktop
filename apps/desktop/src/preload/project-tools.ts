@@ -11,9 +11,7 @@ import type {
   ProjectCopy,
   CopyInput,
   CopyPreview,
-  GitCommitContext,
   GitCommitDetail,
-  GitCommitScope,
   GitCompareResult,
   GitCompareTarget,
   GitHistoryAction,
@@ -29,7 +27,6 @@ import type {
   GitPullMode,
 } from '../shared/types/project-tools'
 import type { CheckConfig, CheckPlan, CheckRun } from '../shared/types/checks'
-import type { IssueLink } from '../shared/types/project-tools'
 
 export interface ProjectToolsBridge {
   searchTasks(text: string, projectId: string | null): Promise<ManualTask[]>
@@ -54,14 +51,6 @@ export interface ProjectToolsBridge {
   runChecks(ref: WorkspaceRef, opts?: { files?: string[] | null }): Promise<CheckRun | null>
   sessionChecks(ref: WorkspaceRef): Promise<boolean>
   setSessionChecks(ref: WorkspaceRef, on: boolean): Promise<boolean>
-  /**
-   * 事项派出去的卡片变了（docs/ui/channels-collab-v2.md §9）：写上卡片的情况、按卡片改状态。
-   * 平时由主进程的频道服务调；已经验收完成的事项不再改状态
-   */
-  syncIssue(
-    id: string,
-    input: { link: IssueLink; status?: ManualTask['status']; fresh?: boolean },
-  ): Promise<ManualTask | null>
   /** 定时任务立即运行一次（docs/ui/board-schedule.md）；上一次还在跑时报错 */
   runSchedule(id: string): Promise<void>
   /** 会话最近一次自动检查（没有时 null）；新结果推过来 */
@@ -96,8 +85,6 @@ export interface ProjectToolsBridge {
   gitUnstage(ref: WorkspaceRef, paths: GitPaths): Promise<GitResult>
   gitDiscard(ref: WorkspaceRef, input: { paths: string[]; untracked: string[] } | 'all'): Promise<GitResult>
   gitCommit(ref: WorkspaceRef, input: { message: string; all: boolean; push: boolean }): Promise<GitResult>
-  /** AI 写提交信息要发给模型的改动（docs/ui/ai-commit-codex-warnings-history.md §2.2）；界面不直接用，主进程按项目所在机器取 */
-  gitCommitContext(ref: WorkspaceRef, input: { scope: GitCommitScope }): Promise<GitCommitContext>
   gitPull(ref: WorkspaceRef, mode: GitPullMode): Promise<GitResult>
   gitPush(ref: WorkspaceRef, input: { publish: boolean }): Promise<GitResult>
   gitFetch(ref: WorkspaceRef): Promise<GitResult>
