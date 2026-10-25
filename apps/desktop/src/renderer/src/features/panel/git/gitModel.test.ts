@@ -9,6 +9,8 @@ import {
   needsCommitAll,
   neighbour,
   sameGitDiff,
+  SECTION_PAGE,
+  sectionPage,
   splitPath,
   syncState,
 } from './gitModel'
@@ -110,5 +112,20 @@ describe('sameGitDiff', () => {
     expect(sameGitDiff(lfs, structuredClone(lfs))).toBe(true)
     expect(sameGitDiff(lfs, before)).toBe(false)
     expect(sameGitDiff(lfs, { ...lfs, images: { original: { unavailable: 'notImage' }, modified: image } })).toBe(false)
+  })
+})
+
+describe('sectionPage', () => {
+  const files = Array.from({ length: 2110 }, (_, i) => i)
+  it('不超过一页全画，超过只画一页并给出剩下的个数', () => {
+    expect(sectionPage(files.slice(0, SECTION_PAGE))).toEqual({ visible: files.slice(0, SECTION_PAGE), rest: 0 })
+    const first = sectionPage(files)
+    expect(first.visible).toHaveLength(SECTION_PAGE)
+    expect(first.rest).toBe(2110 - SECTION_PAGE)
+  })
+  it('点「再显示」后上限加一页，到底时 rest 为 0', () => {
+    expect(sectionPage(files, SECTION_PAGE * 2).visible).toHaveLength(SECTION_PAGE * 2)
+    expect(sectionPage(files, 2200)).toMatchObject({ rest: 0 })
+    expect(sectionPage(files, 2200).visible).toHaveLength(2110)
   })
 })

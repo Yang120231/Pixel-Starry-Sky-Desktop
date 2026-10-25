@@ -26,6 +26,16 @@ export function gitSections(status: GitStatus): GitSection[] {
   return sections.filter(s => s.files.length > 0)
 }
 
+/** 每组先画这么多行，其余点「再显示」：几千个未跟踪文件一次全画会让面板卡住，打字、每次读到状态都要重画 */
+export const SECTION_PAGE = 200
+
+/** 一组里现在画出的行和还没画的个数；shown 是点过几次「再显示」后的上限 */
+export function sectionPage<T>(files: readonly T[], shown = SECTION_PAGE): { visible: readonly T[]; rest: number } {
+  return files.length <= shown
+    ? { visible: files, rest: 0 }
+    : { visible: files.slice(0, shown), rest: files.length - shown }
+}
+
 export const changeCount = (status: GitStatus): number =>
   status.staged.length + status.unstaged.length + status.untracked.length + status.conflicted.length
 

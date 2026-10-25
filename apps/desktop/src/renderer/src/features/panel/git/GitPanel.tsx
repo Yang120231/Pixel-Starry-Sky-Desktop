@@ -59,6 +59,8 @@ import {
   gitSections,
   needsCommitAll,
   neighbour,
+  SECTION_PAGE,
+  sectionPage,
   splitPath,
   type GitSection,
 } from './gitModel'
@@ -143,6 +145,8 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
   const [message, setMessage] = useState('')
   const ai = useAiCommit({ target, demo, message, setMessage })
   const [selected, setSelected] = useState<{ area: GitArea; path: string } | null>(null)
+  // 每组画到第几行（点「再显示」加一页，gitModel SECTION_PAGE）
+  const [shown, setShown] = useState<Partial<Record<GitArea, number>>>({})
   const [fileMenu, setFileMenu] = useState<(GitFileMenuPosition & { area: GitArea; path: string }) | null>(null)
   const [menu, setMenu] = useState(false)
   const branchTrigger = useRef<HTMLButtonElement>(null)
@@ -844,7 +848,7 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
                 )}
               </div>
               <ul className="flex flex-col">
-                {section.files.map(file => {
+                {sectionPage(section.files, shown[section.area]).visible.map(file => {
                   const { name, dir } = splitPath(file.path)
                   const actions = fileActions(file, section.area)
                   return (
@@ -964,6 +968,13 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
                   )
                 })}
               </ul>
+              <ShowMore
+                area={section.area}
+                rest={sectionPage(section.files, shown[section.area]).rest}
+                onMore={() =>
+                  setShown(s => ({ ...s, [section.area]: (s[section.area] ?? SECTION_PAGE) + SECTION_PAGE }))
+                }
+              />
             </section>
           ))}
         </div>
@@ -995,5 +1006,20 @@ function GitBody({ target, demo, active }: { target: WorkspaceRef; demo: boolean
         />
       )}
     </div>
+  )
+}
+
+/** 一组没画完时末尾的「再显示 N 个」 */
+function ShowMore({ area, rest, onMore }: { area: GitArea; rest: number; onMore: () => void }) {
+  if (rest <= 0) return null
+  return (
+    <button
+      type="button"
+      data-git-more={area}
+      onClick={onMore}
+      className="flex h-7 w-full items-center rounded-md pl-7 text-left text-meta text-fg-muted hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+    >
+      {tr('git.showMore', { n: Math.min(rest, SECTION_PAGE), rest })}
+    </button>
   )
 }

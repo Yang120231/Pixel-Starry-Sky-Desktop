@@ -130,6 +130,10 @@ export const gitMessages = {
   'git.operation.abort': { zh: '中止', en: 'Abort' },
   'git.operation.continue': { zh: '继续', en: 'Continue' },
   'git.truncated': { zh: '改动太多，只列出了前 5000 项', en: 'Too many changes; only the first 5,000 are listed' },
+  'git.showMore': {
+    zh: '再显示 {n} 个（还有 {rest} 个没列出）',
+    en: 'Show {n} more ({rest} not listed)',
+  },
   'git.busy': {
     zh: 'AI 正在这个工作区运行，切换分支和拉取会暂时被拒绝',
     en: 'An AI is running in this workspace; switching branches and pulling are blocked for now',
