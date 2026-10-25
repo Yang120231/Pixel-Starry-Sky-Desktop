@@ -17,7 +17,7 @@ import {
 } from '@/features/panel/workspaceStore'
 import { demo } from '@/data/demo'
 import { renameRecentFile } from '@/features/panel/recentFiles'
-import { isAbsolutePath, relativeInFolders } from './extraFolderPaths'
+import { OUTSIDE_PREFIX, isAbsolutePath, relativeInFolders } from './extraFolderPaths'
 
 export const OPEN_FILES_EVENT = 'pixelsky:open-files'
 export const FILE_CLOSED_EVENT = 'pixelsky:file-closed'
@@ -264,7 +264,9 @@ export async function openFile(
   const root = target.path.replaceAll('\\', '/'),
     key = windows ? root.toLowerCase() : root
   // 绝对路径（AI 改了附加文件夹里的文件，改动卡片给的是完整路径）：换成主文件夹的相对路径或「::N/…」
-  if (!isDemo && isAbsolutePath(normalized)) normalized = relativeInFolders(normalized, target, windows) ?? normalized
+  // 都不在（AI 改了项目外的文件）：「::0/完整路径」，主进程以它所在的文件夹为根读写（docs/ui/outside-files.md）
+  if (!isDemo && isAbsolutePath(normalized))
+    normalized = relativeInFolders(normalized, target, windows) ?? `${OUTSIDE_PREFIX}${normalized}`
   const existing = state.tabs.find(
     t =>
       machineOf(t.ref.projectId ?? t.ref.sessionId) === machine &&

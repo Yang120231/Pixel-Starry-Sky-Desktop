@@ -153,6 +153,19 @@ const EXTRA_FOLDER = /^::(\d{1,2})(?:[\\/]|$)/
 export function locateFolder(target: WorkspaceTarget, input: unknown): { root: string; rel: unknown; prefix: string } {
   const match = typeof input === 'string' ? EXTRA_FOLDER.exec(input) : null
   if (!match) return { root: target.path, rel: input, prefix: '' }
+  // 「::0/完整路径」：项目外的文件（AI 改了项目外的文件，docs/ui/outside-files.md），以它所在的文件夹为根
+  if (match[1] === '0') {
+    const absolute = (input as string).slice(match[0].length)
+    if (!absolute || absolute.includes('\0') || !isAbsolute(absolute)) throw codedError('files.notFound')
+    const full = resolve(absolute),
+      root = dirname(full)
+    const shown = root.split(sep).join('/')
+    return {
+      root,
+      rel: full === root ? '' : basename(full),
+      prefix: `::0/${shown.endsWith('/') ? shown : shown + '/'}`,
+    }
+  }
   const folder = target.folders?.[Number(match[1]) - 1]
   if (!folder) throw codedError('files.notFound')
   return { root: folder.path, rel: (input as string).slice(match[0].length), prefix: `::${match[1]}/` }

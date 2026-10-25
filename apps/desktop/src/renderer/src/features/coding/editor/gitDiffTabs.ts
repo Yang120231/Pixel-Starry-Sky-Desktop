@@ -162,6 +162,8 @@ export const inGitWorkspace =
   (panelKey: string) =>
   (tab: { ref: WorkspaceRef; path: string }): boolean => {
     const extra = tab.ref.folder ? null : splitExtra(tab.path).index
+    // 项目外的文件不属于任何 Git 面板
+    if (extra === 0) return false
     return gitPanelKey(refKey(extra === null ? tab.ref : { ...tab.ref, folder: extra })) === panelKey
   }
 

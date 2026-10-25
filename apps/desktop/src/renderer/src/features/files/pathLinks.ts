@@ -4,6 +4,7 @@ import { machineOf } from '@/features/machines/store'
 import type { WorkspaceRef, WorkspaceTarget } from '../../../../shared/types/workspace'
 import { linkPathText, type LinkTarget } from '@/ui/markdown/pathLinks'
 import { findPathMatches, projectPath } from './pathMatch'
+import { OUTSIDE_PREFIX, isAbsolutePath } from './extraFolderPaths'
 
 const LIST_TTL = 5000
 /** 项目的附加文件夹可能改（docs/ui/multi-root-projects.md §3），目标只缓存一会儿 */
@@ -65,6 +66,14 @@ export async function workspaceRelativePath(ref: WorkspaceRef, raw: string, cwd?
       }
     }
   return relative
+}
+
+/** 同 workspaceRelativePath，项目外的完整路径换成「::0/完整路径」（docs/ui/outside-files.md）；相对路径解析不了时 null */
+export async function workspacePathOrOutside(ref: WorkspaceRef, raw: string): Promise<string | null> {
+  const relative = await workspaceRelativePath(ref, raw)
+  if (relative) return relative
+  const normalized = raw.replaceAll('\\', '/')
+  return isAbsolutePath(normalized) ? OUTSIDE_PREFIX + normalized : null
 }
 
 /** 项目内确实存在的文件；图片读取不依赖目录缓存，交给 files.read 校验文件。 */

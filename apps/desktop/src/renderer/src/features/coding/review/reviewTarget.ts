@@ -5,6 +5,7 @@ import { useCodingSessionId } from '../workspace'
 import { useTurnChanges } from '../ai/useTurnChanges'
 import { relativePath, type TurnFile } from '../ai/turnChangesModel'
 import { turnBaseline } from './hunksModel'
+import { OUTSIDE_PREFIX } from '@/features/files/extraFolderPaths'
 
 const caseInsensitive = typeof window !== 'undefined' && window.pixelsky?.platform === 'win32'
 const same = (a: string, b: string): boolean => (caseInsensitive ? a.toLowerCase() === b.toLowerCase() : a === b)
@@ -46,7 +47,9 @@ export function useReviewTarget(tab: OpenFile | null): ReviewTarget {
   const sessionId = useCodingSessionId()
   const turn = useTurnChanges(sessionId)
   const document = tab?.document ?? null
-  const path = tab ? relativePath(tab.root, tab.path, caseInsensitive) : null
+  // 项目外的文件标签是「::0/完整路径」，这一轮的改动记的是完整路径（docs/ui/outside-files.md）
+  const tabPath = tab?.path.startsWith(OUTSIDE_PREFIX) ? tab.path.slice(OUTSIDE_PREFIX.length) : tab?.path
+  const path = tab && tabPath !== undefined ? relativePath(tab.root, tabPath, caseInsensitive) : null
   const head = tab?.head ?? null
   const content = document?.kind === 'text' ? document.content : null
   const version = document?.kind === 'text' ? document.version : ''

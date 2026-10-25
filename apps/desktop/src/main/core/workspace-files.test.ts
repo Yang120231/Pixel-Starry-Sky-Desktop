@@ -223,6 +223,24 @@ describe('多文件夹项目（docs/ui/multi-root-projects.md §3.4）', () => {
   })
 })
 
+describe('项目外的文件「::0/完整路径」（docs/ui/outside-files.md）', () => {
+  it('以文件所在的文件夹为根读写、列目录，返回的路径带回「::0/文件夹/」；不是完整路径的报找不到', async () => {
+    const outside = join(folder, '项目外 文件夹')
+    await mkdir(join(outside, 'sub'), { recursive: true })
+    await writeFile(join(outside, 'sub', 'a.java'), 'class A {}\n')
+    const shown = (p: string): string => '::0/' + p.replaceAll('\\', '/')
+    const file = shown(join(outside, 'sub', 'a.java'))
+    const doc = await service.read(ref, file)
+    expect(doc).toMatchObject({ kind: 'text', path: file, content: 'class A {}\n' })
+    if (doc.kind !== 'text') throw new Error('not text')
+    await service.save(ref, file, 'class B {}\n', doc.version)
+    expect(await readFile(join(outside, 'sub', 'a.java'), 'utf8')).toBe('class B {}\n')
+    expect((await service.list(ref, shown(outside))).entries.map(e => e.path)).toEqual([shown(join(outside, 'sub'))])
+    await expect(service.read(ref, '::0/relative/a.java')).rejects.toThrow('files.notFound')
+    await expect(service.read(ref, '::0/')).rejects.toThrow('files.notFound')
+  })
+})
+
 describe('编辑器参数', () => {
   it('中文与 shell 特殊字符作为参数原样传入，文件定位保留盘符', () => {
     expect(editorArgs('code', 'reuse', 'D:\\中文 & 项目', 'D:\\中文 & 项目\\file.ts', 10, 4)).toEqual([

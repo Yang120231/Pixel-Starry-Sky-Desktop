@@ -4,7 +4,10 @@ import { projectPath } from './pathMatch'
 
 const EXTRA = /^::(\d{1,2})(?:\/|$)/
 
-/** 拆出附加文件夹编号（从 1 开始）和文件夹里的相对路径；主文件夹里的路径 index 为 null */
+/** 「::0/完整路径」：项目外的文件（docs/ui/outside-files.md），编号 0 不会和附加文件夹（1–20）撞上 */
+export const OUTSIDE_PREFIX = '::0/'
+
+/** 拆出附加文件夹编号（从 1 开始，项目外为 0）和文件夹里的相对路径；主文件夹里的路径 index 为 null */
 export function splitExtra(path: string): { index: number | null; prefix: string; rest: string } {
   const match = EXTRA.exec(path)
   if (!match) return { index: null, prefix: '', rest: path }

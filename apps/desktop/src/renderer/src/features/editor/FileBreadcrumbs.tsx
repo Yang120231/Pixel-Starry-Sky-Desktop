@@ -43,8 +43,21 @@ export function FileBreadcrumbs({ tab, children }: { tab: OpenFile; children?: R
   const extra = splitExtra(tab.path)
   const folder = extra.index === null ? undefined : extraFolder(tab.ref, extra.index)
   const parts = extra.rest.split('/')
-  const under = (rel: string): string => (extra.prefix ? (rel ? `${extra.prefix}/${rel}` : extra.prefix) : rel)
-  const first = folder ? folderLabel(folder) : extra.prefix || tab.project || text('文件')
+  // 项目外的文件（「::0/完整路径」，docs/ui/outside-files.md）：每一节都是完整路径；盘符要带上斜杠、空的是根目录
+  const outside = extra.index === 0
+  const under = (rel: string): string =>
+    outside
+      ? `${extra.prefix}/${/^[A-Za-z]:$/.test(rel) ? rel + '/' : rel || '/'}`
+      : extra.prefix
+        ? rel
+          ? `${extra.prefix}/${rel}`
+          : extra.prefix
+        : rel
+  const first = outside
+    ? t('workspace.outsideProject')
+    : folder
+      ? folderLabel(folder)
+      : extra.prefix || tab.project || text('文件')
   return (
     <nav
       data-file-breadcrumbs
@@ -56,7 +69,7 @@ export function FileBreadcrumbs({ tab, children }: { tab: OpenFile; children?: R
           {i > 0 && <ChevronRight size={12} className="mx-0.5 shrink-0 text-fg-faint" />}
           <button
             type="button"
-            title={i ? parts.slice(0, i).join('/') : (folder?.path ?? tab.root)}
+            title={i ? parts.slice(0, i).join('/') : outside ? extra.rest : (folder?.path ?? tab.root)}
             className="flex min-w-0 items-center gap-1 rounded px-1 py-1 text-left text-fg-secondary hover:bg-hover"
             onClick={e => {
               const r = e.currentTarget.getBoundingClientRect()
@@ -73,7 +86,7 @@ export function FileBreadcrumbs({ tab, children }: { tab: OpenFile; children?: R
             ) : i === parts.length ? (
               <FileText size={13} className="shrink-0" />
             ) : null}
-            <span className="min-w-0 [overflow-wrap:anywhere]">{name}</span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">{name || '/'}</span>
           </button>
         </span>
       ))}

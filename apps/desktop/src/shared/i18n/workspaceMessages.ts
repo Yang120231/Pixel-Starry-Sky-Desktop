@@ -14,6 +14,7 @@ export const workspaceMessages = {
   'workspace.hideTree': { zh: '收起文件树', en: 'Hide file tree' },
   'workspace.wrap': { zh: '自动换行', en: 'Word wrap' },
   'workspace.breadcrumb': { zh: '文件路径导航', en: 'File path navigation' },
+  'workspace.outsideProject': { zh: '项目外', en: 'Outside project' },
   'workspace.expandAll': { zh: '展开全部目录', en: 'Expand all folders' },
   'workspace.collapseAll': { zh: '折叠全部目录', en: 'Collapse all folders' },
   'workspace.terminalSearch': { zh: '搜索终端输出…', en: 'Search terminal output…' },
