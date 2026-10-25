@@ -275,6 +275,12 @@ export const channelMessages = {
   'channels.agent.source.providerGone': { zh: '这个自定义接口已经删了', en: 'This custom API has been removed' },
   'channels.agent.source.noModels': { zh: '这个来源没有能选的模型', en: 'No models available from this source' },
   'channels.agent.permission': { zh: '权限', en: 'Permissions' },
+  'channels.agent.effort': { zh: '推理强度', en: 'Effort' },
+  'channels.agent.fast': { zh: 'Fast 模式', en: 'Fast mode' },
+  'channels.agent.ultracode': { zh: 'Ultracode', en: 'Ultracode' },
+  'channels.agent.follow': { zh: '跟随默认（{value}）', en: 'Default ({value})' },
+  'channels.agent.on': { zh: '开', en: 'On' },
+  'channels.agent.off': { zh: '关', en: 'Off' },
   'channels.agent.fullWarning': {
     zh: '这个成员做的活不会停下来等你确认，包括运行命令和改文件',
     en: 'Tasks for this member will not stop for your approval, including running commands and editing files',

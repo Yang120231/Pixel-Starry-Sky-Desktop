@@ -17,6 +17,7 @@ import { FileAttachments } from '@/features/session/attachments/FileAttachments'
 import type { ChannelAttachments } from '../../../../shared/types/channels'
 import { getProviders } from '@/features/account/providers'
 import { channelShort } from '@/features/model-channels/channelLabels'
+import { effortLabel } from '@/features/engine/labels'
 
 /** 成员头像：真人是圆形首字头像，AI 成员是圆角方块里的引擎图标 */
 export function MemberAvatar({
@@ -51,7 +52,7 @@ export function machineLabel(member: ChannelMember | undefined): string {
   return member.machine || (member.machineId === 'local' ? tr('channels.thisComputer') : member.machineId)
 }
 
-/** 额度来源（自有账号不写）· 模型 · 机器（AI 成员）；真人没有 */
+/** 额度来源（自有账号不写）· 模型 · 自己设过的推理强度 / Fast / Ultracode · 机器（AI 成员）；真人没有 */
 export function agentMeta(member: ChannelMember | undefined): string | null {
   if (member?.kind !== 'agent') return null
   const settings = member.config?.settings
@@ -60,7 +61,16 @@ export function agentMeta(member: ChannelMember | undefined): string | null {
     : settings?.provider
       ? (getProviders().providers.find(p => p.id === settings.provider?.id)?.name ?? channelShort('custom'))
       : null
-  return [credit, member.model, machineLabel(member)].filter(Boolean).join(' · ')
+  return [
+    credit,
+    member.model,
+    settings?.effort && effortLabel(settings.effort),
+    settings?.fast && 'Fast',
+    settings?.ultracode && 'Ultracode',
+    machineLabel(member),
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /** 项目 · 机器（任务卡底部） */

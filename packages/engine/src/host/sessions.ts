@@ -39,7 +39,8 @@ export class HostSessions {
   }
 
   createSession(
-    opts: { projectId: string } & Partial<SessionSettings> & { engine?: EngineId },
+    /** rememberChoices: false：按别处存的配置开的会话（频道成员），不把这几项记成默认值 */
+    opts: { projectId: string } & Partial<SessionSettings> & { engine?: EngineId; rememberChoices?: false },
     workspacePath?: string,
   ): SessionRecord {
     const { ctx } = this
@@ -80,7 +81,7 @@ export class HostSessions {
     ctx.records.set(record.id, record)
     ctx.store.saveRecord(record)
     // 打开了「记住会话里的选择」：新会话界面上（发第一条消息前）改的推理强度那几项也记成默认值（GitHub #6）
-    if (m.settings.remembersChoices(engine)) {
+    if (opts.rememberChoices !== false && m.settings.remembersChoices(engine)) {
       const picked: Partial<SessionSettings> = {}
       for (const k of EFFORT_PANEL_KEYS) Object.assign(picked, { [k]: record[k] })
       m.settings.setDefaults({ ...picked, engine })

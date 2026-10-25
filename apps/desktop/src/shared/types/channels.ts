@@ -96,10 +96,11 @@ export interface HumanMember {
 
 /**
  * AI 成员派活时用的会话设置；没写的用引擎默认值。额度来源（docs/ui/channels-local-ai.md §3.1 #1）：
- * 都不写是自有账号；platform 是像素星空平台（分组 + 账号），provider 是自定义接口，两个不能同时有
+ * 都不写是自有账号；platform 是像素星空平台（分组 + 账号），provider 是自定义接口，两个不能同时有。
+ * effort / fast / ultracode 不写 = 跟随引擎设置里的默认（docs/ui/channels-pipeline.md 第 19 项）
  */
 export type AgentSettings = Partial<
-  Pick<SessionSettings, 'model' | 'effort' | 'permissionMode' | 'platform' | 'provider'>
+  Pick<SessionSettings, 'model' | 'effort' | 'permissionMode' | 'platform' | 'provider' | 'fast' | 'ultracode'>
 >
 
 /** AI 成员的配置（全局，可以加进多个频道；docs/ui/channels-phase-b.md §2.2），存在 members.json */

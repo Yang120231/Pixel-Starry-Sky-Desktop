@@ -145,6 +145,10 @@ describe('本机引擎详情设置', () => {
     // 关掉以后又只影响会话
     await host.update(a.id, { effort: 'low' })
     expect(host.engineConfig().claude.defaults.effort).toBe('xhigh')
+    // 频道成员按自己的配置开会话：不改默认值
+    await host.setEngineConfig('claude', { rememberChoices: true })
+    host.createSession({ projectId: p.id, effort: 'max', fast: false, rememberChoices: false })
+    expect(host.engineConfig().claude.defaults.effort).toBe('xhigh')
     await expect(host.setEngineConfig('claude', { rememberChoices: 'yes' as never })).rejects.toThrow(
       '记住会话里的选择',
     )

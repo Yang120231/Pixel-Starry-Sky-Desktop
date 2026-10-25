@@ -2,11 +2,13 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { PERMISSION_MODES, type EngineId, type PermissionMode } from '@pixelsky/protocol'
+import { PERMISSION_MODES, type Effort, type EngineId, type PermissionMode } from '@pixelsky/protocol'
 import { Button, cn, EngineIcon, Segmented, Select, useToast, type SelectOption } from '@/ui'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useEngineState, PERMISSION_INFO } from '@/features/engine'
 import { useEngineCatalog } from '@/features/engine/catalog'
+import { effortLabel } from '@/features/engine/labels'
+import { effortDefaultsFor } from '@/features/engine/effortDefaults'
 import { useMachines } from '@/features/machines/store'
 import type { AgentMember, Channel } from '@/data/types'
 import { DEFAULT_RELAY_RULES, relayRulesOf, type AgentConfig, type RelayRules } from '../../../../shared/types/channels'
@@ -44,6 +46,11 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
 }
 
 const errorText = (error: unknown) => translateMessage((error as Error)?.message ?? String(error))
+
+/** Fast / Ultracode：跟随引擎设置、开、关 */
+type Toggle = 'follow' | 'on' | 'off'
+const toggleOf = (v: boolean | undefined): Toggle => (v === undefined ? 'follow' : v ? 'on' : 'off')
+const toggleValue = (t: Toggle): boolean | undefined => (t === 'follow' ? undefined : t === 'on')
 
 /** 项目下拉：机器没连上的项目不能选 */
 function useProjectOptions(): SelectOption<string>[] {
@@ -353,6 +360,12 @@ export function AgentDialog({
   const [model, setModel] = useState<string>(editing?.settings.model ?? '')
   const [source, setSource] = useState<SourceKey>(sourceKeyOf(editing?.settings))
   const [permission, setPermission] = useState<PermissionMode | ''>(editing?.settings.permissionMode ?? '')
+  // 推理强度那几项（docs/ui/channels-pipeline.md 第 19 项）：'' / follow = 跟随引擎设置里的默认
+  const [effort, setEffort] = useState<Effort | ''>(editing?.settings.effort ?? '')
+  const [fast, setFast] = useState<Toggle>(toggleOf(editing?.settings.fast))
+  const [ultracode, setUltracode] = useState<Toggle>(toggleOf(editing?.settings.ultracode))
+  const engineConfig = useEngineState(s => s.config)
+  const engineDefaults = useEngineState(s => s.defaults)
   const [instructions, setInstructions] = useState(editing?.instructions ?? '')
   const [mode, setMode] = useState<AgentConfig['mode']>(editing?.mode ?? 'per-task')
   const [tools, setTools] = useState<AgentConfig['tools']>(editing?.tools ?? null)
@@ -406,6 +419,25 @@ export function AgentDialog({
     { value: '', label: tr('channels.agent.default') },
     ...PERMISSION_MODES.map(m => ({ value: m, label: PERMISSION_INFO[m].label, hint: PERMISSION_INFO[m].hint })),
   ]
+  // 推理强度那几项按执行者能力显示（和会话里的菜单同一套：模型目录里的档位优先，没有就用引擎能力表）
+  const caps = engines.find(e => e.id === engine)?.caps
+  const efforts = (model && catalog?.models?.find(m => m.id === model)?.efforts) || caps?.efforts || []
+  // 换了执行者或模型、原来的档位不在了：退回跟随默认；引擎还没加载出能力表时原样保留
+  const effortValue: Effort | '' = effort && (!caps || efforts.includes(effort)) ? effort : ''
+  const hasFast = caps ? caps.fast : true
+  const hasUltracode = caps ? caps.ultracode : true
+  const panelDefaults = effortDefaultsFor(engineConfig, engineDefaults, engine)
+  const onOff = (v: boolean) => tr(v ? 'channels.agent.on' : 'channels.agent.off')
+  const followLabel = (value: string) => tr('channels.agent.follow', { value })
+  const effortOptions: SelectOption<Effort | ''>[] = [
+    { value: '', label: followLabel(effortLabel(panelDefaults.effort)) },
+    ...efforts.map(e => ({ value: e, label: effortLabel(e) })),
+  ]
+  const toggleOptions = (dflt: boolean): SelectOption<Toggle>[] => [
+    { value: 'follow', label: followLabel(onOff(dflt)) },
+    { value: 'on', label: tr('channels.agent.on') },
+    { value: 'off', label: tr('channels.agent.off') },
+  ]
   const canSave =
     !!name.trim() && !!projectId && (ready.some(e => e.id === engine) || !!editing) && (source === 'self' || !!model)
 
@@ -430,10 +462,9 @@ export function AgentDialog({
         copyId: copyId || null,
         settings: {
           ...settingsForSource(engine, source, model, sourceCtx),
-          // 界面上没有推理强度选项：编辑时沿用原来的（同一引擎才沿用，换了引擎档位不一定通用）
-          ...(editing?.settings.effort !== undefined && editing.engine === engine
-            ? { effort: editing.settings.effort }
-            : {}),
+          ...(effortValue ? { effort: effortValue } : {}),
+          ...(hasFast && toggleValue(fast) !== undefined ? { fast: toggleValue(fast) } : {}),
+          ...(hasUltracode && toggleValue(ultracode) !== undefined ? { ultracode: toggleValue(ultracode) } : {}),
           ...(permission ? { permissionMode: permission } : {}),
         },
         instructions,
@@ -572,7 +603,44 @@ export function AgentDialog({
                   onChange={setPermission}
                 />
               </div>
+              {efforts.length > 0 && (
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <span className="text-meta font-medium text-fg-muted">{tr('channels.agent.effort')}</span>
+                  <Select
+                    label={tr('channels.agent.effort')}
+                    value={effortValue}
+                    options={effortOptions}
+                    onChange={setEffort}
+                  />
+                </div>
+              )}
             </div>
+            {(caps?.fast || caps?.ultracode) && (
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
+                {caps.fast && (
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <span className="text-meta font-medium text-fg-muted">{tr('channels.agent.fast')}</span>
+                    <Select
+                      label={tr('channels.agent.fast')}
+                      value={fast}
+                      options={toggleOptions(panelDefaults.fast)}
+                      onChange={setFast}
+                    />
+                  </div>
+                )}
+                {caps.ultracode && (
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <span className="text-meta font-medium text-ultracode">{tr('channels.agent.ultracode')}</span>
+                    <Select
+                      label={tr('channels.agent.ultracode')}
+                      value={ultracode}
+                      options={toggleOptions(panelDefaults.ultracode)}
+                      onChange={setUltracode}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             {permission === 'full' && <p className="-mt-1 text-meta text-warn">{tr('channels.agent.fullWarning')}</p>}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-2">

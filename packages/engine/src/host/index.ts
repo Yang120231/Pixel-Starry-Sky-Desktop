@@ -399,7 +399,7 @@ export class EngineHost {
   }
 
   createSession(
-    opts: { projectId: string } & Partial<SessionSettings> & { engine?: EngineId },
+    opts: { projectId: string } & Partial<SessionSettings> & { engine?: EngineId; rememberChoices?: false },
     workspacePath?: string,
   ): SessionRecord {
     return this.m.sessions.createSession(opts, workspacePath)

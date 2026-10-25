@@ -863,6 +863,8 @@ export class Channels {
     if (raw.settings?.model !== undefined) settings.model = raw.settings.model
     if (raw.settings?.effort !== undefined) settings.effort = raw.settings.effort
     if (raw.settings?.permissionMode !== undefined) settings.permissionMode = raw.settings.permissionMode
+    if (typeof raw.settings?.fast === 'boolean') settings.fast = raw.settings.fast
+    if (typeof raw.settings?.ultracode === 'boolean') settings.ultracode = raw.settings.ultracode
     Object.assign(settings, creditOf(raw.settings))
     const machineId = this.deps.machineOf(raw.projectId)
     const credit = (x: AgentConfig['settings']) => JSON.stringify([x.platform ?? null, x.provider ?? null])
@@ -893,6 +895,14 @@ export class Channels {
       ? this.store.members.map(m => (m.id === config.id ? config : m))
       : [...this.store.members, config]
     await this.store.saveMembers()
+    // 一直用同一个会话的：改了推理强度那几项，同步到那个会话（跟随默认的不动）
+    const panel = (['effort', 'fast', 'ultracode'] as const).filter(
+      k => settings[k] !== undefined && settings[k] !== existing?.settings[k],
+    )
+    if (config.mode === 'shared' && config.sharedSessionId && panel.length)
+      await this.deps
+        .call('engine:updateSession', [config.sharedSessionId, Object.fromEntries(panel.map(k => [k, settings[k]]))])
+        .catch(e => this.deps.log?.('同步成员会话设置失败', e))
     if (channelId) await this.addMember(channelId, config.id)
     this.changed()
     return config.id
@@ -1662,6 +1672,8 @@ export class Channels {
         engine: member.engine,
         ...member.settings,
         ...(member.copyId ? { copyId: member.copyId } : {}),
+        // 按成员配置开的会话，不改「记住会话里的选择」的默认值
+        rememberChoices: false,
       },
     ])) as SessionRecord
     const shared = member.mode === 'shared'

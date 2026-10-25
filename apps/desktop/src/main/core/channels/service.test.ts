@@ -6,6 +6,7 @@ import type { EngineEvent, HostEvent, ProjectRecord, SessionSnapshot, SessionSum
 import {
   RELAY_PRESETS,
   type AgentInput,
+  type AgentMember,
   type ChannelTask,
   type ChannelTextMessage,
 } from '../../../shared/types/channels'
@@ -278,8 +279,20 @@ describe('协作频道：成员的额度来源', () => {
     await c.post(channelId, { text: '@平台助手 @接口助手 看一下', clientId: 'c1' })
     await settle()
     const creates = engine.calls.filter(x => x.channel === 'engine:createSession').map(x => x.args[0])
-    expect(creates).toContainEqual({ projectId: 'p1', engine: 'claude', model: 'claude-opus-5-5', platform })
-    expect(creates).toContainEqual({ projectId: 'p1', engine: 'claude', model: 'my-claude', provider: { id: 'anth' } })
+    expect(creates).toContainEqual({
+      projectId: 'p1',
+      engine: 'claude',
+      model: 'claude-opus-5-5',
+      platform,
+      rememberChoices: false,
+    })
+    expect(creates).toContainEqual({
+      projectId: 'p1',
+      engine: 'claude',
+      model: 'my-claude',
+      provider: { id: 'anth' },
+      rememberChoices: false,
+    })
   })
   it('一直用同一个会话的成员换了额度来源：下一项活开新会话（来源是开会话时定的）', async () => {
     const c = await open()
@@ -318,7 +331,7 @@ describe('协作频道：派活', () => {
     await settle()
     expect(ids).toHaveLength(1)
     const create = engine.calls.find(x => x.channel === 'engine:createSession')!
-    expect(create.args[0]).toEqual({ projectId: 'p1', engine: 'claude', permissionMode: 'ask' })
+    expect(create.args[0]).toEqual({ projectId: 'p1', engine: 'claude', permissionMode: 'ask', rememberChoices: false })
     expect(engine.calls.find(x => x.channel === 'engine:renameSession')?.args).toEqual(['s1', '把设置页迁到新表单'])
     const [send] = engine.sends()
     expect(send.sessionId).toBe('s1')
@@ -1014,6 +1027,45 @@ describe('协作频道：失败、停止、重试', () => {
     await c.post(channelId, { text: '@前端助手 做', clientId: '1' })
     await settle()
     expect(tasks(c, channelId)[0]).toMatchObject({ status: 'failed', error: '项目目录不存在' })
+  })
+})
+
+describe('成员的推理强度、Fast、Ultracode（docs/ui/channels-pipeline.md 第 19 项）', () => {
+  it('存进成员配置，新开会话时带上、不改「记住会话里的选择」的默认值；不写就是跟随默认，乱写的不收', async () => {
+    const c = await open()
+    const a = await c.saveMember(
+      null,
+      agent('前端助手', { settings: { effort: 'max', fast: true, ultracode: false, permissionMode: 'ask' } }),
+    )
+    const b = await c.saveMember(null, agent('后端助手', { settings: { fast: 'yes' as never } }))
+    const config = (id: string) => c.state().members.find((m): m is AgentMember => m.id === id && m.kind === 'agent')
+    expect(config(a)).toMatchObject({ config: { settings: { effort: 'max', fast: true, ultracode: false } } })
+    expect(config(b)?.config?.settings).not.toHaveProperty('fast')
+    const channelId = await c.create({ name: 'ch', memberIds: [a] })
+    await c.post(channelId, { text: '@前端助手 做', clientId: '1' })
+    await settle()
+    expect(engine.calls.find(x => x.channel === 'engine:createSession')?.args[0]).toMatchObject({
+      effort: 'max',
+      fast: true,
+      ultracode: false,
+      rememberChoices: false,
+    })
+  })
+
+  it('一直用同一个会话的成员：改了推理强度那几项，同步到那个会话；改回跟随默认的不动', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手', { mode: 'shared' }))
+    const channelId = await c.create({ name: 'ch', memberIds: [a] })
+    await c.post(channelId, { text: '@前端助手 做', clientId: '1' })
+    await settle()
+    await c.saveMember(null, agent('前端助手', { id: a, mode: 'shared', settings: { effort: 'low', fast: true } }))
+    expect(engine.calls.at(-1)).toEqual({
+      channel: 'engine:updateSession',
+      args: ['s1', { effort: 'low', fast: true }],
+    })
+    const before = engine.calls.length
+    await c.saveMember(null, agent('前端助手', { id: a, mode: 'shared', settings: { effort: 'low' } }))
+    expect(engine.calls.length).toBe(before)
   })
 })
 
