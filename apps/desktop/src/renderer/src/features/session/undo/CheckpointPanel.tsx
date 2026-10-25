@@ -49,9 +49,12 @@ export function CheckpointPanel({
     [snapshot.items],
   )
   const list = checkpoints.list
+  // 每轮的快照按消息 id 查：长会话上千轮时逐行 find 是 n²；倒着建，同一条消息有两项时和 find 一样取第一项
+  const turnOf = useMemo(() => new Map((list?.turns ?? []).toReversed().map(t => [t.itemId, t])), [list])
   const [selected, setSelected] = useState<string | null>(null)
   const item = users.length ? (users.find(u => u.id === selected) ?? users[users.length - 1]!) : null
-  const turn = item ? list?.turns.find(t => t.itemId === item.id) : undefined
+  const turn = item ? turnOf.get(item.id) : undefined
+  const itemIndex = item ? users.indexOf(item) : -1
   const codeAvailable = !!turn || engineRewindCode
   const [result, setResult] = useState<{ itemId: string; preview: RewindPreview } | null>(null)
   const code = result && item && result.itemId === item.id ? result.preview.code : null
@@ -160,9 +163,9 @@ export function CheckpointPanel({
           <>
             <ol data-checkpoint-list className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {users.map((u, i) => {
-                const t = list?.turns.find(x => x.itemId === u.id)
+                const t = turnOf.get(u.id)
                 const active = u.id === item.id
-                const after = i > users.indexOf(item)
+                const after = i > itemIndex
                 const meta = t
                   ? t.files === null
                     ? tr('checkpoint.pending')
