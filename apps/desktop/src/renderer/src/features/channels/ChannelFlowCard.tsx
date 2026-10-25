@@ -661,7 +661,7 @@ export function ChannelFlowCard({
   return (
     <div className="conversation-message mt-3 pl-10" data-channel-message={message.id}>
       <article
-        aria-label={`${tr('channels.flow.label')}：${flow.title}`}
+        aria-label={tr('channels.flow.label', { title: flow.title })}
         data-flow-status={flow.status}
         className={cn(
           'max-w-[640px] rounded-lg border border-line-card bg-surface p-3 shadow-sm',

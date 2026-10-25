@@ -639,7 +639,7 @@ export const channelMessages = {
     zh: '频道说明也是流程的共享约定（接口名、文件位置、贴图规格），每一步都会看到',
     en: 'Channel guidelines are also the flow’s shared conventions (interface names, file locations, texture specs); every step sees them',
   },
-  'channels.flow.label': { zh: '流程', en: 'Flow' },
+  'channels.flow.label': { zh: '流程：{title}', en: 'Flow: {title}' },
   'channels.flow.new': { zh: '新建流程', en: 'New flow' },
   'channels.flow.manual': { zh: '自己写', en: 'Write it myself' },
   'channels.flow.plan': { zh: '让成员拆', en: 'Let a member plan it' },
