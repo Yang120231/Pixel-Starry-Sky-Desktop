@@ -40,3 +40,8 @@
 [data-change-row] {
   height: 26px;
 }
+
+/* 标签 24 高 */
+[data-tab-strip] [role='tab'] {
+  height: 24px;
+}

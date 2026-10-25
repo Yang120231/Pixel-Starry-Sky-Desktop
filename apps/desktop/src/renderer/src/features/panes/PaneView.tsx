@@ -109,7 +109,7 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
     >
       {showHead && (
         <div
-          className="pane-head relative shrink-0"
+          className={cn('pane-head relative shrink-0 border-b border-line', focused ? 'bg-selected' : 'bg-app')}
           onDoubleClick={e => {
             if ((e.target as HTMLElement).closest('button')) return
             paneActions.toggleMaximize(leaf.id)
@@ -213,12 +213,12 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
         </div>
       )}
       {!showHead && leaf.tabs.length > 0 && (
-        <div data-tab-bar data-tab-count={leaf.tabs.length} className="shrink-0">
+        <div data-tab-bar data-tab-count={leaf.tabs.length} className="shrink-0 border-b border-line-layout">
           <TabStrip leaf={leaf} dim={false} areaSize={props.areaSize} />
         </div>
       )}
 
-      <div data-pane-content className="pane-card relative min-h-0 flex-1">
+      <div data-pane-content className="relative min-h-0 flex-1">
         {leaf.tabs.length === 0 ? <EmptyPane /> : leaf.tabs.map(tab => <TabSlot key={tab} tab={tab} />)}
       </div>
     </div>
@@ -256,14 +256,14 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
   }
 
   return (
-    <div className={cn('pane-head-content tab-row flex pr-2', dim && 'opacity-55')}>
+    <div className={cn('pane-head-content flex items-center pr-2', dim && 'opacity-55')}>
       <div className="tab-strip-wrap">
         <div
           ref={strip}
           data-tab-strip
           role="tablist"
           aria-label={tr('panes.PaneView.conversationTabsDragTo')}
-          className="pane-tab-strip relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 py-1 [scrollbar-width:none]"
+          className="pane-tab-strip relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 pt-1 pb-1.5 [scrollbar-width:none]"
           onContextMenu={e => {
             e.preventDefault()
             setBlankMenu({ x: e.clientX, y: e.clientY })
@@ -286,8 +286,8 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
         </div>
         <TabStripArrows strip={strip} />
       </div>
-      {/* 新建按钮固定在标签栏右边，标签多了也不会被挤出去 */}
-      <span className="flex shrink-0">
+      {/* 新建按钮固定在标签栏右边，标签多了也不会被挤出去；上下留白和标签栏一样，和标签对齐 */}
+      <span className="flex shrink-0 pt-1 pb-1.5">
         <button
           type="button"
           aria-label={tr('panes.PaneView.newConversationInThis')}
@@ -379,9 +379,9 @@ function Tab({
       onClick={() => paneActions.activate(leafId, tab)}
       onAuxClick={e => e.button === 1 && paneActions.closeTab(leafId, tab)}
       className={cn(
-        'group/tab flex h-7 max-w-60 shrink-0 cursor-grab touch-none items-center gap-1.5 rounded-sm border pr-1 pl-2 text-meta select-none transition-colors',
+        'group/tab flex h-7 max-w-60 shrink-0 cursor-grab touch-none items-center gap-1.5 rounded-md border pr-1 pl-2 text-meta select-none transition-colors',
         active
-          ? 'tab-current border-transparent font-semibold text-fg'
+          ? 'border-line bg-surface text-fg shadow-sm'
           : 'border-transparent text-fg-muted hover:bg-hover hover:text-fg',
         entering && 'pane-tab-in',
       )}

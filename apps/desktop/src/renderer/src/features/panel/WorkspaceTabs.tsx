@@ -84,12 +84,12 @@ export function WorkspaceTabs({
           run: () => onSelect(tool.id),
         }))
   return (
-    <div data-panel-tabs className="tab-row flex min-w-0 shrink-0 gap-1 px-2">
+    <div data-panel-tabs className="flex h-10 min-w-0 shrink-0 items-center gap-1 border-b border-line-layout px-2">
       <div
         ref={strip}
         role="tablist"
         aria-label={t('workspace.title')}
-        className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none]"
+        className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]"
       >
         {layout.tabs.map(id => {
           const Icon = toolIcon(id) ?? FileText,
@@ -100,9 +100,9 @@ export function WorkspaceTabs({
               data-panel-tab={id}
               data-active={id === layout.active || undefined}
               className={cn(
-                'group flex h-7 max-w-[min(32rem,80vw)] shrink-0 items-center gap-1 rounded-sm border pr-1',
+                'group flex h-7 max-w-[min(32rem,80vw)] shrink-0 items-center gap-1 rounded-md border pr-1',
                 id === layout.active
-                  ? 'tab-current border-transparent font-semibold text-fg'
+                  ? 'border-line bg-surface text-fg shadow-sm'
                   : 'border-transparent text-fg-muted hover:bg-hover',
               )}
               onContextMenu={e => {
@@ -119,7 +119,7 @@ export function WorkspaceTabs({
                 title={
                   file ? `${file.project} / ${displayPath(file.ref, file.path)}` : (parseFileTab(id)?.path ?? label(id))
                 }
-                className="flex h-full min-w-0 items-center gap-1.5 rounded-sm px-2 text-meta"
+                className="flex h-full min-w-0 items-center gap-1.5 rounded-md px-2 text-meta"
                 onClick={() => onSelect(id)}
                 onKeyDown={e => {
                   if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {

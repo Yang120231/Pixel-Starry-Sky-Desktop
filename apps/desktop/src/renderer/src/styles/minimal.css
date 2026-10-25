@@ -359,8 +359,6 @@
     [data-coding-bottom-tab][aria-selected='true']
   ) {
   color: var(--text);
-  /* 正常模式的当前标签加粗了；极简模式只靠字色和底线，不加粗 */
-  font-weight: inherit;
   box-shadow: inset 0 -1px 0 var(--text);
 }
 /* 编辑器标签原来靠顶上的主色条标当前，换成底下的线 */
@@ -384,10 +382,6 @@
 :root[data-minimal='on'] [data-tab-bar][data-tab-count='1'] {
   display: none;
 }
-/* 标签栏藏起来后，卡片照样离顶栏 8px（这段距离原来在标签行的下内边距里） */
-:root[data-minimal='on'] [data-tab-bar][data-tab-count='1'] + [data-pane-content] {
-  margin-top: 8px;
-}
 
 /* 底部账号行：只留头像、名字和余额，设置等图标鼠标移过去才显示（图标外面包的是 display: contents，透明度要设在按钮上） */
 :root[data-minimal='on'] [data-sidebar-footer] > :not([data-sidebar-account]) button {
@@ -397,9 +391,9 @@
   opacity: 1;
 }
 
-/* 右侧面板的标签行：44 → 40（32 + 下面到卡片的 8px），右边的「+ / 放大 / 收起」悬停才显示；一个标签都没有时照常显示 */
+/* 右侧面板的标签行：40 → 32，右边的「+ / 放大 / 收起」悬停才显示；一个标签都没有时照常显示 */
 :root[data-minimal='on'] [data-panel-tabs] {
-  height: 40px;
+  height: 32px;
 }
 :root[data-minimal='on'] [data-panel-tabs]:has([data-panel-tab]) > button {
   opacity: 0;

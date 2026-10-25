@@ -12,6 +12,8 @@ import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { ToolbarContext } from '@/features/layout/ToolbarContext'
 import type { ActiveWorkspace } from '@/features/editor/target'
 import { SessionChannelBadge } from '@/features/channels/SessionChannelBadge'
+import { useGitSummary } from '@/features/panel/git/summary'
+import { FolderMenu } from './FolderMenu'
 
 interface SessionHeaderProps {
   title: string
@@ -50,6 +52,7 @@ export function SessionHeader({
   const { layout } = useSidebarPrefs()
   // 侧栏收起时看不到「频道」行的未读，改在「展开侧栏」按钮上显示一个点（docs/ui/layout-v2.md §8）
   const channelUnread = useChannelUnreadTotal()
+  const git = useGitSummary(workspace?.name && title ? (workspace.ref ?? null) : null)
   return (
     <header
       // macOS 侧边栏收起时左上角是红绿灯（index.ts 的 trafficLightPosition），让开
@@ -83,39 +86,32 @@ export function SessionHeader({
       )}
       <div className="flex min-w-0 flex-1 items-center gap-1">
         {workspace?.name || title ? (
-          // 标题 + 项目名（两种模式一样，docs/ui/layout-v2.md §4）；新对话标签没有标题，只写项目名
-          <div data-header-workspace className="flex min-w-0 items-baseline gap-2">
-            {/* 有项目时是一行淡色面包屑「项目 › 标题」，标签栏才是主角（docs/ui/session-header-layouts-mockup.html 方案二） */}
-            {title && workspace?.name && (
-              <>
-                <span
-                  title={workspace.path || workspace.name}
-                  className="max-w-[40%] shrink-0 truncate text-meta text-fg-muted"
-                >
-                  {workspace.name}
-                </span>
-                <span aria-hidden className="shrink-0 text-meta text-fg-faint">
-                  ›
-                </span>
-              </>
+          // 「项目 分支 ▾」按钮 + 正常粗细的标题（方案 C，docs/ui/layout-v2.md §4）；新对话标签没有标题，只写项目名
+          <div data-header-workspace className="flex min-w-0 items-center gap-2">
+            {workspace?.name && title && (
+              <FolderMenu
+                name={workspace.name}
+                path={workspace.path}
+                target={workspace.ref}
+                header={{ branch: git?.branch ?? (git?.detached ? (git.head?.slice(0, 7) ?? null) : null) }}
+              />
             )}
             {title && (
               <h1
                 title={title}
                 className={cn(
-                  'min-w-0 truncate',
-                  workspace?.name ? 'text-meta text-fg-secondary' : 'text-ui font-semibold text-fg',
+                  'min-w-0 truncate text-ui',
+                  workspace?.name ? 'text-fg-secondary' : 'font-semibold text-fg',
                 )}
               >
                 {title}
               </h1>
             )}
-            {workspace?.name &&
-              (title ? null : (
-                <h1 title={workspace.path || workspace.name} className="min-w-0 truncate text-ui font-semibold text-fg">
-                  {workspace.name}
-                </h1>
-              ))}
+            {workspace?.name && !title && (
+              <h1 title={workspace.path || workspace.name} className="min-w-0 truncate text-ui font-semibold text-fg">
+                {workspace.name}
+              </h1>
+            )}
             {sessionId && <SessionChannelBadge sessionId={sessionId} />}
           </div>
         ) : null}
