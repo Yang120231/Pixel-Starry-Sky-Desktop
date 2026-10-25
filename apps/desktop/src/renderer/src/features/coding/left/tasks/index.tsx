@@ -683,7 +683,7 @@ export function TasksView({ visible }: { visible: boolean }) {
           placeholder={tr('coding.tasks.filter')}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => {
-            if (e.key === 'Escape' && query) {
+            if (e.key === 'Escape' && query && !e.nativeEvent.isComposing) {
               e.preventDefault()
               setQuery('')
             }

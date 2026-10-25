@@ -182,6 +182,7 @@ function CommentEditor({
         aria-label={tr('review.add')}
         onChange={e => setText(e.target.value)}
         onKeyDown={e => {
+          if (e.nativeEvent.isComposing) return
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault()
             save()

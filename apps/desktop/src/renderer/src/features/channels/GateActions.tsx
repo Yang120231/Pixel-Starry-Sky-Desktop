@@ -29,7 +29,7 @@ export function GateActions({
           onChange={e => setNote(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter' && !e.nativeEvent.isComposing) send()
-            if (e.key === 'Escape') setRejecting(false)
+            if (e.key === 'Escape' && !e.nativeEvent.isComposing) setRejecting(false)
           }}
           className="h-7 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-meta text-fg outline-none focus:border-accent"
         />

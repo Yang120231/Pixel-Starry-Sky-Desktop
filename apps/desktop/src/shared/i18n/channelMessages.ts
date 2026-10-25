@@ -569,6 +569,10 @@ export const channelMessages = {
   'checks.settings.save': { zh: '保存', en: 'Save' },
   'checks.settings.saved': { zh: '已保存', en: 'Saved' },
   'checks.settings.runNow': { zh: '现在跑一次', en: 'Run now' },
+  'checks.settings.nothingToRun': {
+    zh: '没有要跑的检查：先识别到命令、自己写几条，或打开文本检查',
+    en: 'Nothing to run: detect or add commands, or turn on the text check',
+  },
   'checks.settings.failed': { zh: '操作失败：{error}', en: 'Failed: {error}' },
   'channels.dialog.toolsKind.mcp': { zh: 'MCP', en: 'MCP' },
   'channels.dialog.toolsKind.skill': { zh: '技能', en: 'Skill' },

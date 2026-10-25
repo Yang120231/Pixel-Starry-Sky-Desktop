@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom'
 import { cn } from './cn'
 import { isTypingTarget, pickByDigit } from './menuDigit'
 import { placePopover, type PopoverAlign, type PopoverSide } from './placePopover'
+import { useRestoreFocus } from './useRestoreFocus'
 
 interface PopoverProps {
   open: boolean
@@ -65,6 +66,7 @@ export function Popover({
   children,
 }: PopoverProps) {
   useI18n()
+  useRestoreFocus(open)
   const ref = useRef<HTMLDivElement>(null)
   const marker = useRef<HTMLSpanElement>(null)
   /** React 的 mousedown（含里层 portal 冒上来的）先于 document 监听器触发，在这里记一笔 */
@@ -149,6 +151,8 @@ export function Popover({
     }
     const onKey = (e: KeyboardEvent) => {
       // 里面又开着一层（「更多工具」里的打开方式）时 Esc 和数字键都交给里层：Esc 只关最里面那层
+      // 输入法选字时的 Esc 是关候选框，不关菜单
+      if (e.isComposing) return
       if (e.key === 'Escape') {
         if (kids.current === 0) onClose()
       } else if (!e.defaultPrevented && ref.current && kids.current === 0 && !isTypingTarget(document.activeElement))

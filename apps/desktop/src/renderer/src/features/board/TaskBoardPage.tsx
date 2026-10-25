@@ -14,7 +14,7 @@ import {
   Trash2,
   Workflow,
 } from 'lucide-react'
-import { Button, Segmented, Select, cn } from '@/ui'
+import { Button, Segmented, Select, cn, useRestoreFocus } from '@/ui'
 import { ActionMenu } from '@/ui/ActionMenu'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { useI18n } from '@/i18n/I18nProvider'
@@ -111,6 +111,8 @@ export function TaskBoardPage() {
   const [showOlder, setShowOlder] = useState(false)
   const [now, setNow] = useState(Date.now)
   const [creating, setCreating] = useState<{ title: string; projectId: string } | null>(null)
+  // 新建任务的输入框关掉后焦点回到点开它的「+」
+  useRestoreFocus(!!creating)
   const [editing, setEditing] = useState<{ task: ManualTask; form: Form } | null>(null)
   const [deleting, setDeleting] = useState<ManualTask | null>(null)
   const [reviewing, setReviewing] = useState<ManualTask | null>(null)
@@ -292,7 +294,7 @@ export function TaskBoardPage() {
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Escape' && query) {
+              if (e.key === 'Escape' && query && !e.nativeEvent.isComposing) {
                 e.preventDefault()
                 setQuery('')
               }
@@ -374,7 +376,7 @@ export function TaskBoardPage() {
                           if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                             e.preventDefault()
                             saveCreate()
-                          } else if (e.key === 'Escape') {
+                          } else if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
                             e.preventDefault()
                             setCreating(null)
                           }

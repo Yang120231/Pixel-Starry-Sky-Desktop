@@ -37,7 +37,7 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.isComposing) {
         e.stopPropagation()
         setOpen(false)
       }
@@ -80,7 +80,7 @@ export function FontPicker({ label, value, onChange, placeholder, sample }: Font
           }}
           onBlur={commit}
           onKeyDown={e => {
-            if (e.key === 'Enter') commit()
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) commit()
           }}
           className="min-w-0 flex-1 bg-transparent px-3 text-list text-fg outline-none placeholder:text-fg-faint"
           style={{ fontFamily: draft.trim() ? `${draft}, var(--font-sans)` : undefined }}

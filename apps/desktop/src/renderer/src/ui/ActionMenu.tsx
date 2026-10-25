@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Check, ChevronRight, type LucideIcon } from 'lucide-react'
 import { cn } from './cn'
 import { pickByDigit } from './menuDigit'
+import { useRestoreFocus } from './useRestoreFocus'
 
 export interface MenuAction {
   label: string
@@ -77,6 +78,7 @@ export function ActionMenu({
     subRef = useRef<HTMLDivElement>(null),
     close = useRef(onClose)
   close.current = onClose
+  useRestoreFocus(true)
   // 打开的子菜单：哪一项、父项的位置、是不是用键盘打开的（是就把焦点放进去）
   const [sub, setSub] = useState<{ index: number; rect: DOMRect; focus: boolean } | null>(null)
   useLayoutEffect(() => {

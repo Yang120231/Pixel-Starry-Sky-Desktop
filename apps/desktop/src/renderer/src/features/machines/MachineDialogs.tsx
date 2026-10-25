@@ -391,7 +391,7 @@ export function MachineDialogs() {
                     value={path}
                     onChange={e => setPath(e.target.value)}
                     onKeyDown={e => {
-                      if (e.key === 'Enter') void run(() => browse(path))
+                      if (e.key === 'Enter' && !e.nativeEvent.isComposing) void run(() => browse(path))
                     }}
                   />
                   <Button disabled={busy} onClick={() => void run(() => browse(path))}>
@@ -650,7 +650,7 @@ function MachineModal({
       }}
       onKeyDown={e => {
         e.stopPropagation()
-        if (e.key === 'Escape' && !busy) close()
+        if (e.key === 'Escape' && !busy && !e.nativeEvent.isComposing) close()
         if (e.key === 'Tab') {
           const elements = [
             ...e.currentTarget.querySelectorAll<HTMLElement>(

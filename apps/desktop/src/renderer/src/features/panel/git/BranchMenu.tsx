@@ -42,7 +42,7 @@ export function BranchMenu({
   // Esc 只关菜单，不再往外传（点外面由 Popover 处理）
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.isComposing) {
         e.stopPropagation()
         onClose()
       }
@@ -99,7 +99,7 @@ export function BranchMenu({
           placeholder={tr('git.branch.search')}
           aria-label={tr('git.branch.search')}
           onKeyDown={e => {
-            if (e.key === 'Enter' && q && !exact) {
+            if (e.key === 'Enter' && q && !exact && !e.nativeEvent.isComposing) {
               e.preventDefault()
               onCreate(q)
             }

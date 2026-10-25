@@ -275,6 +275,7 @@ function AccountRow({
               placeholder={tr('accounts.renamePlaceholder')}
               onBlur={saveLabel}
               onKeyDown={e => {
+                if (e.nativeEvent.isComposing) return
                 if (e.key === 'Enter') saveLabel()
                 if (e.key === 'Escape') setEditing(false)
               }}

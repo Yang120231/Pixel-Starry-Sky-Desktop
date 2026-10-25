@@ -48,7 +48,7 @@ export function RegisterPanel({
             setName(e.target.value)
             setError(null)
           }}
-          onKeyDown={e => e.key === 'Enter' && void submit()}
+          onKeyDown={e => e.key === 'Enter' && !e.nativeEvent.isComposing && void submit()}
           className="no-drag h-8 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-ui text-fg outline-none placeholder:text-fg-faint focus:border-line-strong"
         />
         <Button variant="primary" disabled={busy || !name.trim()} onClick={() => void submit()}>

@@ -72,7 +72,10 @@ export function ProjectChecksCard() {
     setBusy(true)
     setResult({ id: 'pending', at: Date.now(), status: 'running', items: [] })
     try {
-      setResult(await bridge.runChecks({ projectId: current.id }))
+      // null：没有命令也没开文本检查，什么都没跑
+      const run = await bridge.runChecks({ projectId: current.id })
+      if (!run) toast(tr('checks.settings.nothingToRun'))
+      setResult(run)
     } catch (e) {
       setResult(null)
       toast(tr('checks.settings.failed', { error: translateMessage((e as Error).message) }))
@@ -99,6 +102,8 @@ export function ProjectChecksCard() {
               value={current.id}
               options={projects.map(p => ({ value: p.id, label: p.name }))}
               onChange={setProjectId}
+              // 跑检查、保存的结果按当时的项目写回，进行中不让换项目
+              disabled={busy}
               className="h-8 w-56"
             />
           </div>

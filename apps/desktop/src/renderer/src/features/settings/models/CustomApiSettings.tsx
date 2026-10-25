@@ -377,7 +377,7 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
       }}
       onKeyDown={e => {
         e.stopPropagation()
-        if (e.key === 'Escape' && !locked) requestClose()
+        if (e.key === 'Escape' && !locked && !e.nativeEvent.isComposing) requestClose()
       }}
     >
       <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-line-card bg-popover shadow-menu">
@@ -510,7 +510,7 @@ function ProviderDialog({ provider, close }: { provider: ProviderView | null; cl
                 placeholder={tr('customApi.modelPlaceholder')}
                 onChange={e => setNewModel(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                     e.preventDefault()
                     addModel()
                   }

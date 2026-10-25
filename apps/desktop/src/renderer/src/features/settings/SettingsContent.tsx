@@ -374,7 +374,7 @@ export function SettingsContent({
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Enter' && hits[0]) openHit(hits[0])
+              if (e.key === 'Enter' && hits[0] && !e.nativeEvent.isComposing) openHit(hits[0])
             }}
             placeholder={tr('settings.SettingsDialog.nav.search')}
             aria-label={`${text('搜索设置')}（Ctrl+F）`}

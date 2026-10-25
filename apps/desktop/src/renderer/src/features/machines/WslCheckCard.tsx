@@ -131,7 +131,8 @@ function Card({ id, items: fresh }: { id: string; items: CheckItem[] | null }) {
                       placeholder={t('wsl.card.nodePlaceholder')}
                       onChange={e => setNodePath(e.target.value)}
                       onKeyDown={e => {
-                        if (e.key === 'Enter' && busy === null && nodePath.trim()) void saveNode(nodePath.trim())
+                        if (e.key === 'Enter' && busy === null && nodePath.trim() && !e.nativeEvent.isComposing)
+                          void saveNode(nodePath.trim())
                       }}
                     />
                     <Button disabled={busy !== null || !nodePath.trim()} onClick={() => void saveNode(nodePath.trim())}>
@@ -164,7 +165,7 @@ function Card({ id, items: fresh }: { id: string; items: CheckItem[] | null }) {
       }}
       onKeyDown={e => {
         e.stopPropagation()
-        if (e.key === 'Escape' && !busy) closeWslCheck()
+        if (e.key === 'Escape' && !busy && !e.nativeEvent.isComposing) closeWslCheck()
       }}
     >
       <div className="flex max-h-[88vh] w-[480px] max-w-full flex-col overflow-hidden rounded-xl border border-line-card bg-popover shadow-menu">

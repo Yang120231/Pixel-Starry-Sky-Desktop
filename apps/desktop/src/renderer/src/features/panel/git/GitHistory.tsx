@@ -891,7 +891,7 @@ export function GitHistory({
             value={search}
             onChange={e => setSearch(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Escape' && search) {
+              if (e.key === 'Escape' && search && !e.nativeEvent.isComposing) {
                 e.stopPropagation()
                 setSearch('')
               }
@@ -1360,7 +1360,7 @@ function ScopePicker({
   // Esc 只关菜单，不再往外传（点外面由 Popover 处理）
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.isComposing) {
         e.stopPropagation()
         onClose()
       }

@@ -76,7 +76,7 @@ export function SearchView({ visible }: { visible: boolean }) {
           placeholder={tr('coding.files.search.placeholder')}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => {
-            if (e.key === 'Escape' && text) {
+            if (e.key === 'Escape' && text && !e.nativeEvent.isComposing) {
               e.preventDefault()
               setText('')
             }

@@ -1347,6 +1347,13 @@ function FileRow({
     statuses[entry.path] ??
     (entry.kind === 'directory' && Object.keys(statuses).some(p => p.startsWith(entry.path + '/')) ? '•' : '')
   const row = useRef<HTMLDivElement>(null)
+  // 重命名框关掉（Esc、改名没变）后焦点掉到 body：放回这一行，键盘用户不用从头 Tab
+  const wasRenaming = useRef(false)
+  useEffect(() => {
+    if (wasRenaming.current && !renaming && (!document.activeElement || document.activeElement === document.body))
+      row.current?.querySelector('button')?.focus()
+    wasRenaming.current = renaming
+  }, [renaming])
   useLayoutEffect(() => {
     const el = row.current,
       list = el?.closest<HTMLElement>('[data-file-tree-scroll]')
