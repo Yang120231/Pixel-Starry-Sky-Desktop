@@ -15,7 +15,6 @@ import { SessionHeader } from '@/features/session/SessionHeader'
 import { useHeaderActions } from '@/features/session/SessionView'
 import { cn } from '@/ui'
 import { Toast } from '@/ui/Toast'
-import { useSessionTitle } from '@/features/engine'
 import {
   CLOSE_TAB,
   CYCLE_PANE,
@@ -42,7 +41,6 @@ import {
   type Rect,
 } from './tree'
 import { useFiles } from '@/features/files/store'
-import { useActiveWorkspace } from '@/features/editor/target'
 import { DragPreview, PaneDragContext, usePaneDrag } from './drag'
 import { useTheme } from '@/features/appearance/ThemeProvider'
 import { getPage, usePage } from '@/features/layout/page'
@@ -74,13 +72,10 @@ export function WorkspaceHeader({ membersShown = false, ...props }: WorkspacePro
   useI18n()
   const current = usePaneState(s => focusedTab(s.layout))
   const sessionId = current && !isNewTab(current) && !isFileTab(current) ? current : null
-  const title = useSessionTitle(sessionId)
   const files = useFiles(),
     file = files.tabs.find(t => t.id === current),
     parsed = current ? parseFileTab(current) : null
   const showActions = useHeaderActions(sessionId)
-  // 标签栏上已经有标题，顶栏改为显示所在的工作区（docs/ui/workbench-ux-3.md §2.1）
-  const workspace = useActiveWorkspace()
   const page = usePage()
   const channel = useChannels(selectedChannel)
   // 协作频道页沿用同一个顶栏（换组件会丢焦点）：标题是频道名，面板开关控制成员面板（docs/ui/channels.md §2）
@@ -115,13 +110,10 @@ export function WorkspaceHeader({ membersShown = false, ...props }: WorkspacePro
       />
     )
   }
+  // 会话页：标题和项目只写在标签上（「📁 项目 / 标题」，docs/ui/tabs-only-mockup.html），顶栏左边留空、可以拖窗口
   return (
     <SessionHeader
-      // 新对话标签没有标题，顶栏只写项目名（docs/ui/layout-v2.md §4）
-      title={
-        file?.name ?? parsed?.path.split('/').pop() ?? (current && isNewTab(current) && workspace?.name ? '' : title)
-      }
-      workspace={workspace}
+      title=""
       showActions={showActions && !parsed}
       sessionId={parsed || file ? null : sessionId}
       {...props}

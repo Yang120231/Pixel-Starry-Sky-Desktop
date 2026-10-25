@@ -378,11 +378,6 @@
   box-shadow: none;
 }
 
-/* 标签栏：只有一个标签时不显示（顶栏写着对话标题） */
-:root[data-minimal='on'] [data-tab-bar][data-tab-count='1'] {
-  display: none;
-}
-
 /* 底部账号行：只留头像、名字和余额，设置等图标鼠标移过去才显示（图标外面包的是 display: contents，透明度要设在按钮上） */
 :root[data-minimal='on'] [data-sidebar-footer] > :not([data-sidebar-account]) button {
   opacity: 0;

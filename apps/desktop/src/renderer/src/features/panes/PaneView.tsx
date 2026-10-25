@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { memo, useLayoutEffect, useRef, useState } from 'react'
-import { Columns2, Ellipsis, Maximize2, Minimize2, MousePointerClick, Plus, Rows2, X } from 'lucide-react'
+import { Columns2, Ellipsis, Folder, Maximize2, Minimize2, MousePointerClick, Plus, Rows2, X } from 'lucide-react'
 import { IconButton, Popover, PopoverItem, Spinner, cn } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { isLive, useEngineState, useSessionTitle } from '@/features/engine'
@@ -39,9 +39,14 @@ function useTabInfo(tab: string | null): TabInfo {
     parsed = tab ? parseFileTab(tab) : null
   const title = useSessionTitle(sessionId)
   const summary = useEngineState(s => (sessionId ? s.sessions.find(x => x.record.id === sessionId) : undefined))
-  const project = useEngineState(s =>
-    summary ? (s.projects.find(p => p.id === summary.record.projectId)?.name ?? null) : null,
-  )
+  const project = useEngineState(s => {
+    if (summary) return s.projects.find(p => p.id === summary.record.projectId)?.name ?? null
+    // 新对话标签还没有会话记录：写当前项目（原来顶栏也是这样，useActiveWorkspace）
+    if (tab && isNewTab(tab)) return s.projects.find(p => p.id === s.currentProjectId)?.name ?? null
+    return null
+  })
+  const demoProject =
+    isDemo && sessionId ? (projects.find(p => p.sessions.some(x => x.id === sessionId))?.name ?? null) : null
   const unread = useEngineState(s => (sessionId ? !!s.unread[sessionId] : false))
   const pending = useEngineState(s => (sessionId ? (s.snapshots[sessionId]?.pending.length ?? 0) : 0))
   const status: TabStatus = !isLive
@@ -61,7 +66,7 @@ function useTabInfo(tab: string | null): TabInfo {
       file: true,
       dirty: file ? dirtyFile(file) : false,
     }
-  return { title: tab === null ? tr('panes.PaneView.emptyPane') : title, project, status }
+  return { title: tab === null ? tr('panes.PaneView.emptyPane') : title, project: project ?? demoProject, status }
 }
 
 function StatusMark({ status }: { status: TabStatus }) {
@@ -115,101 +120,90 @@ export const PaneView = memo(function PaneView(props: PaneViewProps) {
             paneActions.toggleMaximize(leaf.id)
           }}
         >
-          <div className={cn('pane-head-content flex h-10 items-center gap-2 pr-2 pl-3', !focused && 'opacity-55')}>
-            {info.status === 'running' && (
-              <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 text-label font-medium text-accent-fg">
-                <Spinner size={10} />
-                {tr('session.live.agentTrace.running')}{' '}
+          {/* 标题只写在标签上（「📁 项目 / 标题」），窗格头就是标签那一行，右边放大 / 更多 / 关闭（docs/ui/tabs-only-mockup.html） */}
+          <div className="flex min-h-10 items-center">
+            {leaf.tabs.length > 0 ? (
+              <TabStrip leaf={leaf} dim={!focused} areaSize={props.areaSize} />
+            ) : (
+              <span className={cn('min-w-0 flex-1 truncate pl-3 text-ui text-fg-muted', !focused && 'opacity-55')}>
+                {info.title}
               </span>
             )}
-            {info.status === 'waiting' && (
-              <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-subtle px-2 text-label font-medium text-warn">
-                {tr('panes.PaneView.waitingForConfirmation')}
-              </span>
-            )}
-            {info.project && (
-              <>
-                <span className="max-w-[40%] shrink-0 truncate text-ui text-fg-muted">{info.project}</span>
-                <span className="shrink-0 text-fg-faint">/</span>
-              </>
-            )}
-            <span className="min-w-0 flex-1 truncate text-ui font-medium text-fg" title={info.title}>
-              {info.title}
-            </span>
-            <IconButton
-              icon={maximized ? Minimize2 : Maximize2}
-              label={withShortcut(
-                maximized ? tr('panes.PaneView.restorePane') : tr('panes.PaneView.expandPane'),
-                ZOOM_PANE,
-              )}
-              iconSize={14}
-              onClick={() => paneActions.toggleMaximize(leaf.id)}
-            />
-            <span className="relative">
+            <div className={cn('flex shrink-0 items-center gap-0.5 pr-2', !focused && 'opacity-55')}>
               <IconButton
-                icon={Ellipsis}
-                label={tr('session.SessionHeader.more')}
-                active={menuOpen}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                onMouseDown={e => menuOpen && e.stopPropagation()}
-                onClick={() => setMenuOpen(v => !v)}
+                icon={maximized ? Minimize2 : Maximize2}
+                label={withShortcut(
+                  maximized ? tr('panes.PaneView.restorePane') : tr('panes.PaneView.expandPane'),
+                  ZOOM_PANE,
+                )}
+                iconSize={14}
+                onClick={() => paneActions.toggleMaximize(leaf.id)}
               />
-              <Popover open={menuOpen} onClose={() => setMenuOpen(false)} align="end">
-                <PopoverItem
-                  icon={<Columns2 size={15} strokeWidth={1.5} className="text-fg-secondary" />}
-                  onClick={() => {
-                    setMenuOpen(false)
-                    paneActions.focus(leaf.id)
-                    paneActions.split('row', props.areaSize())
-                  }}
-                >
-                  {tr('panes.PaneView.splitRight')} {SPLIT_RIGHT.label}）
-                </PopoverItem>
-                <PopoverItem
-                  icon={<Rows2 size={15} strokeWidth={1.5} className="text-fg-secondary" />}
-                  onClick={() => {
-                    setMenuOpen(false)
-                    paneActions.focus(leaf.id)
-                    paneActions.split('col', props.areaSize())
-                  }}
-                >
-                  {tr('panes.PaneView.splitDown')} {SPLIT_DOWN.label}）
-                </PopoverItem>
-                {leaf.tabs.length > 0 &&
-                  (['inactive', 'all'] as const).map(kind => (
-                    <PopoverItem
-                      key={kind}
-                      icon={<span className="size-[15px] shrink-0" />}
-                      disabled={kind === 'inactive' && !tabsToClose(leaf, kind, null, tabInUse).length}
-                      title={kind === 'inactive' ? tr('panes.PaneView.closeInactiveHint') : undefined}
-                      onClick={() => {
-                        setMenuOpen(false)
-                        void paneActions.closeTabs(leaf.id, kind)
-                      }}
-                    >
-                      {BULK_LABEL[kind]()}
-                    </PopoverItem>
-                  ))}
-                <PopoverItem
-                  icon={<X size={15} strokeWidth={1.5} className="text-fg-secondary" />}
-                  onClick={() => {
-                    setMenuOpen(false)
-                    paneActions.closePane(leaf.id)
-                  }}
-                >
-                  {tr('panes.PaneView.closePane')}{' '}
-                </PopoverItem>
-              </Popover>
-            </span>
-            <IconButton
-              icon={X}
-              label={tr('panes.PaneView.closePaneConversationContinues')}
-              iconSize={15}
-              onClick={() => paneActions.closePane(leaf.id)}
-            />
+              <span className="relative">
+                <IconButton
+                  icon={Ellipsis}
+                  label={tr('session.SessionHeader.more')}
+                  active={menuOpen}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onMouseDown={e => menuOpen && e.stopPropagation()}
+                  onClick={() => setMenuOpen(v => !v)}
+                />
+                <Popover open={menuOpen} onClose={() => setMenuOpen(false)} align="end">
+                  <PopoverItem
+                    icon={<Columns2 size={15} strokeWidth={1.5} className="text-fg-secondary" />}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      paneActions.focus(leaf.id)
+                      paneActions.split('row', props.areaSize())
+                    }}
+                  >
+                    {tr('panes.PaneView.splitRight')} {SPLIT_RIGHT.label}）
+                  </PopoverItem>
+                  <PopoverItem
+                    icon={<Rows2 size={15} strokeWidth={1.5} className="text-fg-secondary" />}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      paneActions.focus(leaf.id)
+                      paneActions.split('col', props.areaSize())
+                    }}
+                  >
+                    {tr('panes.PaneView.splitDown')} {SPLIT_DOWN.label}）
+                  </PopoverItem>
+                  {leaf.tabs.length > 0 &&
+                    (['inactive', 'all'] as const).map(kind => (
+                      <PopoverItem
+                        key={kind}
+                        icon={<span className="size-[15px] shrink-0" />}
+                        disabled={kind === 'inactive' && !tabsToClose(leaf, kind, null, tabInUse).length}
+                        title={kind === 'inactive' ? tr('panes.PaneView.closeInactiveHint') : undefined}
+                        onClick={() => {
+                          setMenuOpen(false)
+                          void paneActions.closeTabs(leaf.id, kind)
+                        }}
+                      >
+                        {BULK_LABEL[kind]()}
+                      </PopoverItem>
+                    ))}
+                  <PopoverItem
+                    icon={<X size={15} strokeWidth={1.5} className="text-fg-secondary" />}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      paneActions.closePane(leaf.id)
+                    }}
+                  >
+                    {tr('panes.PaneView.closePane')}{' '}
+                  </PopoverItem>
+                </Popover>
+              </span>
+              <IconButton
+                icon={X}
+                label={tr('panes.PaneView.closePaneConversationContinues')}
+                iconSize={15}
+                onClick={() => paneActions.closePane(leaf.id)}
+              />
+            </div>
           </div>
-          {leaf.tabs.length > 0 && <TabStrip leaf={leaf} dim={!focused} areaSize={props.areaSize} />}
         </div>
       )}
       {!showHead && leaf.tabs.length > 0 && (
@@ -231,6 +225,7 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
   const refs = useRef(new Map<string, HTMLDivElement>())
   const prev = useRef(new Map<string, number>())
   const seen = useRef(new Set(leaf.tabs))
+  const activeProject = useTabInfo(leaf.active).project
   const [menu, setMenu] = useState<{ tab: string; x: number; y: number } | null>(null)
   // 标签栏空白处右键：关闭所有 / 不活跃的标签页（GitHub #32）
   const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null)
@@ -256,7 +251,7 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
   }
 
   return (
-    <div className={cn('pane-head-content flex items-center pr-2', dim && 'opacity-55')}>
+    <div className={cn('pane-head-content flex min-w-0 flex-1 items-center pr-2', dim && 'opacity-55')}>
       <div className="tab-strip-wrap">
         <div
           ref={strip}
@@ -275,6 +270,7 @@ function TabStrip({ leaf, dim, areaSize }: { leaf: Leaf; dim: boolean; areaSize:
               tab={tab}
               leafId={leaf.id}
               active={tab === leaf.active}
+              activeProject={activeProject}
               entering={isNew(tab)}
               onMenu={(x, y) => setMenu({ tab, x, y })}
               refCb={el => {
@@ -331,6 +327,7 @@ function Tab({
   tab,
   leafId,
   active,
+  activeProject,
   entering,
   refCb,
   onMenu,
@@ -338,6 +335,8 @@ function Tab({
   tab: string
   leafId: string
   active: boolean
+  /** 当前标签所属项目：别的标签项目不同时才在标题前写项目名 */
+  activeProject: string | null
   entering: boolean
   refCb: (el: HTMLDivElement | null) => void
   onMenu: (x: number, y: number) => void
@@ -345,6 +344,8 @@ function Tab({
   useI18n()
   const info = useTabInfo(tab)
   const beginDrag = useBeginTabDrag()
+  // 顶栏不写标题了，标题只在标签上：当前标签「📁 项目 / 标题」，别的标签项目和当前不同时写「项目 / 标题」
+  const crumb = info.file || !info.project ? null : active ? 'full' : info.project !== activeProject ? 'project' : null
   return (
     <div
       ref={refCb}
@@ -379,13 +380,23 @@ function Tab({
       onClick={() => paneActions.activate(leafId, tab)}
       onAuxClick={e => e.button === 1 && paneActions.closeTab(leafId, tab)}
       className={cn(
-        'group/tab flex h-7 max-w-60 shrink-0 cursor-grab touch-none items-center gap-1.5 rounded-md border pr-1 pl-2 text-meta select-none transition-colors',
+        'group/tab flex h-7 shrink-0 cursor-grab touch-none items-center gap-1.5 rounded-md border pr-1 pl-2 text-meta select-none transition-colors',
         active
           ? 'border-line bg-surface text-fg shadow-sm'
           : 'border-transparent text-fg-muted hover:bg-hover hover:text-fg',
+        crumb === 'full' ? 'max-w-80' : 'max-w-60',
         entering && 'pane-tab-in',
       )}
     >
+      {crumb && (
+        <span data-tab-project className="flex shrink-0 items-center gap-1.5 text-fg-faint">
+          {crumb === 'full' && <Folder size={13} strokeWidth={1.5} className="shrink-0" />}
+          <span className={cn('max-w-32 truncate font-mono text-label', active && 'text-fg-muted')}>
+            {info.project}
+          </span>
+          <span>/</span>
+        </span>
+      )}
       {info.file ? (
         <FileIcon name={info.title.split('/').pop() ?? info.title} kind="file" size={14} />
       ) : (

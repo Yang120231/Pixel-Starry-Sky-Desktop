@@ -14,18 +14,7 @@ import { OpenInButton } from '@/features/editor/OpenInButton'
 import { ToolbarContext, useToolbarState } from '@/features/layout/ToolbarContext'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 
-// header：会话页顶栏标题前的「项目 分支 ▾」按钮（docs/ui/session-title-row-mockup.html 方案 C），菜单往下开
-export function FolderMenu({
-  name,
-  path,
-  target,
-  header,
-}: {
-  name: string
-  path: string
-  target: WorkspaceRef | null
-  header?: { branch: string | null }
-}) {
+export function FolderMenu({ name, path, target }: { name: string; path: string; target: WorkspaceRef | null }) {
   useI18n()
   const toast = useToast()
   const toolbar = useToolbarState()
@@ -39,8 +28,7 @@ export function FolderMenu({
     <span className="relative inline-flex min-w-0">
       <button
         type="button"
-        data-composer-project={header ? undefined : ''}
-        data-header-project={header ? '' : undefined}
+        data-composer-project
         data-folder-menu
         aria-haspopup="menu"
         aria-expanded={open}
@@ -48,18 +36,15 @@ export function FolderMenu({
         onMouseDown={e => open && e.stopPropagation()}
         onClick={() => setOpen(v => !v)}
         className={cn(
-          header
-            ? 'no-drag inline-flex h-[26px] min-w-0 items-center gap-1.5 rounded-sm border border-line px-2 text-meta text-fg-secondary hover:bg-hover hover:text-fg'
-            : 'inline-flex min-w-0 items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
+          'inline-flex min-w-0 items-center gap-1 rounded px-1 hover:bg-hover hover:text-fg',
           open && 'bg-hover text-fg',
         )}
       >
         <Folder size={13} className="shrink-0" />
         <span className="truncate">{name}</span>
-        {header?.branch && <span className="shrink-0 font-mono text-fg-muted">{header.branch}</span>}
-        <ChevronDown size={12} className={cn('shrink-0', header && 'text-fg-faint')} />
+        <ChevronDown size={12} className="shrink-0" />
       </button>
-      <Popover open={open} onClose={close} side={header ? 'bottom' : 'top'} offset={header ? 6 : 8} className="w-72">
+      <Popover open={open} onClose={close} side="top" offset={8} className="w-72">
         <p className="px-2 pt-1 pb-1.5 text-meta break-all text-fg-muted">
           {tr('machines.folder.fixed', { path: path || name })}
         </p>

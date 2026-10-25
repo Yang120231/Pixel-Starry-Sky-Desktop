@@ -10,15 +10,10 @@ import { useChannelUnreadTotal } from '@/features/channels/store'
 import { tr } from '@/i18n/core'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { ToolbarContext } from '@/features/layout/ToolbarContext'
-import type { ActiveWorkspace } from '@/features/editor/target'
 import { SessionChannelBadge } from '@/features/channels/SessionChannelBadge'
-import { useGitSummary } from '@/features/panel/git/summary'
-import { FolderMenu } from './FolderMenu'
 
 interface SessionHeaderProps {
   title: string
-  /** 工作台：左边显示当前标签所在的工作区「项目 › 分支」，代替标题（标签栏上已经有标题，docs/ui/workbench-ux-3.md §2.1） */
-  workspace?: Pick<ActiveWorkspace, 'name' | 'path' | 'ref'>
   showActions: boolean
   sidebarOpen: boolean
   panelOpen: boolean
@@ -36,7 +31,6 @@ interface SessionHeaderProps {
  *  机器切换和右面板开关固定，中间工具的顺序和去留由图标位置设置决定（docs/ui/sidebar-compact-controls.md）。 */
 export function SessionHeader({
   title,
-  workspace,
   showActions,
   sidebarOpen,
   panelOpen,
@@ -52,7 +46,6 @@ export function SessionHeader({
   const { layout } = useSidebarPrefs()
   // 侧栏收起时看不到「频道」行的未读，改在「展开侧栏」按钮上显示一个点（docs/ui/layout-v2.md §8）
   const channelUnread = useChannelUnreadTotal()
-  const git = useGitSummary(workspace?.name && title ? (workspace.ref ?? null) : null)
   return (
     <header
       // macOS 侧边栏收起时左上角是红绿灯（index.ts 的 trafficLightPosition），让开
@@ -85,36 +78,12 @@ export function SessionHeader({
         </span>
       )}
       <div className="flex min-w-0 flex-1 items-center gap-1">
-        {workspace?.name || title ? (
-          // 「项目 分支 ▾」按钮 + 正常粗细的标题（方案 C，docs/ui/layout-v2.md §4）；新对话标签没有标题，只写项目名
-          <div data-header-workspace className="flex min-w-0 items-center gap-2">
-            {workspace?.name && title && (
-              <FolderMenu
-                name={workspace.name}
-                path={workspace.path}
-                target={workspace.ref}
-                header={{ branch: git?.branch ?? (git?.detached ? (git.head?.slice(0, 7) ?? null) : null) }}
-              />
-            )}
-            {title && (
-              <h1
-                title={title}
-                className={cn(
-                  'min-w-0 truncate text-ui',
-                  workspace?.name ? 'text-fg-secondary' : 'font-semibold text-fg',
-                )}
-              >
-                {title}
-              </h1>
-            )}
-            {workspace?.name && !title && (
-              <h1 title={workspace.path || workspace.name} className="min-w-0 truncate text-ui font-semibold text-fg">
-                {workspace.name}
-              </h1>
-            )}
-            {sessionId && <SessionChannelBadge sessionId={sessionId} />}
-          </div>
-        ) : null}
+        {title && (
+          <h1 title={title} className="min-w-0 truncate text-ui font-semibold text-fg">
+            {title}
+          </h1>
+        )}
+        {sessionId && <SessionChannelBadge sessionId={sessionId} />}
         {showActions && (
           // 平时透明，鼠标移到顶栏或键盘焦点到它时显示（globals.css [data-header-more]）
           <span data-header-more className="inline-flex shrink-0">
