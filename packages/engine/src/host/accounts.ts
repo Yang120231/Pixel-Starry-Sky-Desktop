@@ -159,6 +159,8 @@ export class HostAccounts {
   private readonly quotas = new Map<string, EngineAccountQuota>()
   private readonly quotaAt = new Map<AccountEngine, number>()
   private readonly reading = new Map<AccountEngine, Promise<EngineAccountQuota[]>>()
+  /** 换了当前账号后的重新检测：检测完之前适配器的 info() 还是上一个账号的 */
+  private readonly detecting = new Map<EngineId, Promise<unknown>>()
   /** 自动换过账号的队列项：同一条消息只换一次，所有账号都用完时不来回换 */
   private readonly autoSwitched = new Set<string>()
   /** 每轮结束看原账号恢复没有：上次去读的时间、正在读的 */
@@ -241,10 +243,20 @@ export class HostAccounts {
     if (!redetect) return
     // 当前账号换了（切换、重新登录、自动换）：重新检测后，额度按新账号清掉重读（docs/ui/claude-login-recovery.md §1 第 1 条）
     const provider = providerOfEngine(engine)
-    void this.ctx.m.settings
-      .engines(true)
-      .then(() => (provider ? this.ctx.m.quota.reset(provider) : undefined))
-      .catch(() => undefined)
+    const run = this.ctx.m.settings.engines(true)
+    this.detecting.set(
+      engine,
+      run.then(
+        () => undefined,
+        () => undefined,
+      ),
+    )
+    void run.then(() => (provider ? this.ctx.m.quota.reset(provider) : undefined)).catch(() => undefined)
+  }
+
+  /** 额度按账号认之前先等它：切号后的检测没完时，按旧检测结果会把上一个账号的额度当成当前的 */
+  detected(engine: EngineId): Promise<unknown> | undefined {
+    return this.detecting.get(engine)
   }
 
   /**

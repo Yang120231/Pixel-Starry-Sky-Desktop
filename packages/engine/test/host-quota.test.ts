@@ -42,6 +42,8 @@ interface Rig {
   ctx: HostContext
   runtimes: Map<string, unknown>
   engines: ReturnType<typeof vi.fn>
+  /** 切号后还没检测完的引擎：额度认账号前等它 */
+  detecting: Map<EngineId, Promise<unknown>>
   /** sessionSource 默认按 record 算（进程启动时的来源）；传 undefined 以外的值可以模拟「记录后来改了、进程还是旧的」 */
   addSession(
     id: string,
@@ -79,12 +81,13 @@ function rig(): Rig {
   const sent: AccountQuota[] = []
   const runtimes = new Map<string, unknown>()
   const engines = vi.fn(async () => [])
+  const detecting = new Map<EngineId, Promise<unknown>>()
   const ctx = {
     adapters: { claude: adapter('claude'), codex: adapter('codex') },
     runtimes,
     closing: false,
     opts: { onQuota: (q: AccountQuota) => sent.push(q) },
-    m: { settings: { engines } },
+    m: { settings: { engines }, accounts: { detected: (e: EngineId) => detecting.get(e) } },
   } as unknown as HostContext
   return {
     quota: new HostQuota(ctx),
@@ -95,6 +98,7 @@ function rig(): Rig {
     account,
     runtimes,
     engines,
+    detecting,
     addSession(id, engine, ask, record = {}, sessionSource) {
       runtimes.set(id, {
         snapshot: { record: { id, engine, ...record } },
@@ -117,6 +121,24 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('HostQuota.refresh', () => {
+  it('切号后检测没完：刷新等检测完按新账号读，不把旧账号的额度当成当前的', async () => {
+    const r = rig()
+    r.next.claude = async () => okReading(4, { account: 'a@example.com' })
+    await r.quota.refresh('claude', { force: true })
+    let detected!: () => void
+    r.detecting.set('claude', new Promise<void>(resolve => (detected = resolve)))
+    r.next.claude = async () => okReading(50, { account: 'b@example.com' })
+    let done: AccountQuota | null = null
+    const forced = r.quota.refresh('claude', { force: true }).then(q => (done = q))
+    await flush()
+    expect(done).toBeNull()
+    r.account.claude = 'b@example.com'
+    detected()
+    await forced
+    expect(done).toMatchObject({ account: 'b@example.com', windows: [{ usedPercent: 50 }, {}] })
+    expect(r.sent.at(-1)?.account).toBe('b@example.com')
+  })
+
   it('两个并发 refresh 只调一次适配器（单飞），手动刷新也并进去', async () => {
     const r = rig()
     let release!: (v: QuotaReading) => void

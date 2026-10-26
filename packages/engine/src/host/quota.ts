@@ -195,6 +195,7 @@ export class HostQuota {
   private async identity(provider: EngineQuotaProvider): Promise<Identity> {
     const adapter = this.ctx.adapters[QUOTA_ENGINE[provider]]
     if (!adapter) throw new Error('引擎不可用')
+    await this.ctx.m.accounts.detected(QUOTA_ENGINE[provider])
     const info = await adapter.info()
     const email = info.account?.email?.trim() || null
     const infoKey = `${provider}:${email ?? '?'}`

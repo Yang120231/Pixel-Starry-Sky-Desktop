@@ -315,6 +315,8 @@ interface Plan {
   copyRoot: string | null
   parentRoot: string | null
   endTree: string | null
+  /** 算合并时上级目录的快照：写之前核对要写的文件没再改过 */
+  parentTree: string | null
   /** 每个文件写回上级的内容：null 是删掉 */
   contents: Map<string, Write | null>
 }
@@ -385,7 +387,7 @@ async function plan(d: BranchDeps, id: string, withContents: boolean): Promise<P
   if (!copyRoot || !parentRoot || !b.startCommit) {
     // 副本在却算不出改动：不能当成「没有代码改动」（那样会放行删副本，副本里的改动就没了）
     status.codeUnknown = !!copyRoot
-    return { status, copyRoot, parentRoot, endTree: null, contents }
+    return { status, copyRoot, parentRoot, endTree: null, parentTree: null, contents }
   }
 
   const start = b.startCommit
@@ -399,7 +401,7 @@ async function plan(d: BranchDeps, id: string, withContents: boolean): Promise<P
     const [a, del, ...rest] = entry.split('\t')
     counts.set(rest.join('\t'), { a: a === '-' ? null : Number(a), d: del === '-' ? null : Number(del) })
   }
-  if (!touched.length) return { status, copyRoot, parentRoot, endTree, contents }
+  if (!touched.length) return { status, copyRoot, parentRoot, endTree, parentTree: null, contents }
 
   const parentTree = await snapshotTree(parentRoot)
   const [changedThere, dirtyThere] = await Promise.all([
@@ -465,7 +467,7 @@ async function plan(d: BranchDeps, id: string, withContents: boolean): Promise<P
   status.conflicts = status.files.filter(f => f.merge === 'conflict').length
   status.dirtyThere = status.files.filter(f => dirtyThere.has(f.path)).map(f => f.path)
   status.canCommit = status.conflicts === 0 && status.dirtyThere.length === 0
-  return { status, copyRoot, parentRoot, endTree, contents }
+  return { status, copyRoot, parentRoot, endTree, parentTree, contents }
 }
 
 export async function branchStatus(d: BranchDeps, id: string): Promise<BranchStatus> {
@@ -607,7 +609,12 @@ async function writeOne(root: string, w: Prepared, symlinks: boolean): Promise<v
  * 文件夹换成同名文件（lib/ → lib）也要先把文件夹删空。写到一半出错时列出已经写了的文件。
  * 返回每个文件写进去的模式和对象名，压成一个提交时照着它提交（commitPaths）
  */
-async function writeBack(root: string, paths: string[], contents: Map<string, Write | null>): Promise<CommitEntry[]> {
+async function writeBack(
+  root: string,
+  paths: string[],
+  contents: Map<string, Write | null>,
+  ready: () => Promise<void>,
+): Promise<CommitEntry[]> {
   const removes: string[] = [],
     writes: Prepared[] = [],
     entries: CommitEntry[] = []
@@ -630,6 +637,8 @@ async function writeBack(root: string, paths: string[], contents: Map<string, Wr
     ? await text(root, ['config', '--type=bool', 'core.symlinks']).catch(() => '')
     : ''
   const symlinks = setting ? setting === 'true' : process.platform !== 'win32'
+  // 都准备好了、真正动文件之前最后核对一次（报错时一个都没写）
+  await ready()
   const done: string[] = []
   try {
     for (const path of removes) {
@@ -676,14 +685,22 @@ export async function mergeBranch(d: BranchDeps, id: string, raw: unknown): Prom
   let commitError: string | undefined
   let message = ''
   if (opts.code && files.length) {
-    if (!p.parentRoot || !p.copyRoot || !p.endTree) throw new Error('副本已经不在了，代码没法合并')
+    if (!p.parentRoot || !p.copyRoot || !p.endTree || !p.parentTree) throw new Error('副本已经不在了，代码没法合并')
     if (status.conflicts) throw new Error('有文件合不上，先处理冲突或者只合并对话')
     if (opts.code.commit && !status.canCommit) throw new Error('这些文件在上级目录里有没提交的改动，不能直接提交')
-    const entries = await writeBack(
-      p.parentRoot,
-      files.map(f => f.path),
-      p.contents,
-    )
+    const root = p.parentRoot,
+      before = p.parentTree,
+      paths = files.map(f => f.path)
+    // 算合并花了一阵：期间要写的文件被改过（AI、编辑器、终端）或会话开始运行，这次不写。运行状态最后查，紧挨着写
+    const entries = await writeBack(root, paths, p.contents, async () => {
+      const now = await snapshotTree(root)
+      if (now !== before) {
+        const moved = await names(root, ['diff', '--no-renames', '--name-only', '-z', before, now])
+        if (paths.some(path => moved.has(path))) throw new Error('合并期间上级目录里要写的文件又改过了，重新合并一次')
+      }
+      if (running(d.host, id)) throw new Error('分支会话正在运行，等它停下再合并')
+      if (running(d.host, up.id)) throw new Error('上级会话正在运行，等它停下再合并')
+    })
     if (opts.code.commit) {
       message = opts.code.message.trim() || `合并分支「${record.title}」`
       try {
@@ -710,6 +727,9 @@ export async function mergeBranch(d: BranchDeps, id: string, raw: unknown): Prom
     d.tools
   ) {
     try {
+      // 合并期间分支又改了副本或又开始跑：强制删会丢掉后来的改动，副本留着（起点照常挪到这次合并的树）
+      if ((await snapshotTree(p.copyRoot)) !== p.endTree || running(d.host, id))
+        throw new Error('分支在合并期间又有改动，副本先留着')
       const copy = d.tools.copies.get(b.copyId)
       await d.tools.copies.remove(b.copyId, true)
       copyRemoved = true

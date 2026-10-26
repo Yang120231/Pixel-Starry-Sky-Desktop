@@ -304,6 +304,31 @@ describe('频道工具（§1）', () => {
     expect(tasks(c, ch)).toHaveLength(2)
   })
 
+  it('同一轮里并发调 task_handover：同一成员只开一张卡，交给不同成员的记录和回复计数都不丢', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端'))
+    const b = await c.saveMember(null, agent('审查员'))
+    const d = await c.saveMember(null, agent('文档'))
+    const ch = await c.create({ name: 'web', memberIds: [a, b, d] })
+    await c.update(ch, { relay: true })
+    await c.post(ch, { text: '@前端 改按钮', clientId: 'go' })
+    await settle()
+    const s = sends()[0].sessionId
+    const results = await Promise.allSettled([
+      c.toolHandover(s, '审查员', '看样式'),
+      c.toolHandover(s, '审查员', '看样式'),
+      c.toolHandover(s, '文档', '补说明'),
+      c.toolReply(s, '进展'),
+    ])
+    expect(results.map(r => r.status)).toEqual(['fulfilled', 'rejected', 'fulfilled', 'fulfilled'])
+    expect((results[1] as PromiseRejectedResult).reason.message).toContain('已经交给过')
+    await settle()
+    const [orig, ...rest] = tasks(c, ch)
+    expect(rest.map(t => t.assigneeId)).toEqual([b, d])
+    const runs = (c as unknown as { store: ChannelStore }).store.runs
+    expect(runs.get(orig.id)?.tools).toEqual({ replies: 1, proposals: 0, handover: [b, d] })
+  })
+
   it('事项文字里的 @成员、@全体 不多派：只交给选的负责人', async () => {
     const c = await open()
     const a = await c.saveMember(null, agent('前端'))

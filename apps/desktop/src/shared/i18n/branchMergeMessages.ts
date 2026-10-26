@@ -208,6 +208,14 @@ export const branchMergeMessages = {
     zh: '上级会话正在运行，等它停下再合并',
     en: 'The parent session is running; wait for it to stop',
   },
+  'merge.changedDuring': {
+    zh: '合并期间上级目录里要写的文件又改过了，重新合并一次',
+    en: 'Files to be written in the parent folder changed during the merge; merge again',
+  },
+  'merge.copyChanged': {
+    zh: '分支在合并期间又有改动，副本先留着',
+    en: 'The branch changed during the merge, so the copy was kept',
+  },
   'merge.done': { zh: '已合并到「{title}」', en: 'Merged into “{title}”' },
   'merge.doneRemoved': { zh: '已合并到「{title}」，副本已删除', en: 'Merged into “{title}”; copy deleted' },
   'merge.commitFailed': {

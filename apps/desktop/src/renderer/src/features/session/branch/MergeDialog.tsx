@@ -153,7 +153,7 @@ export function MergeDialog({ sessionId }: { sessionId: string }) {
       closeBranchDialog()
       paneActions.open(status.parentId)
       if (result.commitError) toast(tr('merge.commitFailed', { title: parentTitle, error: result.commitError }))
-      else if (result.removeError) toast(tr('merge.removeFailed', { error: result.removeError }))
+      else if (result.removeError) toast(tr('merge.removeFailed', { error: translateMessage(result.removeError) }))
       else toast(tr(removeOn ? 'merge.doneRemoved' : 'merge.done', { title: parentTitle }))
     } catch (e) {
       setError(translateMessage((e as Error).message) || String(e))

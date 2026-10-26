@@ -2163,7 +2163,8 @@ export class Channels {
       threadId: task.id,
       mentions: [peer.id, ...(stop && relayRulesOf(c).notify ? [SELF_ID] : [])],
     }
-    await this.store.append(source)
+    // 不等写盘：检查到开卡是同一段同步代码，并发的另一次交接看得到这次的记录和卡片
+    void this.store.append(source).catch(e => this.deps.log?.('保存频道消息失败', e))
     this.pushMessage(source)
     this.store.runs.set(run.taskId, { ...run, tools: { ...used, handover: [...used.handover, peer.id] } })
     const handoff: Handoff = { from: member.name, title: task.title, reply: '', files: changedFiles(run) }

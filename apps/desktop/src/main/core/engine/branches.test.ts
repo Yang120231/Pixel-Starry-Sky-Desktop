@@ -29,13 +29,22 @@ import {
   prepareBranch,
 } from './branches'
 
-// chmod 可以让它失败：模拟存不了权限的文件系统（vfat U 盘等）
-const fsMock = vi.hoisted(() => ({ chmodFails: false }))
+// chmod 可以让它失败：模拟存不了权限的文件系统（vfat U 盘等）；
+// onSnapshot：第 n 次建快照（snapshotTree 的临时目录）之前调，用来在合并的各个时刻插进改动
+const fsMock = vi.hoisted(() => ({
+  chmodFails: false,
+  onSnapshot: null as ((n: number) => Promise<void> | void) | null,
+  snapshots: 0,
+}))
 vi.mock('node:fs/promises', async importOriginal => {
   const real = await importOriginal<typeof import('node:fs/promises')>()
   const chmod: typeof real.chmod = (...args) =>
     fsMock.chmodFails ? Promise.reject(Object.assign(new Error('EPERM'), { code: 'EPERM' })) : real.chmod(...args)
-  return { ...real, chmod, default: { ...real, chmod } }
+  const mkdtemp = (async (prefix: string, ...rest: unknown[]) => {
+    if (fsMock.onSnapshot && String(prefix).includes('pixelsky-branch-')) await fsMock.onSnapshot(++fsMock.snapshots)
+    return (real.mkdtemp as (...a: unknown[]) => Promise<string>)(prefix, ...rest)
+  }) as typeof real.mkdtemp
+  return { ...real, chmod, mkdtemp, default: { ...real, chmod, mkdtemp } }
 })
 
 let root: string, project: string, tools: ProjectTools, host: FakeHost
@@ -127,6 +136,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   fsMock.chmodFails = false
+  fsMock.onSnapshot = null
+  fsMock.snapshots = 0
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
   await tools.shutdown()
@@ -577,6 +588,46 @@ describe('写回上级', () => {
     expect(await commitPaths(project, [entry], 'm')).toBe(false)
     expect(await commitPaths(project, [{ path: 'gone.txt', entry: null }], 'm')).toBe(false)
     expect(await out(project, ['log', '--format=%s'])).toBe('m\nx\ninit')
+  })
+})
+
+describe('合并期间有变化', () => {
+  // 合并里建快照的顺序：1 副本、2 上级（算合并），3 上级（写之前核对），4 副本（删副本之前核对）
+  it('算合并期间上级开始运行：不写，提示上级在运行', async () => {
+    const { id, cwd } = await branchWithCopy(false)
+    await writeFile(join(cwd, 'b.txt'), 'branch\n')
+    vi.spyOn(tools.copies, 'verify').mockImplementation(async () => void host.states.set('main', 'running'))
+    await expect(mergeBranch(deps(), id, applyOnly)).rejects.toThrow('上级会话正在运行')
+    expect(await readFile(join(project, 'b.txt'), 'utf8')).toBe('b1\nb2\nb3\nb4\nb5\n')
+    expect(host.merges).toHaveLength(0)
+  })
+
+  it('算完到写之前要写的文件又被改了：不写、留着新内容；改的是别的文件照常合并', async () => {
+    const { id, cwd } = await branchWithCopy(false)
+    await writeFile(join(cwd, 'b.txt'), 'branch\n')
+    fsMock.onSnapshot = n => (n === 3 ? writeFile(join(project, 'b.txt'), 'user\n') : undefined)
+    await expect(mergeBranch(deps(), id, applyOnly)).rejects.toThrow('又改过了')
+    expect(await readFile(join(project, 'b.txt'), 'utf8')).toBe('user\n')
+    expect(host.merges).toHaveLength(0)
+
+    await git(project, ['checkout', '--', 'b.txt'])
+    fsMock.snapshots = 0
+    fsMock.onSnapshot = n => (n === 3 ? writeFile(join(project, 'other.txt'), 'x\n') : undefined)
+    expect(await mergeBranch(deps(), id, applyOnly)).toEqual({ code: 'applied', files: 1 })
+    expect(await readFile(join(project, 'b.txt'), 'utf8')).toBe('branch\n')
+  })
+
+  it('勾了删副本、合并期间副本里又有改动：副本留着，起点挪到这次合并的树，下次只剩后来的改动', async () => {
+    const { id, cwd } = await branchWithCopy(false)
+    await writeFile(join(cwd, 'b.txt'), 'branch\n')
+    fsMock.onSnapshot = n => (n === 3 ? writeFile(join(cwd, 'late.txt'), 'late\n') : undefined)
+    const result = await mergeBranch(deps(), id, { ...applyOnly, removeCopy: true })
+    expect(result).toMatchObject({ code: 'applied', files: 1, removeError: expect.stringContaining('副本先留着') })
+    expect(await exists(cwd)).toBe(true)
+    expect(host.merges.at(-1)!.patch).toMatchObject({ startCommit: expect.any(String) })
+    expect(host.merges.at(-1)!.patch.copyRemoved).toBeUndefined()
+    fsMock.onSnapshot = null
+    expect((await branchStatus(deps(), id)).files.map(f => f.path)).toEqual(['late.txt'])
   })
 })
 
