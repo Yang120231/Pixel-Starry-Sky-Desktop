@@ -1,4 +1,5 @@
 // 协作频道派活的提示词和结果摘取（docs/ui/channels-phase-b.md §4.2、§5.2）。纯函数，不碰磁盘和引擎。
+import { codexPlainText } from '@pixelsky/protocol'
 import type { Locale } from '../../../shared/i18n/messages'
 import type { ChannelMessage, ChannelTaskStatus } from '../../../shared/types/channels'
 import { excerpt, splitMentions, type Mentionable } from '../../../shared/channels/mentions'
@@ -71,7 +72,7 @@ export function decisionOf(text: string): string | null {
 
 /** 回复的第一段（不含「需要你决定」那一行），压成一行，最多 140 字 */
 export function summaryOf(text: string): string {
-  const paragraphs = text
+  const paragraphs = codexPlainText(text)
     .split(/\n\s*\n/)
     .map(p =>
       p

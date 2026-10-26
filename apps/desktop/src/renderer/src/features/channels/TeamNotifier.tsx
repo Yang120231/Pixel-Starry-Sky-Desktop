@@ -1,6 +1,7 @@
 // 团队频道的系统通知（docs/ui/channels-phase-c.md §6.2）：有人 @ 了我，或我的 AI 成员有新活等我同意。
 // 窗口级挂载一次，不渲染任何内容；演示模式不工作。遵守通知设置（勿扰、仅在后台时通知、声音），正在看这个频道时不发。
 import { useEffect } from 'react'
+import { codexPlainText } from '@pixelsky/protocol'
 import { tr } from '../../i18n/core'
 import { getPage, setPage } from '@/features/layout/page'
 import { getNotificationPrefs } from '@/features/settings/notifications'
@@ -43,7 +44,7 @@ export function TeamNotifier() {
           : message.kind === 'message'
             ? {
                 title: tr('team.notify.mentioned', { author: name(message.authorId), channel: channel?.name ?? '' }),
-                body: message.text.replace(/\s+/g, ' ').trim(),
+                body: codexPlainText(message.text).replace(/\s+/g, ' ').trim(),
               }
             : null
       if (!content) return

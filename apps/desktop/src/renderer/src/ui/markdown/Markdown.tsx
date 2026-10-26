@@ -5,7 +5,8 @@ import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/ui'
 import { CodeBlock } from '@/ui/code/CodeBlock'
-import { InlineCode, MarkdownLink, PathLinksContext, keepLocalPaths } from './pathLinks'
+import { replaceCodexDirectives } from '@pixelsky/protocol'
+import { InlineCode, MarkdownLink, PathLinksContext, citationLink, keepLocalPaths } from './pathLinks'
 import { MarkdownImage } from './MarkdownImage'
 import { Callout, isAlertKind, remarkAlerts } from './alerts'
 import { hasMath, normalizeMath, useMathPlugins, type PluggableList } from './math'
@@ -156,7 +157,7 @@ function StreamingBody({ text }: { text: string }) {
 }
 
 export const Markdown = memo(function Markdown({
-  text,
+  text: raw,
   className,
   streaming,
   document,
@@ -169,6 +170,8 @@ export const Markdown = memo(function Markdown({
   document?: boolean
 }) {
   useI18n()
+  // Codex 的文件引用换成链接（预览 .md 文件时按原文）
+  const text = useMemo(() => (document ? raw : replaceCodexDirectives(raw, citationLink)), [raw, document])
   // 公式：有公式标记时才加载 KaTeX，加载好之前按原文显示（docs/ui/content-highlight.md §2 I）；流式时不扫全文
   const math = useMathPlugins(streaming ? false : hasMath(text))
   const source = useMemo(() => (math ? normalizeMath(text) : text), [math, text])

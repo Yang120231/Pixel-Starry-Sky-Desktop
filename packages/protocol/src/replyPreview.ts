@@ -1,5 +1,6 @@
 // 会话列表里「最后一句回复」的预览：把 AI 的 Markdown 回复变成一行纯文本（docs/mobile-remote.md §21.3）。
 // 手机和桌面都用它，所以放在协议包里。
+import { codexPlainText } from './codexDirectives'
 
 export const REPLY_PREVIEW_MAX = 120
 
@@ -54,7 +55,8 @@ export function replyPreview(text: string, max: number = REPLY_PREVIEW_MAX): str
   const out: string[] = []
   let size = 0
   let fence: { ch: string; len: number } | null = null
-  for (const raw of text.split(/\r\n|\r|\n/)) {
+  // Codex 的文件引用只留文件名
+  for (const raw of codexPlainText(text).split(/\r\n|\r|\n/)) {
     // 够长了就不用再读后面的
     if (size > max * 4) break
     let line: string

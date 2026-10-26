@@ -162,6 +162,8 @@ export {
 export type { ContextDetail, ContextDetailLevel, ContextDiagnostic, ContextPart, ContextWindow } from './context'
 export { contextCount, contextDiagnostic } from './context'
 export { REPLY_PREVIEW_MAX, replyPreview } from './replyPreview'
+export { citationName, codexPlainText, replaceCodexDirectives } from './codexDirectives'
+export type { CodexCitation } from './codexDirectives'
 export type {
   SearchFragment,
   SearchKind,

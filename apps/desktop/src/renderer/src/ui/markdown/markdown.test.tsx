@@ -118,3 +118,35 @@ describe('正文图片', () => {
     }
   })
 })
+
+describe('Codex 文件引用', () => {
+  it('换成链接，文字是文件名；路径里的 \\ _ % # 原样留在地址里', () => {
+    const path = 'D:\\学习资料\\论文\\修改稿\\03_数值算例_修改稿06_润色 %1 #2.docx'
+    const out = html(`原文件未修改。\n\n:codex-file-citation{path="${path}" purpose="output"}`)
+    expect(out).not.toContain('codex-file-citation')
+    // 没有路径上下文（测试里）时本地路径只显示文字，悬停提示是完整路径
+    expect(out).toContain(`<span title="${path}">03_数值算例_修改稿06_润色 %1 #2.docx</span>`)
+  })
+
+  it('文件名里的 [ ] $ 不会在公式插件加载后变成公式，路径里的 & 不被当成字符引用', async () => {
+    await loadMath()
+    const path = 'D:\\a\\论文[终稿] $$x$$ R&copy;.docx'
+    const out = html(`:codex-file-citation{path="${path}"}`)
+    expect(out).not.toContain('katex')
+    expect(out).toContain(`<span title="${path.replace('&', '&amp;')}">论文[终稿] $$x$$ R&amp;copy;.docx</span>`)
+  })
+
+  it('表格单元格里、文件名带 | 的引用不会把单元格切开', () => {
+    const out = html('| 文件 |\n|---|\n| :codex-file-citation{path="/tmp/a|b.docx"} |')
+    expect(out).toContain('<td><span title="/tmp/a|b.docx">a|b.docx</span></td>')
+  })
+
+  it('预览 .md 文件时按原文', () => {
+    const out = renderToStaticMarkup(
+      <I18nProvider>
+        <Markdown document text=':codex-file-citation{path="a.md"}' />
+      </I18nProvider>,
+    )
+    expect(out).toContain('codex-file-citation')
+  })
+})

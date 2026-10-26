@@ -1,6 +1,6 @@
 // 协作频道任务的状态跟踪（docs/ui/channels-phase-b.md §5.1）：会话事件 / 会话快照 → 任务卡的变化。
 // 纯函数：输入一项活的运行信息和一个事件，返回新的运行信息、要改的任务卡字段，以及这一轮是不是结束了。
-import { diffStat } from '@pixelsky/protocol'
+import { codexPlainText, diffStat } from '@pixelsky/protocol'
 import type { ApprovalRequest, EngineEvent, Item, SessionSnapshot } from '@pixelsky/protocol'
 import type { ChannelActivity, ChannelStep, ChannelTask, FlowResult, FlowStep } from '../../../shared/types/channels'
 import type { CopyPlan } from './flow'
@@ -190,7 +190,7 @@ function absorb(run: TaskRun, item: Item, now: number): TaskRun {
     case 'assistant': {
       const text = item.text.trim()
       if (!text) return run
-      const line = clip(firstLine(text) ?? '', SAY_MAX)
+      const line = clip(firstLine(codexPlainText(text)) ?? '', SAY_MAX)
       const say = run.activity?.say?.text === line ? run.activity.say : { text: line, at: now }
       return { ...run, reply: item.text, activity: { steps: run.activity?.steps ?? [], say } }
     }

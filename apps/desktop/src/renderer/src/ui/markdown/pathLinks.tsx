@@ -2,6 +2,7 @@
 // 判断文件是否存在、怎么打开由 features/files/PathLinksProvider.tsx 注入（ui/ 不读文件）。
 import { createContext, useContext, useEffect, useState, type AnchorHTMLAttributes, type ReactNode } from 'react'
 import { defaultUrlTransform } from 'react-markdown'
+import { citationName, type CodexCitation } from '@pixelsky/protocol'
 import { cn } from '@/ui'
 import { pathClickHandlers } from '@/ui/pathClick'
 
@@ -77,6 +78,17 @@ export function linkPathText(href: string | undefined, anchors = true): string |
   const lines = /^L(\d+)(?:C(\d+))?(?:-L?\d+(?:C\d+)?)?$/.exec(hash)
   if (lines) return `${path}:${lines[1]}${lines[2] ? `:${lines[2]}` : ''}`
   return path
+}
+
+/**
+ * Codex 的文件引用（protocol codexDirectives.ts）→ Markdown 链接，文字是文件名。
+ * 地址用 <…> 包起来（路径里能有空格）。记号字符一律编码、不用 \ 转义：\[ \] 会被 normalizeMath 当成公式；
+ * 地址里的 %xx 由 linkPathText 解码还原，# 编码后不会被切成锚点，| 编码后不会把表格单元格切开
+ */
+export function citationLink({ path }: CodexCitation): string {
+  const label = citationName(path).replace(/[\\\x60*_[\]<>~|!#&$]/g, c => `&#${c.charCodeAt(0)};`)
+  const href = path.replace(/[%#&<>\\$|]/g, encodeURIComponent)
+  return `[${label}](<${href}>)`
 }
 
 /**

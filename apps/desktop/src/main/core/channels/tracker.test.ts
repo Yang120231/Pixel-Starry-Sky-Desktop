@@ -435,6 +435,8 @@ describe('派活提示词（§4.2）', () => {
     expect(titleWithoutAll('@全体', kinds)).toBe('@全体')
     const reply = '## 总结\n改好了设置页。\n\n需要你决定：要不要删掉旧组件？\n\n其他'
     expect(summaryOf(reply)).toBe('总结 改好了设置页。')
+    // Codex 的文件引用只留文件名
+    expect(summaryOf('已生成 :codex-file-citation{path="D:\\a\\报告.docx" purpose="output"}')).toBe('已生成 报告.docx')
     expect(decisionOf(reply)).toBe('要不要删掉旧组件？')
     expect(decisionOf('- **Needs your decision:** keep the flag?')).toBe('keep the flag?')
     expect(decisionOf('没有')).toBeNull()

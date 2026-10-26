@@ -1,6 +1,7 @@
 // 回复正文：和桌面端用同一套库（react-markdown + remark-gfm）；代码块带复制和高亮（ui/code.tsx），还没有公式
 // （packages/ui 抽出后换成共用的）。
 import { memo } from 'react'
+import { citationName, replaceCodexDirectives, type CodexCitation } from '@pixelsky/protocol'
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CodeBlock } from './code'
@@ -34,12 +35,18 @@ const components: Components = {
   },
 }
 
+/** Codex 的文件引用：手机上打不开电脑上的文件，按行内代码只显示文件名（名字里有 ` 时用两个反引号包） */
+const citationText = ({ path }: CodexCitation): string => {
+  const name = citationName(path)
+  return name.includes('`') ? `\`\` ${name} \`\`` : `\`${name}\``
+}
+
 // 流式输出时每个事件都会重渲整页，正文没变的条目直接跳过
 export const MarkdownText = memo(function MarkdownText({ text }: { text: string }) {
   return (
     <div className="markdown text-prose text-fg-body">
       <Markdown remarkPlugins={[remarkGfm]} components={components}>
-        {text}
+        {replaceCodexDirectives(text, citationText)}
       </Markdown>
     </div>
   )

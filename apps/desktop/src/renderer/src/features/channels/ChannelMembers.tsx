@@ -1,6 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage, type TranslationKey } from '../../i18n/core'
 import { useState, type ReactNode } from 'react'
+import { codexPlainText } from '@pixelsky/protocol'
 import {
   Archive,
   ArchiveRestore,
@@ -79,7 +80,7 @@ function PinnedList({ channel, members }: { channel: Channel; members: readonly 
       <p className="px-2 pb-1 text-meta text-fg-faint">{tr('channels.members.pinnedHint')}</p>
       {ids.map(id => {
         const m = byId.get(id)
-        const text = m?.kind === 'message' ? m.text.replace(/\s+/g, ' ').trim() : null
+        const text = m?.kind === 'message' ? codexPlainText(m.text).replace(/\s+/g, ' ').trim() : null
         return (
           <div
             key={id}
