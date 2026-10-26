@@ -75,28 +75,9 @@ import { MobileSection } from '../mobile/settings/MobileSection'
 import { ProjectsSection } from './projects/ProjectsSection'
 import { SubagentsSection } from './SubagentsSection'
 import { leaveSettings, UnsavedLeaveDialog } from './unsavedEdits'
+import type { SectionId } from './sectionId'
 
-export type SectionId =
-  | 'account'
-  | 'models'
-  /** 像素星空引擎的子智能体走哪个站点（docs/ui/subagent-routing.md） */
-  | 'subagents'
-  | 'engines'
-  | 'usage'
-  | 'appearance'
-  | 'shortcuts'
-  | 'about'
-  | 'editor'
-  | 'projects'
-  | 'extensions'
-  /** 旧名：以前的「插件配置」，现在是扩展页的 AI 引擎分组；老入口（输入框里的链接）仍用它 */
-  | 'plugins'
-  | 'terminal'
-  | 'machines'
-  | 'notifications'
-  | 'logs'
-  | 'feedback'
-  | 'mobile'
+export type { SectionId } from './sectionId'
 
 /** label 用在页面标题和搜索结果；nav 是左侧导航里的短名（英文放不下时才给），没有就用 label */
 const SECTIONS: Array<{ id: SectionId; label: string; nav?: string; icon: LucideIcon }> = [
@@ -514,9 +495,7 @@ export function SettingsContent({
   )
 }
 
-/** 是不是设置的分区名（独立窗口从地址、主进程推送里收到的是字符串） */
-export const isSectionId = (value: unknown): value is SectionId =>
-  typeof value === 'string' && SECTIONS.some(s => s.id === value)
+export { isSectionId } from './sectionId'
 
 const THEME_OPTIONS: Array<{ value: ThemePreference; label: string; icon: LucideIcon }> = [
   {

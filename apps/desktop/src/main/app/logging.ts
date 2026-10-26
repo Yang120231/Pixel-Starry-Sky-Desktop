@@ -199,16 +199,17 @@ export function initLogIpc(): void {
   })
   // 渲染进程报错（§4.5「renderer」）：限流，只收 warn / error
   const rendererLog = logger('renderer')
-  const budget = new Map<number, { minute: number; count: number }>()
+  // 按窗口记：WeakMap 跟着窗口释放，开关很多次窗口也不会越积越多
+  const budget = new WeakMap<WebContents, { minute: number; count: number }>()
   ipc.on('log:write', (event, raw: unknown) => {
     const e = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
     const level = e.level === 'warn' ? 'warn' : 'error'
     const message = typeof e.message === 'string' ? e.message.slice(0, 2000) : ''
     if (!message) return
     const minute = Math.floor(Date.now() / 60_000)
-    const used = budget.get(event.sender.id)
+    const used = budget.get(event.sender)
     if (used?.minute === minute && used.count >= RENDERER_PER_MINUTE) return
-    budget.set(event.sender.id, { minute, count: used?.minute === minute ? used.count + 1 : 1 })
+    budget.set(event.sender, { minute, count: used?.minute === minute ? used.count + 1 : 1 })
     const fields = e.fields && typeof e.fields === 'object' && !Array.isArray(e.fields) ? e.fields : {}
     rendererLog[level](message, { ...(fields as Record<string, unknown>), window: event.sender.id })
   })

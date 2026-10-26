@@ -1,10 +1,24 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  Suspense,
+  createContext,
+  lazy,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { OPEN_SETTINGS } from '@/features/layout/shortcuts'
-import { SettingsDialog } from './SettingsDialog'
-import { isSectionId, type SectionId } from './SettingsContent'
+import { isSectionId, type SectionId } from './sectionId'
 import { openInSettingsWindow, openSettingsRouted, startSettingsWindowSync } from './windowBridge'
+
+// 设置界面（几十个分页）不进首屏，第一次打开时才加载；启动几秒后空闲时先预取，打开时不用等（性能审核 B10）
+const loadDialog = () => import('./SettingsDialog')
+const SettingsDialog = lazy(() => loadDialog().then(m => ({ default: m.SettingsDialog })))
 
 export interface SettingsContextValue {
   open: boolean
@@ -52,6 +66,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // 设置窗口的状态（记住的打开方式）；设置窗口点「收回」时主进程让这里打开浮层
   const openDialogRef = useRef(openDialog)
   openDialogRef.current = openDialog
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadDialog().catch(() => undefined), 5000)
+    return () => window.clearTimeout(timer)
+  }, [])
   useEffect(() => {
     startSettingsWindowSync()
     return window.pixelsky?.settingsWindow?.onOpenDialog(target =>
@@ -102,12 +120,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     <SettingsContext.Provider value={value}>
       {children}
       {open && (
-        <SettingsDialog
-          section={section}
-          onSectionChange={setSection}
-          onClose={closeSettings}
-          onPopOut={window.pixelsky?.settingsWindow ? popOut : undefined}
-        />
+        <Suspense fallback={null}>
+          <SettingsDialog
+            section={section}
+            onSectionChange={setSection}
+            onClose={closeSettings}
+            onPopOut={window.pixelsky?.settingsWindow ? popOut : undefined}
+          />
+        </Suspense>
       )}
     </SettingsContext.Provider>
   )

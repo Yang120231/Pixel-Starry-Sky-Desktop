@@ -21,6 +21,12 @@ describe('expandItems', () => {
     expandItems('s4', [])
     expect(expandRequest('s4', 'x')).toBeNull()
   })
+  it('再次请求时删掉过期的', () => {
+    expandItems('s5', ['old'], 10_000)
+    expandItems('s5', ['new'], 10_000 + REQUEST_MS)
+    expect(expandRequest('s5', 'old')).toBeNull()
+    expect(expandRequest('s5', 'new')).toEqual({ n: 1, at: 10_000 + REQUEST_MS })
+  })
 })
 
 describe('freshRequest', () => {

@@ -26,6 +26,8 @@ const subscribe = (listener: () => void): (() => void) => {
 
 export function expandItems(sessionId: string, itemIds: readonly string[], now = Date.now()): void {
   if (itemIds.length === 0) return
+  // 过期的请求不再起作用，顺手删掉，搜索、跳转用久了表不会一直变大
+  for (const [k, r] of requests) if (!freshRequest(r, now)) requests.delete(k)
   for (const id of itemIds) {
     const k = key(sessionId, id)
     requests.set(k, { n: (requests.get(k)?.n ?? 0) + 1, at: now })

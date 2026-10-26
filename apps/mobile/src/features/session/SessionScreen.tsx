@@ -149,14 +149,22 @@ export function SessionScreen({
       .catch((e: Error) => setRetryError(e.message))
       .finally(() => setRetrying(false))
   }, [link, retrying, retryId, sessionId])
-  const actions: TurnActions = { sessionId, image, view: setViewing, retryId, retrying, retry }
+  // 引用稳定：EntryView 是 memo 的，流式时每包只重画变了的那条（性能审核 B9）
+  const actions = useMemo<TurnActions>(
+    () => ({ sessionId, image, view: setViewing, retryId, retrying, retry }),
+    [sessionId, image, retryId, retrying, retry],
+  )
   const [menuError, setMenuError] = useState<string | null>(null)
   // 加载更早的消息、查看完整内容失败：和菜单的错误一样放在输入框上面
   const [loadError, setLoadError] = useState<string | null>(null)
-  const load = (failed: string, run: () => Promise<void>) => {
+  const load = useCallback((failed: string, run: () => Promise<void>) => {
     setLoadError(null)
     run().catch(e => setLoadError(L(`${failed}：${toolError(e)}`, `${failed}: ${toolError(e)}`)))
-  }
+  }, [])
+  const onDetail = useCallback(
+    (id: string) => load(L('查看完整内容失败', "Couldn't load the full content"), () => detail(id)),
+    [load, detail],
+  )
   // 快捷回复：答完了（最后一条不是你的）、没在跑、没排队、没有「重试」
   const suggest =
     canAct && !!snapshot && !running && !pending && !retryId && !snapshot.queue.length && !!last && last.kind !== 'user'
@@ -305,7 +313,7 @@ export function SessionScreen({
                     last={i === entries.length - 1}
                     waiting={!!pending}
                     truncated={view.truncated}
-                    onDetail={id => load(L('查看完整内容失败', "Couldn't load the full content"), () => detail(id))}
+                    onDetail={onDetail}
                     actions={actions}
                   />
                 </div>

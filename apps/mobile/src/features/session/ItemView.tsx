@@ -2,7 +2,7 @@
 // 你的消息右对齐气泡；回复是左侧白卡 + Markdown；思考「思考了 N 秒 ›」点开看原文；
 // 一段过程收成一行「做了 N 步 · 改了 3 个文件 +40 −12 ›」，点开是底部面板（ProcessSheet）。
 // 图片点开再向电脑取；回复可以复制；最近一轮出错时错误下面有「重试」（§17）。
-import { useState, type ReactNode } from 'react'
+import { memo, useState, type ReactNode } from 'react'
 import { Check, ChevronRight, CircleAlert, FileText, ListTodo, RotateCcw, X } from 'lucide-react'
 import type { Item, TurnEntry } from '@pixelsky/protocol'
 import { latestTodo, processLine, stepCount, thinkingLabel } from '@/data/turns'
@@ -27,7 +27,28 @@ interface Props {
   actions: TurnActions
 }
 
-export function EntryView({ entry, last, waiting, truncated, onDetail, actions }: Props) {
+/** foldTurns 每次给新的条目对象：按里面的 item 比，item 没变（store 里同一个对象）就不重画 */
+const sameEntry = (a: TurnEntry, b: TurnEntry): boolean =>
+  a.type === 'item'
+    ? b.type === 'item' && a.item === b.item
+    : b.type === 'process' &&
+      a.running === b.running &&
+      a.durationMs === b.durationMs &&
+      a.items.length === b.items.length &&
+      a.items.every((item, i) => item === b.items[i])
+
+export const EntryView = memo(
+  EntryViewInner,
+  (a, b) =>
+    sameEntry(a.entry, b.entry) &&
+    a.last === b.last &&
+    a.waiting === b.waiting &&
+    a.truncated === b.truncated &&
+    a.onDetail === b.onDetail &&
+    a.actions === b.actions,
+)
+
+function EntryViewInner({ entry, last, waiting, truncated, onDetail, actions }: Props) {
   const more = (id: string) =>
     truncated.includes(id) && (
       <button type="button" onClick={() => onDetail(id)} className="mt-1.5 text-meta font-medium text-accent-fg">
