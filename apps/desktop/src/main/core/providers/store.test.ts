@@ -252,4 +252,29 @@ describe('发往接口的请求', () => {
     }
     await expect(fetchModels(p, refused)).rejects.toThrow('连接被拒绝')
   })
+
+  it('Anthropic 地址以 /anthropic 结尾：读取模型 404 时去掉 /anthropic 再取，404 提示写明 /anthropic', async () => {
+    const deepseek = { ...p, protocol: 'anthropic' as const, baseUrl: 'https://api.deepseek.com/anthropic' }
+    const urls: string[] = []
+    const fake: Fetch = async url => {
+      urls.push(url)
+      return url === 'https://api.deepseek.com/v1/models'
+        ? new Response('{"data":[{"id":"deepseek-chat"}]}', { status: 200 })
+        : new Response('Not Found', { status: 404 })
+    }
+    expect(await fetchModels(deepseek, fake)).toEqual(['deepseek-chat'])
+    expect(urls).toEqual(['https://api.deepseek.com/anthropic/v1/models', 'https://api.deepseek.com/v1/models'])
+    // 根上也取不到（404，或根上不认这个 Key）：直说没有模型列表，不说地址不对
+    const none: Fetch = async () => new Response('Not Found', { status: 404 })
+    await expect(fetchModels(deepseek, none)).rejects.toThrow('没有提供模型列表')
+    const rootAuth: Fetch = async url =>
+      new Response('{"error":"bad key"}', { status: url.includes('/anthropic/') ? 404 : 401 })
+    await expect(fetchModels(deepseek, rootAuth)).rejects.toThrow('没有提供模型列表')
+    expect(classifyStatus(404, 'Not Found', deepseek, null).message).toContain('/anthropic 结尾')
+    // 别的协议不回退，提示照旧
+    urls.length = 0
+    await expect(fetchModels({ ...p, baseUrl: 'https://x.example.com/anthropic' }, fake)).rejects.toThrow('/v1')
+    expect(urls).toHaveLength(1)
+    expect(classifyStatus(404, 'Not Found', p, null).message).not.toContain('/anthropic')
+  })
 })

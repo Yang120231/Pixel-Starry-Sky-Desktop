@@ -85,7 +85,7 @@ export function balanceProblem(body: string): 'balance' | 'quota' | null {
 export function classifyStatus(
   status: number,
   body: string,
-  p: Pick<ResolvedProvider, 'name' | 'apiKey' | 'headers'>,
+  p: Pick<ResolvedProvider, 'name' | 'apiKey' | 'headers'> & { protocol?: ProviderProtocol },
   model: string | null,
 ): { problem: ProviderProblem; message: string } {
   const detail = redact(upstreamMessage(body), p)
@@ -98,7 +98,15 @@ export function classifyStatus(
     return { problem: 'quota', message: detail || (status === 429 ? '请求太频繁或额度用完（429）' : '余额不足（402）') }
   if ((status === 404 || status === 400) && model && /model/i.test(detail))
     return { problem: 'model', message: `接口「${p.name}」没有模型 ${model}${detail ? '：' + detail : ''}` }
-  if (status === 404) return { problem: 'not_found', message: '地址不对：接口返回 404，检查是否多写或少写了 /v1' }
+  if (status === 404)
+    return {
+      problem: 'not_found',
+      // DeepSeek、Kimi 等的 Anthropic 兼容接口挂在 /anthropic 下，少写了对话就 404（Claude Code 会说成「模型不存在」）
+      message:
+        p.protocol === 'anthropic'
+          ? '地址不对：接口返回 404。Anthropic 兼容地址一般以 /anthropic 结尾（例如 https://api.deepseek.com/anthropic），也检查是否多写或少写了 /v1'
+          : '地址不对：接口返回 404，检查是否多写或少写了 /v1',
+    }
   return { problem: 'other', message: `接口返回 ${status}${detail ? '：' + detail : ''}` }
 }
 
@@ -127,21 +135,34 @@ export function classifyError(err: unknown, url: string): { problem: ProviderPro
 
 const TIMEOUT = 20_000
 
-/** 从接口读取模型（GET /v1/models），按 id 去重排序 */
+/**
+ * 从接口读取模型（GET /v1/models），按 id 去重排序。
+ * Anthropic 协议、地址以 /anthropic 结尾时 404 了再去掉 /anthropic 取一次：DeepSeek、Kimi 等只在 /anthropic 下放对话接口，模型列表在根上
+ */
 export async function fetchModels(p: ResolvedProvider, fetch: Fetch): Promise<string[]> {
-  const url = upstreamUrl(p, '/v1/models')
-  let res: Response
-  try {
-    res = await fetch(url, {
-      method: 'GET',
-      headers: providerHeaders(p, { accept: 'application/json' }),
-      redirect: 'error',
-      signal: AbortSignal.timeout(TIMEOUT),
-    })
-  } catch (err) {
-    throw new Error(classifyError(err, url).message)
+  const get = async (base: string): Promise<{ res: Response; body: string }> => {
+    const url = upstreamUrl({ protocol: p.protocol, baseUrl: base }, '/v1/models')
+    let res: Response
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: providerHeaders(p, { accept: 'application/json' }),
+        redirect: 'error',
+        signal: AbortSignal.timeout(TIMEOUT),
+      })
+    } catch (err) {
+      throw new Error(classifyError(err, url).message)
+    }
+    return { res, body: await res.text() }
   }
-  const body = await res.text()
+  let { res, body } = await get(p.baseUrl)
+  const root = p.protocol === 'anthropic' ? p.baseUrl.replace(/\/anthropic$/i, '') : p.baseUrl
+  if (res.status === 404 && root !== p.baseUrl) {
+    const retry = await get(root).catch(() => null)
+    // 地址已经是 /anthropic 结尾、根上也取不到：说「地址不对、要以 /anthropic 结尾」会误导，直说没有模型列表
+    if (!retry?.res.ok) throw new Error('这个接口没有提供模型列表，请手动填写模型')
+    ;({ res, body } = retry)
+  }
   if (!res.ok) throw new Error(classifyStatus(res.status, body, p, null).message)
   let data: unknown
   try {

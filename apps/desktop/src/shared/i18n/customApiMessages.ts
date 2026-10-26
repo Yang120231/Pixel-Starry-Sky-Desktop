@@ -262,6 +262,14 @@ export const customApiMessages = {
     zh: '地址不对：接口返回 404，检查是否多写或少写了 /v1',
     en: 'Wrong address: the endpoint returned 404. Check for a missing or extra /v1',
   },
+  'customApi.err.notFoundAnthropic': {
+    zh: '地址不对：接口返回 404。Anthropic 兼容地址一般以 /anthropic 结尾（例如 https://api.deepseek.com/anthropic），也检查是否多写或少写了 /v1',
+    en: 'Wrong address: the endpoint returned 404. Anthropic-compatible addresses usually end with /anthropic (e.g. https://api.deepseek.com/anthropic); also check for a missing or extra /v1',
+  },
+  'customApi.err.noModelList': {
+    zh: '这个接口没有提供模型列表，请手动填写模型',
+    en: 'This endpoint does not provide a model list; enter models manually',
+  },
   'customApi.err.modelsFormat': {
     zh: '接口返回的模型列表格式不对，请手动填写',
     en: 'The endpoint returned an unexpected model list; enter models manually',
