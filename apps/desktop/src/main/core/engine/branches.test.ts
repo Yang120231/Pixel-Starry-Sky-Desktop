@@ -35,6 +35,8 @@ const fsMock = vi.hoisted(() => ({
   chmodFails: false,
   onSnapshot: null as ((n: number) => Promise<void> | void) | null,
   snapshots: 0,
+  /** 每次写文件之前调（合并写回上级的那一刻） */
+  onWrite: null as ((path: string) => Promise<void> | void) | null,
 }))
 vi.mock('node:fs/promises', async importOriginal => {
   const real = await importOriginal<typeof import('node:fs/promises')>()
@@ -44,7 +46,11 @@ vi.mock('node:fs/promises', async importOriginal => {
     if (fsMock.onSnapshot && String(prefix).includes('pixelsky-branch-')) await fsMock.onSnapshot(++fsMock.snapshots)
     return (real.mkdtemp as (...a: unknown[]) => Promise<string>)(prefix, ...rest)
   }) as typeof real.mkdtemp
-  return { ...real, chmod, mkdtemp, default: { ...real, chmod, mkdtemp } }
+  const writeFile = (async (path: unknown, ...rest: unknown[]) => {
+    await fsMock.onWrite?.(String(path))
+    return (real.writeFile as (...a: unknown[]) => Promise<void>)(path, ...rest)
+  }) as typeof real.writeFile
+  return { ...real, chmod, mkdtemp, writeFile, default: { ...real, chmod, mkdtemp, writeFile } }
 })
 
 let root: string, project: string, tools: ProjectTools, host: FakeHost
@@ -138,6 +144,7 @@ afterEach(async () => {
   fsMock.chmodFails = false
   fsMock.onSnapshot = null
   fsMock.snapshots = 0
+  fsMock.onWrite = null
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
   await tools.shutdown()
@@ -613,6 +620,33 @@ describe('合并期间有变化', () => {
     await git(project, ['checkout', '--', 'b.txt'])
     fsMock.snapshots = 0
     fsMock.onSnapshot = n => (n === 3 ? writeFile(join(project, 'other.txt'), 'x\n') : undefined)
+    expect(await mergeBranch(deps(), id, applyOnly)).toEqual({ code: 'applied', files: 1 })
+    expect(await readFile(join(project, 'b.txt'), 'utf8')).toBe('branch\n')
+  })
+
+  it('最后核对之后、写到第一个文件时用户保存了第二个：第二个不覆盖，报错列出已写的第一个', async () => {
+    const { id, cwd } = await branchWithCopy(false)
+    await writeFile(join(cwd, 'a.txt'), 'branch a\n')
+    await writeFile(join(cwd, 'b.txt'), 'branch b\n')
+    fsMock.onWrite = async path => {
+      if (resolve(path) !== resolve(project, 'a.txt')) return
+      fsMock.onWrite = null
+      await writeFile(join(project, 'b.txt'), 'user saved\n')
+    }
+    const error = await mergeBranch(deps(), id, applyOnly).catch((e: Error) => e)
+    expect(String(error)).toContain('写到一半出错：合并期间 b.txt 又被改过了')
+    expect(String(error)).toContain('已经写进去的文件：a.txt')
+    expect(await readFile(join(project, 'a.txt'), 'utf8')).toBe('branch a\n')
+    expect(await readFile(join(project, 'b.txt'), 'utf8')).toBe('user saved\n')
+    expect(host.merges).toHaveLength(0)
+  })
+
+  it('最后核对之后上级会话开始运行、但没改文件：照常写完', async () => {
+    const { id, cwd } = await branchWithCopy(false)
+    await writeFile(join(cwd, 'b.txt'), 'branch\n')
+    fsMock.onWrite = path => {
+      if (resolve(path) === resolve(project, 'b.txt')) host.states.set('main', 'running')
+    }
     expect(await mergeBranch(deps(), id, applyOnly)).toEqual({ code: 'applied', files: 1 })
     expect(await readFile(join(project, 'b.txt'), 'utf8')).toBe('branch\n')
   })

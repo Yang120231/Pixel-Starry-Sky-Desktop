@@ -212,6 +212,10 @@ export const branchMergeMessages = {
     zh: '合并期间上级目录里要写的文件又改过了，重新合并一次',
     en: 'Files to be written in the parent folder changed during the merge; merge again',
   },
+  'merge.changedFile': {
+    zh: '合并期间 {path} 又被改过了，没有覆盖它，重新合并一次',
+    en: '{path} changed during the merge and was not overwritten; merge again',
+  },
   'merge.copyChanged': {
     zh: '分支在合并期间又有改动，副本先留着',
     en: 'The branch changed during the merge, so the copy was kept',

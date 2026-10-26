@@ -1,5 +1,6 @@
 // 开分支 / 合并回主会话（docs/ui/branch-merge.md）：建副本、算分支自己的改动、按文件写回上级、写摘要。
 // 本机和 SSH 辅助进程共用（engine:branch* 操作表），不依赖 electron
+import type { Stats } from 'node:fs'
 import { chmod, copyFile, lstat, mkdir, mkdtemp, rm, rmdir, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -551,8 +552,9 @@ async function safeTarget(root: string, path: string): Promise<string> {
 }
 
 /** 删掉上级里的一个文件（是符号链接时删链接本身），再把删空的文件夹也删掉（和 git 一样），不越过上级目录 */
-async function removeFile(root: string, path: string): Promise<void> {
+async function removeFile(root: string, path: string, expect: string | null | undefined): Promise<void> {
   const target = await safeTarget(root, path)
+  unchanged(path, await lstat(target).catch(() => null), expect)
   await rm(target, { force: true })
   for (let dir = dirname(target); inside(root, dir) && resolve(dir) !== resolve(root); dir = dirname(dir)) {
     // 不空（或删不了）就停
@@ -574,10 +576,16 @@ const NO_SYMLINKS = new Set(['EPERM', 'EACCES', 'ENOSYS', 'ENOTSUP', 'EOPNOTSUPP
  * 写一个文件：原来是符号链接先删链接（不写到链接指向的地方）；原来是（删空了的）文件夹先删掉；
  * 要建符号链接而原来是普通文件时也先删掉（symlink 不会覆盖）。符号链接、可执行位按 Git 里的模式
  */
-async function writeOne(root: string, w: Prepared, symlinks: boolean): Promise<void> {
+async function writeOne(
+  root: string,
+  w: Prepared,
+  symlinks: boolean,
+  expect: string | null | undefined,
+): Promise<void> {
   const target = await safeTarget(root, w.path)
   await mkdir(dirname(target), { recursive: true })
   const info = await lstat(target).catch(() => null)
+  unchanged(w.path, info, expect)
   // 文件夹不空时 rmdir 报错，不会删掉别的东西
   if (info?.isDirectory()) await rmdir(target)
   else if (info && (info.isSymbolicLink() || w.mode === SYMLINK)) await rm(target)
@@ -601,6 +609,15 @@ async function writeOne(root: string, w: Prepared, symlinks: boolean): Promise<v
   const current = (await stat(target)).mode & 0o777
   const next = w.mode === EXECUTABLE ? current | ((current & 0o444) >> 2) : current & ~0o111
   if (next !== current) await chmod(target, next).catch(() => undefined)
+}
+
+/** 文件现在的样子（大小、修改和变更时间），写之前核对它没被别人改过；文件夹不记（删空它的是合并自己） */
+const stampOf = (info: Stats | null): string | null => (info ? `${info.size}:${info.mtimeMs}:${info.ctimeMs}` : null)
+
+/** expect 为 undefined：不核对 */
+function unchanged(path: string, info: Stats | null, expect: string | null | undefined): void {
+  if (expect !== undefined && stampOf(info) !== expect)
+    throw new Error(`合并期间 ${path} 又被改过了，没有覆盖它，重新合并一次`)
 }
 
 /**
@@ -637,16 +654,23 @@ async function writeBack(
     ? await text(root, ['config', '--type=bool', 'core.symlinks']).catch(() => '')
     : ''
   const symlinks = setting ? setting === 'true' : process.platform !== 'win32'
-  // 都准备好了、真正动文件之前最后核对一次（报错时一个都没写）
+  // 先记下每个要动的文件现在的样子，再最后核对一次（报错时一个都没写）：核对之后谁再改它，动它之前都看得出来
+  const stamps = new Map<string, string | null>()
+  for (const path of paths) {
+    const info = await lstat(join(root, path)).catch(() => null)
+    if (!info?.isDirectory()) stamps.set(path, stampOf(info))
+  }
   await ready()
   const done: string[] = []
   try {
     for (const path of removes) {
-      await removeFile(root, path)
+      await removeFile(root, path, stamps.get(path))
       done.push(path)
+      // 只改大小写的改名：不分大小写的磁盘上删掉旧名字，新名字跟着不见了，是自己删的
+      for (const w of writes) if (w.path !== path && w.path.toLowerCase() === path.toLowerCase()) stamps.delete(w.path)
     }
     for (const w of writes) {
-      await writeOne(root, w, symlinks)
+      await writeOne(root, w, symlinks, stamps.get(w.path))
       done.push(w.path)
     }
   } catch (error) {
