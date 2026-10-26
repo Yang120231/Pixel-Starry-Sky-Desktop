@@ -14,6 +14,7 @@ import { codingLayout } from '../layoutStore'
 import { setAppMode } from '../mode'
 import { chatDraftKey, newChatInProject, useCodingChatTab, useCodingSessionId, useCodingWorkspace } from '../workspace'
 import { ConversationSwitcher } from './ConversationSwitcher'
+import { forgetInput } from '@/features/logs/switchTiming'
 
 const noop = () => {}
 
@@ -138,7 +139,10 @@ export function ChatView({ visible }: { visible: boolean }) {
               panelOpen={false}
               onToggleSidebar={noop}
               onTogglePanel={noop}
-              onOpenSession={id => paneActions.replace(chatTab, id)}
+              onOpenSession={id => {
+                forgetInput()
+                paneActions.replace(chatTab, id)
+              }}
             />
           </ErrorBoundary>
         )}

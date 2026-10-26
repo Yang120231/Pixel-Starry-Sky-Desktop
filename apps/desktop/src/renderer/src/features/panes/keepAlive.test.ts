@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { keepMounted, isSessionTab, pruneRecency } from './keepAlive'
+import { DEFAULT_KEEP_ALIVE, keepAliveFor, keepMounted, isSessionTab, pruneRecency } from './keepAlive'
 import { fileTab, type Leaf } from './tree'
 
 // keepAlive 订阅引擎 store；这里只测纯函数，不加载它
@@ -27,6 +27,17 @@ describe('标签保活', () => {
   it('当前标签 + 最近用过的 2 个对话标签', () => {
     const keep = keepMounted([leaf('L', tabs, 'e')], recent('a', 'b', 'c', 'd', 'e'), opts(2))
     expect([...keep].sort()).toEqual(['c', 'd', 'e'])
+  })
+
+  it('保留个数调大：已经卸载的不在后台挂回来，本来挂着的照留', () => {
+    const r = recent('a', 'b', 'c', 'd', 'e')
+    const before = keepMounted([leaf('L', tabs, 'e')], r, opts(2))
+    expect([...before].sort()).toEqual(['c', 'd', 'e'])
+    const after = keepMounted([leaf('L', tabs, 'e')], r, { ...opts(6), mounted: before })
+    expect([...after].sort()).toEqual(['c', 'd', 'e'])
+    // 切到卸载过的 a：当前标签照挂，刚切走的 e 本来挂着、留下
+    const next = keepMounted([leaf('L', tabs, 'a')], recent('b', 'c', 'd', 'e', 'a'), { ...opts(6), mounted: after })
+    expect([...next].sort()).toEqual(['a', 'c', 'd', 'e'])
   })
 
   it('启动时没有用过记录，只挂当前标签', () => {
@@ -58,5 +69,18 @@ describe('标签保活', () => {
     // b 拖到右窗格：左窗格里最近的变成 a，右窗格的 d 是当前，b 排第二
     const after = keepMounted([leaf('L', ['a', 'c'], 'c'), leaf('R', ['d', 'b'], 'd')], rec, opts(1))
     expect([...after].sort()).toEqual(['a', 'b', 'c', 'd'])
+  })
+})
+
+describe('keepAliveFor', () => {
+  it.each([
+    [8000, 300, 6],
+    [4097, 300, 6],
+    [4096, 300, 4],
+    [2048, 300, 4],
+    [2047, 300, DEFAULT_KEEP_ALIVE],
+    [8000, 1100, DEFAULT_KEEP_ALIVE],
+  ])('还能用 %i MB、堆 %i MB → 保留 %i 个', (freeMb, heapMb, n) => {
+    expect(keepAliveFor(freeMb, heapMb)).toBe(n)
   })
 })

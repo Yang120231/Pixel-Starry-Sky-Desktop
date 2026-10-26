@@ -130,3 +130,62 @@ describe('createTailThrottle', () => {
     expect(vi.getTimerCount()).toBe(1)
   })
 })
+
+/** 流畅档：每次刷新渲染（view 到 arm）花 cost 毫秒，每 16 毫秒来一次新字，跑到时钟走过 ms 为止 */
+function smoothRun(cost: number, ms: number) {
+  let clock = 0
+  const now = vi.spyOn(performance, 'now').mockImplementation(() => clock)
+  try {
+    const split = createStreamSplitter()
+    let text = 'a'.repeat(TAIL_SLOW_CHARS + 1)
+    let refreshes = 0
+    let shown: StreamBlocks | null = null
+    const throttle = createTailThrottle(
+      () => render(),
+      () => true,
+    )
+    const render = (): void => {
+      const next = throttle.view(split(text))
+      if (next !== shown) {
+        refreshes++
+        clock += cost
+      }
+      shown = next
+      throttle.arm()
+    }
+    render()
+    let pushes = 0
+    while (clock < ms) {
+      pushes++
+      text += 'b'
+      render()
+      clock += 16
+      vi.advanceTimersByTime(16)
+    }
+    return { pushes, refreshes: refreshes - 1, latest: () => shown?.tail === split(text).tail }
+  } finally {
+    now.mockRestore()
+  }
+}
+
+describe('createTailThrottle 流畅档', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('渲染快：长尾巴也每次跟上最新', () => {
+    const r = smoothRun(2, 1600)
+    expect(r.refreshes).toBe(r.pushes)
+    expect(r.latest()).toBe(true)
+  })
+
+  it('渲染慢：间隔按耗时拉长（20 毫秒 → 约 80 毫秒一次），比固定 200 毫秒刷得勤', () => {
+    const r = smoothRun(20, 2000)
+    expect(r.refreshes).toBeLessThan(2000 / 80)
+    expect(r.refreshes).toBeGreaterThan(2000 / 120)
+  })
+
+  it('渲染很慢：最多 200 毫秒一次', () => {
+    const r = smoothRun(80, 2000)
+    expect(r.refreshes).toBeLessThanOrEqual(Math.ceil(2000 / TAIL_SLOW_MS))
+  })
+})

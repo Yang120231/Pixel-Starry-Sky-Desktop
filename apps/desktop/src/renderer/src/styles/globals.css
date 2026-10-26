@@ -1216,6 +1216,10 @@
 .animate-spin {
   animation-timing-function: steps(12, end);
 }
+/* 动画档位为流畅（插电、最近不卡，features/layout/perfTier.ts）时平滑转 */
+:root[data-perf='smooth'] .animate-spin {
+  animation-timing-function: linear;
+}
 :root[data-window-idle]
   :is(
     .animate-spin,

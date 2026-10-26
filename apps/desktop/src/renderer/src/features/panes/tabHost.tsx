@@ -8,6 +8,7 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { cn } from '@/ui'
 import { ErrorBoundary } from '@/ui/ErrorBoundary'
 import { reportRendererError } from '@/features/logs/rendererErrors'
+import { forgetInput, noteSessionSwitch } from '@/features/logs/switchTiming'
 import { SessionView } from '@/features/session/SessionView'
 import { isLive, useSessionTitle } from '@/features/engine'
 import { noteTabSessions } from '@/features/engine/store'
@@ -157,10 +158,14 @@ const TabBody = memo(function TabBody({
   const wasActive = useRef(active && !unloaded.has(tab))
   const sessionId = isNewTab(tab) || isFileTab(tab) ? null : tab
   const title = useSessionTitle(sessionId)
+  const mounting = useRef(true)
 
   useLayoutEffect(() => {
+    // 切到这个对话（含这次才挂载的）：量到画出来要多久，慢了记日志
+    if (active && sessionId && (mounting.current || !wasActive.current)) noteSessionSwitch(sessionId, mounting.current)
     if (active && !wasActive.current && ref.current) fadeIn(ref.current)
     wasActive.current = active
+    mounting.current = false
     unloaded.delete(tab)
   }, [active, tab])
 
@@ -193,7 +198,10 @@ const TabBody = memo(function TabBody({
             panelOpen={panelOpen}
             onToggleSidebar={onToggleSidebar}
             onTogglePanel={onTogglePanel}
-            onOpenSession={id => paneActions.replace(tab, id)}
+            onOpenSession={id => {
+              forgetInput()
+              paneActions.replace(tab, id)
+            }}
           />
         )}
       </ErrorBoundary>

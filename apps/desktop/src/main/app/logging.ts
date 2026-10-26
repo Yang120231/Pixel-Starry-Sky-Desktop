@@ -203,7 +203,7 @@ export function initLogIpc(): void {
   const budget = new WeakMap<WebContents, { minute: number; count: number }>()
   ipc.on('log:write', (event, raw: unknown) => {
     const e = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
-    const level = e.level === 'warn' ? 'warn' : 'error'
+    const level = e.level === 'warn' || e.level === 'info' ? e.level : 'error'
     const message = typeof e.message === 'string' ? e.message.slice(0, 2000) : ''
     if (!message) return
     const minute = Math.floor(Date.now() / 60_000)

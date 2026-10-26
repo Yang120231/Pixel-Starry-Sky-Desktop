@@ -8,10 +8,21 @@ import { isFileTab, isNewTab, type Leaf } from './tree'
 /** 每个窗格除当前标签外保留几个最近用过的对话标签 */
 export const DEFAULT_KEEP_ALIVE = 2
 
+/**
+ * 按内存定保留几个（docs/ui/performance.md §5.3）：整机还能用的 > 4 GB 留 6 个，2～4 GB 留 4 个，
+ * 更少、或界面自己的 JS 堆已过 1 GB 时留默认的 2 个
+ */
+export function keepAliveFor(freeMb: number, heapMb: number): number {
+  if (heapMb > 1024) return DEFAULT_KEEP_ALIVE
+  if (freeMb > 4096) return 6
+  if (freeMb >= 2048) return 4
+  return DEFAULT_KEEP_ALIVE
+}
+
 let limit = DEFAULT_KEEP_ALIVE
 const listeners = new Set<() => void>()
 
-/** 轻量模式（崩溃恢复后）改成 0：切走的对话标签一律卸载；退出轻量模式改回 DEFAULT_KEEP_ALIVE */
+/** 轻量模式（崩溃恢复后）改成 0：切走的对话标签一律卸载；退出轻量模式改回 DEFAULT_KEEP_ALIVE；平时内存采样按 keepAliveFor 调 */
 export function setKeepAliveLimit(next: number): void {
   next = Math.max(0, Math.floor(next))
   if (next === limit) return
@@ -36,12 +47,18 @@ export const isSessionTab = (tab: string): boolean => !isNewTab(tab) && !isFileT
 
 /**
  * 要保持挂载的标签：每个窗格取当前标签、新对话和文件标签、pinned 的对话标签，
- * 再按 recency（越大越近）从新到旧取 limit 个对话标签
+ * 再按 recency（越大越近）从新到旧取 limit 个对话标签。
+ * mounted：上一次挂着的标签。给了就只留本来挂着的：limit 调大（内存采样）时不在后台把已卸载的对话重新挂回来
  */
 export function keepMounted(
   leaves: readonly Leaf[],
   recency: ReadonlyMap<string, number>,
-  opts: { limit: number; isSession: (tab: string) => boolean; pinned: (tab: string) => boolean },
+  opts: {
+    limit: number
+    isSession: (tab: string) => boolean
+    pinned: (tab: string) => boolean
+    mounted?: ReadonlySet<string>
+  },
 ): Set<string> {
   const keep = new Set<string>()
   for (const leaf of leaves) {
@@ -54,6 +71,7 @@ export function keepMounted(
       .filter(tab => recency.has(tab))
       .sort((a, b) => (recency.get(b) ?? 0) - (recency.get(a) ?? 0))
       .slice(0, Math.max(0, opts.limit))
+      .filter(tab => !opts.mounted || opts.mounted.has(tab))
       .forEach(tab => keep.add(tab))
   }
   return keep
@@ -95,6 +113,7 @@ export function useKeepMounted(leaves: readonly Leaf[]): Set<string> {
   const recency = useRef(new Map<string, number>())
   const seen = useRef(new Map<string, string | null>())
   const seq = useRef(0)
+  const mounted = useRef(new Set<string>())
   // 渲染时同步更新：只在当前标签变了才记一个新序号，重复渲染（StrictMode）不会重复记
   for (const leaf of leaves) {
     if (seen.current.get(leaf.id) === leaf.active) continue
@@ -103,5 +122,11 @@ export function useKeepMounted(leaves: readonly Leaf[]): Set<string> {
   }
   pruneRecency(recency.current, leaves)
   const pinned = new Set(waiting ? waiting.split('\n') : [])
-  return keepMounted(leaves, recency.current, { limit, isSession: isSessionTab, pinned: tab => pinned.has(tab) })
+  mounted.current = keepMounted(leaves, recency.current, {
+    limit,
+    isSession: isSessionTab,
+    pinned: tab => pinned.has(tab),
+    mounted: mounted.current,
+  })
+  return mounted.current
 }

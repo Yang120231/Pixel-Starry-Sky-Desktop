@@ -25,6 +25,7 @@ import { ShortcutsHelp } from '../features/layout/ShortcutsHelp'
 import { installRendererErrorLog, reactRootErrorOptions } from '../features/logs/rendererErrors'
 import { installLongTaskLog } from '../features/logs/longTasks'
 import { installMemorySampler } from '../features/logs/memorySampler'
+import { installInputClock } from '../features/logs/switchTiming'
 import { RecoveredNotice } from '../features/recovery/RecoveredNotice'
 import { SettingsSyncRunner } from '../features/settings/sync/RestoreNotice'
 import { MainActionHost } from '../features/settings/MainActionHost'
@@ -34,6 +35,7 @@ import { BranchDialogHost } from '../features/session/branch/BranchViews'
 import { startWindowActivity } from '../features/layout/windowActivity'
 import { startAutoSave } from '../features/editor/autoSave'
 import { startLoopClock } from '../features/layout/loopClock'
+import { startPerfTier } from '../features/layout/perfTier'
 
 document.documentElement.dataset.platform = window.pixelsky?.platform ?? 'web'
 // 页面报错、未处理的 Promise 拒绝写进本机日志（docs/ui/logging.md §4.5）
@@ -48,6 +50,10 @@ startWindowActivity()
 startAutoSave()
 // 转圈、闪烁的点对齐同一个节奏（docs/ui/motion-proposal.html）
 startLoopClock()
+// 动画档位：插电、不卡时转圈平滑转，用电池或刚卡过时省电（docs/ui/performance.md §5.3）
+startPerfTier()
+// 记最近一次点击、按键：切换对话慢时记日志用（docs/ui/performance.md §5.2 B1）
+installInputClock()
 
 createRoot(document.getElementById('root')!, reactRootErrorOptions).render(
   <StrictMode>

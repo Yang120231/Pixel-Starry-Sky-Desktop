@@ -3,7 +3,7 @@
 import type { RendererMemorySample } from '../../../../shared/types/memory'
 import { getEngineState } from '@/features/engine/store'
 import { snapshotStats } from '@/features/engine/snapshotStats'
-import { mountedTabCount } from '@/features/panes/keepAlive'
+import { keepAliveFor, mountedTabCount, setKeepAliveLimit } from '@/features/panes/keepAlive'
 import { transcriptViewStats } from '@/features/session/live/transcriptPlaces'
 import { screens } from '@/features/terminal/screens'
 import { editorCount } from '@/features/editor/code/CodeEditor'
@@ -58,9 +58,15 @@ export function installMemorySampler(): () => void {
       if (!stopped) timer = window.setTimeout(tick, interval)
     }
     try {
+      const sample = collectSample()
       bridge
-        .sample(collectSample())
-        .then(reply => (interval = nextInterval(reply)))
+        .sample(sample)
+        .then(reply => {
+          interval = nextInterval(reply)
+          // 切走的对话保留几个跟着内存走；轻量模式固定 0（lightweight.ts）
+          if (typeof reply?.freeMb === 'number' && !isLightweight())
+            setKeepAliveLimit(keepAliveFor(reply.freeMb, sample.heapUsedMb))
+        })
         .catch(() => {})
         .finally(next)
     } catch {

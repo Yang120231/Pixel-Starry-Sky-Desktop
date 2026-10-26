@@ -1,5 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { memo, useEffect, useMemo, useReducer, useRef } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
@@ -118,14 +118,14 @@ const StreamChunk = memo(function StreamChunk({ text }: { text: string }) {
   )
 })
 
-/** 尾巴节流（tailThrottle.ts）：尾巴很长时最多隔 200 毫秒才刷新显示的那一份，其余情况跟最新 */
+/** 尾巴节流（tailThrottle.ts）：尾巴很长时按动画档位和渲染耗时延后刷新显示的那一份，其余情况跟最新 */
 function useThrottledBlocks(latest: StreamBlocks): StreamBlocks {
   const [, refresh] = useReducer((n: number) => n + 1, 0)
   const throttle = useRef<TailThrottle | null>(null)
   throttle.current ??= createTailThrottle(refresh)
   const shown = throttle.current.view(latest)
-  // 每次提交后看要不要排定时器；卸载（含开发模式的重新挂载）时清掉
-  useEffect(() => throttle.current?.arm())
+  // 每次提交后量渲染耗时、看要不要排定时器（layout effect：在绘制之前，量到的不含等下一帧的时间）；卸载（含开发模式的重新挂载）时清掉
+  useLayoutEffect(() => throttle.current?.arm())
   useEffect(() => () => throttle.current?.dispose(), [])
   return shown
 }

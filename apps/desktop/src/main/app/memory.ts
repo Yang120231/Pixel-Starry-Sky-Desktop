@@ -327,12 +327,16 @@ function record(sample: MemorySample): number {
   return decision.intervalMs
 }
 
-/** log:sample 的处理：界面报来的数 + 主进程同一时刻的数；回复下一次采样的间隔 */
-export function onRendererSample(contents: WebContents, raw: unknown): { intervalMs: number } {
+/** 整机还能用的内存（MB）：物理可用和可提交余量取小的；界面按它定切走的对话保留几个（docs/ui/performance.md §5.3） */
+export const roomMb = (s: SystemMem): number => Math.min(s.freeMb, s.commitFreeMb ?? Infinity)
+
+/** log:sample 的处理：界面报来的数 + 主进程同一时刻的数；回复下一次采样的间隔和整机还能用的内存 */
+export function onRendererSample(contents: WebContents, raw: unknown): { intervalMs: number; freeMb?: number } {
   if (!deps) return { intervalMs: NORMAL_MS }
   const metrics = app.getAppMetrics()
   deps.check(metrics)
-  return { intervalMs: record(collect(parseRendererSample(raw), contents.getOSProcessId(), metrics)) }
+  const sample = collect(parseRendererSample(raw), contents.getOSProcessId(), metrics)
+  return { intervalMs: record(sample), freeMb: roomMb(sample.system) }
 }
 
 /**

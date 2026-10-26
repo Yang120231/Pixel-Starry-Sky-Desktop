@@ -14,9 +14,9 @@ export interface LogBridge {
   /** 弹保存对话框写诊断文件；取消时为 null */
   exportDiagnostics(): Promise<string | null>
   /** 渲染进程报错写进日志（限流） */
-  write(level: 'warn' | 'error', message: string, fields?: Record<string, unknown>): void
+  write(level: 'info' | 'warn' | 'error', message: string, fields?: Record<string, unknown>): void
   /** 界面里的 React 根被未接住的错误卸载（白屏）：通知主进程按崩溃处理，自动重新加载 */
   uncaught(): void
   /** 内存采样（docs/ui/renderer-memory.md §3.2）：界面的数，主进程补上自己那边的；回复下一次采样的间隔 */
-  sample(sample: RendererMemorySample): Promise<{ intervalMs: number }>
+  sample(sample: RendererMemorySample): Promise<{ intervalMs: number; freeMb?: number }>
 }
