@@ -95,6 +95,12 @@ export const extensionCenterMessages = {
   'extstore.action.verifying': { zh: '校验中', en: 'Verifying' },
   'extstore.action.installing': { zh: '安装中', en: 'Installing' },
   'extstore.toast.installed': { zh: '已安装 {name}', en: 'Installed {name}' },
+  // 打开某种语言的文件时推荐官方语言扩展（extstore/recommend.ts）
+  'extstore.recommend.text': {
+    zh: '装上「{name}」，这门语言就有代码片段、任务和 AI 技能',
+    en: 'Install {name} to get snippets, tasks and AI skills for this language',
+  },
+  'extstore.recommend.install': { zh: '安装', en: 'Install' },
   'extstore.toast.updated': { zh: '已更新 {name}', en: 'Updated {name}' },
   'extstore.toast.rolledBack': { zh: '已换回 {name}', en: 'Rolled back {name}' },
   'extstore.toast.failed': { zh: '{name} 没装上：{reason}', en: '{name} couldn’t be installed: {reason}' },
