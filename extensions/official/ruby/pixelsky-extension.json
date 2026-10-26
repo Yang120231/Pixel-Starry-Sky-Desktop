@@ -1,0 +1,250 @@
+{
+  "id": "pixelsky.ruby",
+  "name": "Ruby 支持",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "Ruby 的语法高亮、代码片段、Rake / Bundler 任务，以及写测试和查异常的技能与提示词",
+  "icon": "icon.png",
+  "keywords": ["ruby", "rake", "bundler", "rspec", "rubocop", "gem"],
+  "license": "MIT",
+  "repository": "https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop",
+  "homepage": null,
+  "engines": {
+    "pixelsky": ">=0.4.10"
+  },
+  "l10n": {
+    "en": {
+      "name": "Ruby Support",
+      "description": "Ruby syntax highlighting, snippets, Rake / Bundler tasks, plus a skill and prompts for writing tests and debugging exceptions"
+    }
+  },
+  "contributes": {
+    "grammars": [
+      {
+        "language": "ruby",
+        "aliases": ["Ruby", "rb"],
+        "extensions": [".rb", ".rake", ".gemspec"],
+        "filenames": ["Rakefile", "Gemfile"],
+        "scopeName": "source.ruby",
+        "path": "syntaxes/ruby.tmLanguage.json",
+        "configuration": "language-configuration.json",
+        "samples": ["samples/sample.rb"]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "ruby",
+        "path": "snippets/ruby.json"
+      }
+    ],
+    "taskTemplates": [
+      {
+        "id": "rake",
+        "label": {
+          "zh": "Rake",
+          "en": "Rake"
+        },
+        "files": ["Rakefile"],
+        "tasks": [
+          {
+            "name": "build",
+            "description": {
+              "zh": "构建 gem 包",
+              "en": "Build the gem package"
+            },
+            "when": "contains:bundler/gem_tasks"
+          },
+          {
+            "name": "install",
+            "description": {
+              "zh": "构建并安装到本机",
+              "en": "Build and install the gem locally"
+            },
+            "when": "contains:bundler/gem_tasks"
+          }
+        ],
+        "extract": [
+          {
+            "pattern": "^desc[ \\t(]+[\"'](.*?)[\"'][ \\t)]*\\r?\\n^task[ \\t(]+[:\"']([A-Za-z0-9_][A-Za-z0-9_.:/-]*)",
+            "flags": "gm",
+            "name": 2,
+            "description": 1
+          },
+          {
+            "pattern": "^desc[ \\t(]+[\"'](.*?)[\"'][ \\t)]*\\r?\\n^task[ \\t(]+([A-Za-z_][A-Za-z0-9_]*):(?!:)",
+            "flags": "gm",
+            "name": 2,
+            "description": 1
+          },
+          {
+            "pattern": "^task[ \\t(]+[:\"']([A-Za-z0-9_][A-Za-z0-9_.:/-]*)",
+            "flags": "gm",
+            "name": 1
+          },
+          {
+            "pattern": "^task[ \\t(]+([A-Za-z_][A-Za-z0-9_]*):(?!:)",
+            "flags": "gm",
+            "name": 1
+          },
+          {
+            "pattern": "^(?:Rake::TestTask|RSpec::Core::RakeTask|RuboCop::RakeTask|YARD::Rake::YardocTask)\\.new[ \\t(]+:([A-Za-z0-9_]+)",
+            "flags": "gm",
+            "name": 1
+          }
+        ],
+        "command": "rake {name}"
+      },
+      {
+        "id": "bundler",
+        "label": {
+          "zh": "Bundler",
+          "en": "Bundler"
+        },
+        "files": ["Gemfile"],
+        "tasks": [
+          {
+            "name": "install",
+            "description": {
+              "zh": "按 Gemfile 安装依赖",
+              "en": "Install dependencies from the Gemfile"
+            }
+          },
+          {
+            "name": "update",
+            "description": {
+              "zh": "更新依赖并改写 Gemfile.lock",
+              "en": "Update dependencies and rewrite Gemfile.lock"
+            }
+          },
+          {
+            "name": "check",
+            "description": {
+              "zh": "检查依赖是否都已安装",
+              "en": "Check that all dependencies are installed"
+            }
+          },
+          {
+            "name": "outdated",
+            "description": {
+              "zh": "列出有新版本的依赖",
+              "en": "List dependencies with newer versions"
+            }
+          }
+        ],
+        "command": "bundle {name}"
+      },
+      {
+        "id": "bundler-exec",
+        "label": {
+          "zh": "Bundler exec",
+          "en": "Bundler exec"
+        },
+        "files": ["Gemfile"],
+        "tasks": [
+          {
+            "name": "rspec",
+            "description": {
+              "zh": "运行 RSpec 测试",
+              "en": "Run RSpec tests"
+            },
+            "when": "exists:spec"
+          },
+          {
+            "name": "rubocop",
+            "description": {
+              "zh": "RuboCop 代码检查",
+              "en": "RuboCop lint"
+            },
+            "when": "contains:rubocop"
+          }
+        ],
+        "command": "bundle exec {name}"
+      },
+      {
+        "id": "bundler-rake",
+        "label": {
+          "zh": "Bundler exec rake",
+          "en": "Bundler exec rake"
+        },
+        "files": ["Gemfile"],
+        "tasks": [
+          {
+            "name": "test",
+            "description": {
+              "zh": "运行 Minitest 测试",
+              "en": "Run Minitest tests"
+            },
+            "when": "exists:test"
+          }
+        ],
+        "command": "bundle exec rake {name}"
+      }
+    ],
+    "skills": [
+      {
+        "path": "skills/ruby-project"
+      }
+    ],
+    "prompts": [
+      {
+        "id": "ruby-write-tests",
+        "title": {
+          "zh": "为选中代码写 RSpec / Minitest 测试",
+          "en": "Write RSpec / Minitest tests for the selection"
+        },
+        "description": {
+          "zh": "按项目已有的测试框架和风格补测试",
+          "en": "Add tests with the project's existing framework and style"
+        },
+        "path": "prompts/write-tests.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "ruby-explain-backtrace",
+        "title": {
+          "zh": "解释 Ruby 异常回溯",
+          "en": "Explain a Ruby backtrace"
+        },
+        "description": {
+          "zh": "把选中的异常或回溯定位到根因",
+          "en": "Trace the selected exception or backtrace to its root cause"
+        },
+        "path": "prompts/explain-backtrace.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "ruby-rubocop-style",
+        "title": {
+          "zh": "按 RuboCop 风格整理选中代码",
+          "en": "Tidy the selection to RuboCop style"
+        },
+        "description": {
+          "zh": "不改行为，按项目的 .rubocop.yml 修正风格问题",
+          "en": "Fix style issues per the project's .rubocop.yml without changing behavior"
+        },
+        "path": "prompts/rubocop-style.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "ruby-add-yard",
+        "title": {
+          "zh": "补 YARD 注释",
+          "en": "Add YARD docs"
+        },
+        "description": {
+          "zh": "为选中的类或方法补 @param / @return 注释",
+          "en": "Document the selected class or method with @param / @return"
+        },
+        "path": "prompts/add-yard.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

@@ -22,7 +22,11 @@
 | `mapget` / `mappost` | Minimal API 的 GET / POST 端点 |
 | `nullchk` / `trycatch` / `aforeach` | ArgumentNullException.ThrowIfNull / try catch / await foreach |
 
-- **任务**：认 `global.json`、`Directory.Build.props`、`Directory.Packages.props` 这三种文件，列出 `build`、`test`、`restore`、`format`，分别运行 `dotnet build`、`dotnet test`、`dotnet restore`、`dotnet format`，在该文件所在文件夹执行。
+- **任务**：按项目文件认，需要像素星空 0.6.2 及以上（根目录往下 3 层，每个文件各列一组）：
+  - `*.sln` / `*.slnx`（解决方案）：`build`、`test`、`restore`、`format`，分别运行 `dotnet build <文件>`、`dotnet test <文件>`、`dotnet restore <文件>`、`dotnet format <文件>`。
+  - `*.csproj`（项目）：`build` 运行 `dotnet build <文件>`；项目文件里引用了 `Microsoft.NET.Test.Sdk`（测试项目）时多一个 `test`，运行 `dotnet test <文件>`。
+  - `*.csproj` 的 `run`：项目文件里有 `<OutputType>Exe`（控制台 / 桌面程序）或用 `Microsoft.NET.Sdk.Web`（Web 项目）时列出，运行 `dotnet run --project <文件>`。
+  - 命令都带上项目 / 解决方案文件的路径，在工作区根目录执行，所以同一个文件夹里有多个项目也不会报"找到多个项目或解决方案文件"。
 - **技能**：`csharp-project`，Claude Code 里是 `/ext-pixelsky-csharp:csharp-project`，Codex 里是 `$csharp-project`。教 AI 认解决方案和项目文件、用 dotnet CLI 验证改动、沿用项目的测试框架、认真处理 nullable 警告，不擅自换工具或装新依赖。
 - **提示词**（输入框「/」菜单；需要选中代码的三条在编辑器右键里也有）：
   - 为选中代码写单元测试（沿用项目现有测试框架）
@@ -33,13 +37,9 @@
 
 ## 已知问题
 
-- 任务只能按**精确文件名**识别，软件现在不支持 `*.csproj`、`*.sln` 这类通配符，所以不能"见到项目文件就列任务"。这里改用 `global.json`、`Directory.Build.props`、`Directory.Packages.props` 这三个常放在仓库根目录的文件来触发，有这些局限：
-  - 仓库里没有这些文件时，任务视图里什么都没有。
-  - 任务直接运行 `dotnet build` 等，不带项目参数：该文件夹里要**恰好有一个** `.sln` / `.slnx` 或 `.csproj`，否则 dotnet 会报"找到多个项目或解决方案文件"，或"找不到项目"。这种情况请在终端里手动指定，例如 `dotnet build MyApp.sln`。
-  - `Directory.Build.props` 出现在子文件夹时，也会多出一组任务。
-  - 为了减少重复，同一文件夹里有 `global.json` 时不再为 `Directory.Build.props` 另列一组，有 `Directory.Build.props` 时不再为 `Directory.Packages.props` 另列一组；只有 `global.json` 加 `Directory.Packages.props`（没有 `Directory.Build.props`）时，仍会出现两组相同的任务。
-  - `dotnet format` 需要 .NET 6 及以上的 SDK。
-  - 真正按项目文件识别要等软件支持通配符。
+- 任务只认 `*.csproj`、`*.sln`、`*.slnx`，不认 `*.fsproj`、`*.vbproj`；`run` 只按项目文件里的 `<OutputType>Exe` 和 `Microsoft.NET.Sdk.Web` 判断（只写 `Microsoft.NET.Sdk.Worker` 的后台服务项目不会列出），OutputType 写在 `Directory.Build.props` 里时不会列出 `run`；`test` 只按项目文件里有没有 `Microsoft.NET.Test.Sdk` 判断，该包由 `Directory.Build.props` 统一引入的测试项目不会列出 `test`（可用解决方案的 `test`）。
+- 一个仓库既有解决方案又有项目文件时，两级任务都会列出（解决方案级和每个项目各一组）；多目标框架的项目要加 `--framework` 时请在终端里手动运行。
+- 软件只往下找 3 层，更深的项目文件找不到；`dotnet format` 需要 .NET 6 及以上的 SDK。
 - 扩展语法没有代码折叠，也不会按语义区分类型和变量（TextMate 语法只做词法着色）。
 - `.csx` 脚本只有 C# 语法着色，没有别的支持。
 

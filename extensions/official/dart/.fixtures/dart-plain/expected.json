@@ -1,0 +1,62 @@
+[
+  {
+    "template": "dart-pub",
+    "file": "pubspec.yaml",
+    "tasks": [
+      {
+        "name": "get",
+        "description": "获取依赖",
+        "linux": "dart pub get",
+        "windows": "dart pub get"
+      },
+      {
+        "name": "upgrade",
+        "description": "升级依赖",
+        "linux": "dart pub upgrade",
+        "windows": "dart pub upgrade"
+      },
+      {
+        "name": "outdated",
+        "description": "查看过期依赖",
+        "linux": "dart pub outdated",
+        "windows": "dart pub outdated"
+      }
+    ]
+  },
+  {
+    "template": "dart",
+    "file": "pubspec.yaml",
+    "tasks": [
+      {
+        "name": "test",
+        "description": "运行测试",
+        "linux": "dart test",
+        "windows": "dart test"
+      },
+      {
+        "name": "analyze",
+        "description": "静态分析",
+        "linux": "dart analyze",
+        "windows": "dart analyze"
+      },
+      {
+        "name": "run",
+        "description": "运行程序",
+        "linux": "dart run",
+        "windows": "dart run"
+      }
+    ]
+  },
+  {
+    "template": "dart-format",
+    "file": "pubspec.yaml",
+    "tasks": [
+      {
+        "name": "format",
+        "description": "格式化代码（dart format）",
+        "linux": "dart format .",
+        "windows": "dart format ."
+      }
+    ]
+  }
+]

@@ -1,0 +1,13 @@
+[
+  {
+    "template": "psake",
+    "file": "psakefile.ps1",
+    "tasks": [
+      { "name": "default", "linux": "pwsh -NoProfile -Command \"Invoke-psake default\"", "windows": "powershell -NoProfile -Command \"Invoke-psake default\"" },
+      { "name": "Clean", "linux": "pwsh -NoProfile -Command \"Invoke-psake Clean\"", "windows": "powershell -NoProfile -Command \"Invoke-psake Clean\"" },
+      { "name": "Build", "linux": "pwsh -NoProfile -Command \"Invoke-psake Build\"", "windows": "powershell -NoProfile -Command \"Invoke-psake Build\"" },
+      { "name": "Test", "linux": "pwsh -NoProfile -Command \"Invoke-psake Test\"", "windows": "powershell -NoProfile -Command \"Invoke-psake Test\"" },
+      { "name": "Pack", "linux": "pwsh -NoProfile -Command \"Invoke-psake Pack\"", "windows": "powershell -NoProfile -Command \"Invoke-psake Pack\"" }
+    ]
+  }
+]

@@ -1,0 +1,14 @@
+name: shop_ui
+description: 共用界面组件，纯 Dart 工具包。
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  collection: ^1.18.0
+
+dev_dependencies:
+  build_runner: ^2.4.0
+  test: ^1.25.0

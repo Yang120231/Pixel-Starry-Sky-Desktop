@@ -1,0 +1,56 @@
+[
+  {
+    "template": "dotnet-project",
+    "file": "Tool.CSPROJ",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "编译这个项目",
+        "linux": "dotnet build Tool.CSPROJ",
+        "windows": "dotnet build Tool.CSPROJ"
+      }
+    ]
+  },
+  {
+    "template": "dotnet-run",
+    "file": "Tool.CSPROJ",
+    "tasks": [
+      {
+        "name": "run",
+        "description": "运行这个项目",
+        "linux": "dotnet run --project Tool.CSPROJ",
+        "windows": "dotnet run --project Tool.CSPROJ"
+      }
+    ]
+  },
+  {
+    "template": "dotnet-sln",
+    "file": "Tool.slnx",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "编译整个解决方案",
+        "linux": "dotnet build Tool.slnx",
+        "windows": "dotnet build Tool.slnx"
+      },
+      {
+        "name": "test",
+        "description": "运行解决方案里的测试",
+        "linux": "dotnet test Tool.slnx",
+        "windows": "dotnet test Tool.slnx"
+      },
+      {
+        "name": "restore",
+        "description": "还原 NuGet 包",
+        "linux": "dotnet restore Tool.slnx",
+        "windows": "dotnet restore Tool.slnx"
+      },
+      {
+        "name": "format",
+        "description": "按 .editorconfig 格式化代码",
+        "linux": "dotnet format Tool.slnx",
+        "windows": "dotnet format Tool.slnx"
+      }
+    ]
+  }
+]

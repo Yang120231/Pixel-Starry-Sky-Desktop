@@ -16,6 +16,14 @@ const LABELS = {
   cpp: 'C++',
   csharp: 'C#',
   kotlin: 'Kt',
+  php: 'PHP',
+  ruby: 'Rb',
+  swift: 'Sw',
+  dart: 'Dt',
+  lua: 'Lua',
+  powershell: 'PS',
+  vue: 'Vue',
+  svelte: 'Sv',
 }
 const SIZE = 256
 

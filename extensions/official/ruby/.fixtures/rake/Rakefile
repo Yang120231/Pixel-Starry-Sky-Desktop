@@ -1,0 +1,33 @@
+# frozen_string_literal: true
+
+require "bundler/gem_tasks"
+require "rake/testtask"
+
+Rake::TestTask.new(:unit) do |t|
+  t.libs << "test"
+  t.pattern = "test/**/*_test.rb"
+end
+
+desc "Run the linter"
+task :lint do
+  sh "rubocop"
+end
+
+desc 'Generate docs for "everything"'
+task "docs:build" => :environment do
+  sh "yard"
+end
+
+task :console
+
+desc "Run unit tests and lint"
+task default: %i[unit lint]
+
+namespace :db do
+  desc "Migrate the database"
+  task :migrate do
+    puts "migrating"
+  end
+end
+
+# task :commented_out

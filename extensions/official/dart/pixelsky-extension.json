@@ -1,0 +1,292 @@
+{
+  "id": "pixelsky.dart",
+  "name": "Dart 与 Flutter 支持",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "Dart 的语法高亮、代码片段、Dart / Flutter 任务，以及写测试和查报错的技能与提示词",
+  "icon": "icon.png",
+  "keywords": ["dart", "flutter", "pub", "build_runner"],
+  "license": "MIT",
+  "repository": "https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop",
+  "homepage": null,
+  "engines": {
+    "pixelsky": ">=0.4.10"
+  },
+  "l10n": {
+    "en": {
+      "name": "Dart & Flutter Support",
+      "description": "Dart syntax highlighting, snippets, Dart / Flutter tasks, plus a skill and prompts for writing tests and fixing errors"
+    }
+  },
+  "contributes": {
+    "grammars": [
+      {
+        "language": "dart",
+        "aliases": ["Dart", "dart"],
+        "extensions": [".dart"],
+        "scopeName": "source.dart",
+        "path": "syntaxes/dart.tmLanguage.json",
+        "configuration": "language-configuration.json",
+        "samples": ["samples/sample.dart"]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "dart",
+        "path": "snippets/dart.json"
+      }
+    ],
+    "taskTemplates": [
+      {
+        "id": "dart-pub",
+        "label": {
+          "zh": "Dart pub",
+          "en": "Dart pub"
+        },
+        "files": ["pubspec.yaml"],
+        "tasks": [
+          {
+            "name": "get",
+            "description": {
+              "zh": "获取依赖",
+              "en": "Get dependencies"
+            },
+            "when": "!contains:flutter:"
+          },
+          {
+            "name": "upgrade",
+            "description": {
+              "zh": "升级依赖",
+              "en": "Upgrade dependencies"
+            },
+            "when": "!contains:flutter:"
+          },
+          {
+            "name": "outdated",
+            "description": {
+              "zh": "查看过期依赖",
+              "en": "Show outdated dependencies"
+            },
+            "when": "!contains:flutter:"
+          }
+        ],
+        "command": "dart pub {name}"
+      },
+      {
+        "id": "dart",
+        "label": {
+          "zh": "Dart",
+          "en": "Dart"
+        },
+        "files": ["pubspec.yaml"],
+        "tasks": [
+          {
+            "name": "test",
+            "description": {
+              "zh": "运行测试",
+              "en": "Run tests"
+            },
+            "when": "!contains:flutter:"
+          },
+          {
+            "name": "analyze",
+            "description": {
+              "zh": "静态分析",
+              "en": "Static analysis"
+            },
+            "when": "!contains:flutter:"
+          },
+          {
+            "name": "run",
+            "description": {
+              "zh": "运行程序",
+              "en": "Run the program"
+            },
+            "when": "!contains:flutter:"
+          }
+        ],
+        "command": "dart {name}"
+      },
+      {
+        "id": "flutter-pub",
+        "label": {
+          "zh": "Flutter pub",
+          "en": "Flutter pub"
+        },
+        "files": ["pubspec.yaml"],
+        "tasks": [
+          {
+            "name": "get",
+            "description": {
+              "zh": "获取依赖",
+              "en": "Get dependencies"
+            },
+            "when": "contains:flutter:"
+          },
+          {
+            "name": "upgrade",
+            "description": {
+              "zh": "升级依赖",
+              "en": "Upgrade dependencies"
+            },
+            "when": "contains:flutter:"
+          },
+          {
+            "name": "outdated",
+            "description": {
+              "zh": "查看过期依赖",
+              "en": "Show outdated dependencies"
+            },
+            "when": "contains:flutter:"
+          }
+        ],
+        "command": "flutter pub {name}"
+      },
+      {
+        "id": "flutter",
+        "label": {
+          "zh": "Flutter",
+          "en": "Flutter"
+        },
+        "files": ["pubspec.yaml"],
+        "tasks": [
+          {
+            "name": "test",
+            "description": {
+              "zh": "运行测试",
+              "en": "Run tests"
+            },
+            "when": "contains:flutter:"
+          },
+          {
+            "name": "analyze",
+            "description": {
+              "zh": "静态分析",
+              "en": "Static analysis"
+            },
+            "when": "contains:flutter:"
+          },
+          {
+            "name": "run",
+            "description": {
+              "zh": "运行应用",
+              "en": "Run the app"
+            },
+            "when": "contains:flutter:"
+          }
+        ],
+        "command": "flutter {name}"
+      },
+      {
+        "id": "dart-format",
+        "label": {
+          "zh": "Dart 格式化",
+          "en": "Dart format"
+        },
+        "files": ["pubspec.yaml"],
+        "tasks": [
+          {
+            "name": "format",
+            "description": {
+              "zh": "格式化代码（dart format）",
+              "en": "Format code (dart format)"
+            }
+          }
+        ],
+        "command": "dart format ."
+      },
+      {
+        "id": "build-runner",
+        "label": {
+          "zh": "build_runner",
+          "en": "build_runner"
+        },
+        "files": ["pubspec.yaml"],
+        "tasks": [
+          {
+            "name": "build",
+            "description": {
+              "zh": "生成代码（build_runner build）",
+              "en": "Generate code (build_runner build)"
+            },
+            "when": "contains:build_runner"
+          },
+          {
+            "name": "watch",
+            "description": {
+              "zh": "监听并生成代码（build_runner watch）",
+              "en": "Watch and generate code (build_runner watch)"
+            },
+            "when": "contains:build_runner"
+          }
+        ],
+        "command": "dart run build_runner {name} --delete-conflicting-outputs"
+      }
+    ],
+    "skills": [
+      {
+        "path": "skills/dart-project"
+      }
+    ],
+    "prompts": [
+      {
+        "id": "dart-write-tests",
+        "title": {
+          "zh": "为选中代码写 Dart 测试",
+          "en": "Write Dart tests for the selection"
+        },
+        "description": {
+          "zh": "给选中的代码写 package:test / flutter_test 测试，覆盖正常、边界和出错情况",
+          "en": "Write package:test / flutter_test tests covering normal, edge and error cases"
+        },
+        "path": "prompts/write-tests.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "dart-explain-error",
+        "title": {
+          "zh": "解释 Dart / Flutter 报错",
+          "en": "Explain a Dart / Flutter error"
+        },
+        "description": {
+          "zh": "粘贴 Dart 或 Flutter 的报错和堆栈，让 AI 找原因并给出最小修复",
+          "en": "Paste a Dart or Flutter error and stack trace and get the cause plus a minimal fix"
+        },
+        "path": "prompts/explain-error.md",
+        "where": ["composer"]
+      },
+      {
+        "id": "dart-null-safety",
+        "title": {
+          "zh": "整理空安全写法",
+          "en": "Clean up null safety"
+        },
+        "description": {
+          "zh": "检查选中代码里滥用的 !、dynamic 和多余的空判断，改成地道的空安全写法",
+          "en": "Replace misused !, dynamic and redundant null checks with idiomatic null-safe code"
+        },
+        "path": "prompts/null-safety.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "dart-add-doc-comments",
+        "title": {
+          "zh": "补全文档注释",
+          "en": "Add doc comments"
+        },
+        "description": {
+          "zh": "给选中的公开类、函数和成员补上 /// 文档注释",
+          "en": "Add /// doc comments to the selected public classes, functions and members"
+        },
+        "path": "prompts/add-doc-comments.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

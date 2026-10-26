@@ -1,0 +1,127 @@
+{
+  "id": "pixelsky.powershell",
+  "name": "PowerShell 支持",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "PowerShell 的语法高亮、代码片段、psake 任务，以及写 Pester 测试和查脚本报错的技能与提示词",
+  "icon": "icon.png",
+  "keywords": ["powershell", "pwsh", "pester", "psake", "ps1"],
+  "license": "MIT",
+  "repository": "https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop",
+  "homepage": null,
+  "engines": {
+    "pixelsky": ">=0.4.10"
+  },
+  "l10n": {
+    "en": {
+      "name": "PowerShell Support",
+      "description": "PowerShell syntax highlighting, snippets, psake tasks, plus a skill and prompts for writing Pester tests and debugging scripts"
+    }
+  },
+  "contributes": {
+    "grammars": [
+      {
+        "language": "powershell",
+        "aliases": ["PowerShell", "powershell", "ps1"],
+        "extensions": [".ps1", ".psm1", ".psd1"],
+        "scopeName": "source.powershell",
+        "path": "syntaxes/powershell.tmLanguage.json",
+        "configuration": "language-configuration.json",
+        "samples": ["samples/Sample.ps1"]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "powershell",
+        "path": "snippets/powershell.json"
+      }
+    ],
+    "taskTemplates": [
+      {
+        "id": "psake",
+        "label": {
+          "zh": "psake",
+          "en": "psake"
+        },
+        "files": ["psakefile.ps1"],
+        "extract": [
+          {
+            "pattern": "^[ \\t]*Task[ \\t]+(?:-Name[ \\t]+)?['\"]?([A-Za-z0-9_][A-Za-z0-9_.-]*)",
+            "flags": "gmi",
+            "name": 1
+          }
+        ],
+        "runner": {
+          "windows": "powershell",
+          "default": "pwsh"
+        },
+        "command": "{runner} -NoProfile -Command \"Invoke-psake {name}\""
+      }
+    ],
+    "skills": [
+      {
+        "path": "skills/powershell-project"
+      }
+    ],
+    "prompts": [
+      {
+        "id": "powershell-write-pester",
+        "title": {
+          "zh": "为选中代码写 Pester 测试",
+          "en": "Write Pester tests for the selection"
+        },
+        "description": {
+          "zh": "按 Pester 5 给选中的函数写测试，覆盖正常、边界和出错情况",
+          "en": "Write Pester 5 tests covering normal, edge and error cases"
+        },
+        "path": "prompts/write-pester.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "powershell-harden-script",
+        "title": {
+          "zh": "加固选中的脚本",
+          "en": "Harden the selected script"
+        },
+        "description": {
+          "zh": "补参数校验、错误处理和 -WhatIf 支持，不改变原有功能",
+          "en": "Add parameter validation, error handling and -WhatIf without changing behavior"
+        },
+        "path": "prompts/harden-script.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "powershell-add-help",
+        "title": {
+          "zh": "补全帮助注释",
+          "en": "Add comment-based help"
+        },
+        "description": {
+          "zh": "给选中的函数补上基于注释的帮助",
+          "en": "Add comment-based help to the selected functions"
+        },
+        "path": "prompts/add-help.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "powershell-explain-error",
+        "title": {
+          "zh": "解释 PowerShell 报错",
+          "en": "Explain a PowerShell error"
+        },
+        "description": {
+          "zh": "粘贴红色报错，让 AI 找原因并给出最小修复",
+          "en": "Paste a red error and get the cause plus a minimal fix"
+        },
+        "path": "prompts/explain-error.md",
+        "where": ["composer"]
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

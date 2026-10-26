@@ -1,0 +1,7 @@
+{
+    "name": "acme/monorepo",
+    "require": { "php": "^8.2" },
+    "scripts": {
+        "lint": "pint --test"
+    }
+}

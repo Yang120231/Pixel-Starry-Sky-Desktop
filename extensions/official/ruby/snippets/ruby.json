@@ -1,0 +1,229 @@
+{
+  "冻结字符串魔法注释": {
+    "prefix": "frozen",
+    "description": "frozen_string_literal 魔法注释",
+    "body": ["# frozen_string_literal: true", "", "$0"]
+  },
+  "类": {
+    "prefix": "class",
+    "description": "带 initialize 的类",
+    "body": ["class ${1:Name}", "  def initialize(${2:arg})", "    @$2 = $2", "  end$0", "end"]
+  },
+  "模块": {
+    "prefix": "module",
+    "description": "模块",
+    "body": ["module ${1:Name}", "  $0", "end"]
+  },
+  "方法": {
+    "prefix": "def",
+    "description": "实例方法",
+    "body": ["def ${1:name}(${2:arg})", "  $0", "end"]
+  },
+  "类方法": {
+    "prefix": "defs",
+    "description": "类方法（def self.）",
+    "body": ["def self.${1:name}(${2:arg})", "  $0", "end"]
+  },
+  "初始化方法": {
+    "prefix": "init",
+    "description": "initialize 方法",
+    "body": ["def initialize(${1:arg})", "  @$1 = $1$0", "end"]
+  },
+  "关键字参数方法": {
+    "prefix": "defk",
+    "description": "带关键字参数的方法",
+    "body": ["def ${1:name}(${2:key}:, ${3:opt}: ${4:nil})", "  $0", "end"]
+  },
+  "属性读写": {
+    "prefix": "attr",
+    "description": "attr_accessor",
+    "body": ["attr_accessor :${1:name}$0"]
+  },
+  "只读属性": {
+    "prefix": "attrr",
+    "description": "attr_reader",
+    "body": ["attr_reader :${1:name}$0"]
+  },
+  "结构体": {
+    "prefix": "struct",
+    "description": "Struct（关键字初始化）",
+    "body": ["${1:Point} = Struct.new(:${2:x}, :${3:y}, keyword_init: true)$0"]
+  },
+  "数据类": {
+    "prefix": "data",
+    "description": "Data.define 不可变值对象（Ruby 3.2+）",
+    "body": ["${1:Point} = Data.define(:${2:x}, :${3:y})$0"]
+  },
+  "if 判断": {
+    "prefix": "if",
+    "description": "if 块",
+    "body": ["if ${1:condition}", "  $0", "end"]
+  },
+  "if else": {
+    "prefix": "ifelse",
+    "description": "if / else 块",
+    "body": ["if ${1:condition}", "  $2", "else", "  $0", "end"]
+  },
+  "unless 判断": {
+    "prefix": "unless",
+    "description": "unless 块",
+    "body": ["unless ${1:condition}", "  $0", "end"]
+  },
+  "case when": {
+    "prefix": "case",
+    "description": "case / when",
+    "body": ["case ${1:value}", "when ${2:pattern}", "  $3", "else", "  $0", "end"]
+  },
+  "模式匹配": {
+    "prefix": "casein",
+    "description": "case / in 模式匹配（Ruby 3+）",
+    "body": ["case ${1:value}", "in {${2:name}:}", "  $3", "in [${4:first}, *]", "  $5", "else", "  $0", "end"]
+  },
+  "each 遍历": {
+    "prefix": "each",
+    "description": "each 块",
+    "body": ["${1:items}.each do |${2:item}|", "  $0", "end"]
+  },
+  "each_with_index": {
+    "prefix": "eachi",
+    "description": "each_with_index 块",
+    "body": ["${1:items}.each_with_index do |${2:item}, ${3:index}|", "  $0", "end"]
+  },
+  "map 转换": {
+    "prefix": "map",
+    "description": "map 块",
+    "body": ["${1:items}.map { |${2:item}| ${3:item} }$0"]
+  },
+  "select 过滤": {
+    "prefix": "select",
+    "description": "select 块",
+    "body": ["${1:items}.select { |${2:item}| ${3:condition} }$0"]
+  },
+  "reduce 归并": {
+    "prefix": "reduce",
+    "description": "reduce / inject",
+    "body": ["${1:items}.reduce(${2:0}) { |${3:acc}, ${4:item}| $3 + $4 }$0"]
+  },
+  "begin rescue": {
+    "prefix": "begin",
+    "description": "begin / rescue / ensure",
+    "body": ["begin", "  $1", "rescue ${2:StandardError} => ${3:e}", "  $4", "ensure", "  $0", "end"]
+  },
+  "方法体 rescue": {
+    "prefix": "rescue",
+    "description": "rescue 块（用在 def 里）",
+    "body": ["rescue ${1:StandardError} => ${2:e}", "  $0"]
+  },
+  "自定义异常": {
+    "prefix": "error",
+    "description": "自定义异常类",
+    "body": [
+      "class ${1:MyError} < ${2:StandardError}",
+      "  def initialize(message = \"${3:出错了}\")",
+      "    super",
+      "  end",
+      "end$0"
+    ]
+  },
+  "打开文件": {
+    "prefix": "file",
+    "description": "File.open 读文件",
+    "body": ["File.open(${1:\"path\"}, \"r\") do |${2:f}|", "  $0", "end"]
+  },
+  "读整个文件": {
+    "prefix": "read",
+    "description": "File.read 读取整个文件",
+    "body": ["File.read(${1:\"path\"}, encoding: \"UTF-8\")$0"]
+  },
+  "字符串插值": {
+    "prefix": "pr",
+    "description": "puts 带插值的字符串",
+    "body": ["puts \"${1:text}: #{${2:value}}\"$0"]
+  },
+  "heredoc": {
+    "prefix": "heredoc",
+    "description": "缩进式 heredoc",
+    "body": ["<<~${1:TEXT}", "  $0", "$1"]
+  },
+  "Comparable": {
+    "prefix": "cmp",
+    "description": "实现 <=> 并引入 Comparable",
+    "body": ["include Comparable", "", "def <=>(other)", "  ${1:value} <=> other.$1", "end$0"]
+  },
+  "to_s 方法": {
+    "prefix": "tos",
+    "description": "to_s 方法",
+    "body": ["def to_s", "  \"${1:#<Name>}\"", "end$0"]
+  },
+  "私有方法区": {
+    "prefix": "private",
+    "description": "private 分区",
+    "body": ["private", "", "def ${1:name}", "  $0", "end"]
+  },
+  "require": {
+    "prefix": "req",
+    "description": "require",
+    "body": ["require \"${1:json}\"$0"]
+  },
+  "require_relative": {
+    "prefix": "reqr",
+    "description": "require_relative",
+    "body": ["require_relative \"${1:file}\"$0"]
+  },
+  "入口守卫": {
+    "prefix": "main",
+    "description": "if __FILE__ == $0 入口守卫",
+    "body": ["if __FILE__ == \\$PROGRAM_NAME", "  ${1:main}$0", "end"]
+  },
+  "RSpec 测试组": {
+    "prefix": "describe",
+    "description": "RSpec describe + it",
+    "body": [
+      "RSpec.describe ${1:Subject} do",
+      "  describe \"#${2:method}\" do",
+      "    it \"${3:does something}\" do",
+      "      expect(${4:actual}).to eq(${5:expected})$0",
+      "    end",
+      "  end",
+      "end"
+    ]
+  },
+  "RSpec 用例": {
+    "prefix": "it",
+    "description": "RSpec it 用例",
+    "body": ["it \"${1:does something}\" do", "  expect(${2:actual}).to ${3:eq(expected)}$0", "end"]
+  },
+  "RSpec 断言抛错": {
+    "prefix": "raiseerror",
+    "description": "RSpec 断言抛出异常",
+    "body": ["expect { ${1:subject} }.to raise_error(${2:StandardError}, /${3:message}/)$0"]
+  },
+  "Minitest 测试类": {
+    "prefix": "mtest",
+    "description": "Minitest 测试类",
+    "body": [
+      "require \"test_helper\"",
+      "",
+      "class ${1:MyTest} < Minitest::Test",
+      "  def test_${2:something}",
+      "    assert_equal ${3:expected}, ${4:actual}$0",
+      "  end",
+      "end"
+    ]
+  },
+  "Rake 任务": {
+    "prefix": "task",
+    "description": "带说明的 Rake 任务",
+    "body": ["desc \"${1:说明}\"", "task :${2:name} do", "  $0", "end"]
+  },
+  "Gemfile 依赖": {
+    "prefix": "gem",
+    "description": "Gemfile 里的 gem 行",
+    "body": ["gem \"${1:name}\", \"~> ${2:1.0}\"$0"]
+  },
+  "Gemfile 分组": {
+    "prefix": "group",
+    "description": "Gemfile 里的 group 块",
+    "body": ["group :${1|development,test|} do", "  gem \"${2:rspec}\"$0", "end"]
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "id": "pixelsky.swift",
+  "name": "Swift 支持",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "Swift 的语法高亮、代码片段、SwiftPM 任务，以及写测试和处理 Xcode 工程的技能与提示词",
+  "icon": "icon.png",
+  "keywords": ["swift", "swiftpm", "xcode", "xctest", "swiftui"],
+  "license": "MIT",
+  "repository": "https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop",
+  "homepage": null,
+  "engines": {
+    "pixelsky": ">=0.4.10"
+  },
+  "l10n": {
+    "en": {
+      "name": "Swift Support",
+      "description": "Swift syntax highlighting, snippets, SwiftPM tasks, plus a skill and prompts for writing tests and working with Xcode projects"
+    }
+  },
+  "contributes": {
+    "grammars": [
+      {
+        "language": "swift",
+        "aliases": ["Swift", "swift"],
+        "extensions": [".swift"],
+        "scopeName": "source.swift",
+        "path": "syntaxes/swift.tmLanguage.json",
+        "configuration": "language-configuration.json",
+        "samples": ["samples/Sample.swift"]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "swift",
+        "path": "snippets/swift.json"
+      }
+    ],
+    "taskTemplates": [
+      {
+        "id": "swiftpm",
+        "label": {
+          "zh": "Swift Package",
+          "en": "Swift Package"
+        },
+        "files": ["Package.swift"],
+        "tasks": [
+          {
+            "name": "build",
+            "description": {
+              "zh": "编译所有目标",
+              "en": "Build all targets"
+            }
+          },
+          {
+            "name": "test",
+            "description": {
+              "zh": "运行测试",
+              "en": "Run tests"
+            }
+          },
+          {
+            "name": "run",
+            "description": {
+              "zh": "运行可执行目标",
+              "en": "Run the executable target"
+            },
+            "when": "contains:executable"
+          }
+        ],
+        "command": "swift {name}"
+      }
+    ],
+    "skills": [
+      {
+        "path": "skills/swift-project"
+      }
+    ],
+    "prompts": [
+      {
+        "id": "swift-write-tests",
+        "title": {
+          "zh": "为选中代码写 Swift 测试",
+          "en": "Write Swift tests for the selection"
+        },
+        "description": {
+          "zh": "按项目用的 XCTest 或 Swift Testing 补测试",
+          "en": "Add tests with the project's XCTest or Swift Testing"
+        },
+        "path": "prompts/write-tests.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "swift-explain-error",
+        "title": {
+          "zh": "解释 Swift 编译报错",
+          "en": "Explain a Swift compiler error"
+        },
+        "description": {
+          "zh": "把选中的编译报错或崩溃日志定位到根因",
+          "en": "Trace the selected compiler error or crash log to its root cause"
+        },
+        "path": "prompts/explain-error.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "swift-add-doc",
+        "title": {
+          "zh": "补 Swift 文档注释",
+          "en": "Add Swift doc comments"
+        },
+        "description": {
+          "zh": "为选中的类型或函数补充 /// 文档注释",
+          "en": "Write /// doc comments for the selected type or function"
+        },
+        "path": "prompts/add-doc.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "swift-concurrency",
+        "title": {
+          "zh": "改写为 async/await",
+          "en": "Convert to async/await"
+        },
+        "description": {
+          "zh": "把回调或 Combine 写法改成 Swift 并发，并注意 Sendable 和 actor 隔离",
+          "en": "Move callback or Combine code to Swift concurrency, mind Sendable and actor isolation"
+        },
+        "path": "prompts/concurrency.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

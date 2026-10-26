@@ -1,0 +1,86 @@
+[
+  {
+    "template": "dotnet-sln",
+    "file": "Solution.sln",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "编译整个解决方案",
+        "linux": "dotnet build Solution.sln",
+        "windows": "dotnet build Solution.sln"
+      },
+      {
+        "name": "test",
+        "description": "运行解决方案里的测试",
+        "linux": "dotnet test Solution.sln",
+        "windows": "dotnet test Solution.sln"
+      },
+      {
+        "name": "restore",
+        "description": "还原 NuGet 包",
+        "linux": "dotnet restore Solution.sln",
+        "windows": "dotnet restore Solution.sln"
+      },
+      {
+        "name": "format",
+        "description": "按 .editorconfig 格式化代码",
+        "linux": "dotnet format Solution.sln",
+        "windows": "dotnet format Solution.sln"
+      }
+    ]
+  },
+  {
+    "template": "dotnet-project",
+    "file": "src/Api/Api.csproj",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "编译这个项目",
+        "linux": "dotnet build src/Api/Api.csproj",
+        "windows": "dotnet build src/Api/Api.csproj"
+      }
+    ]
+  },
+  {
+    "template": "dotnet-run",
+    "file": "src/Api/Api.csproj",
+    "tasks": [
+      {
+        "name": "run",
+        "description": "运行这个 Web 项目",
+        "linux": "dotnet run --project src/Api/Api.csproj",
+        "windows": "dotnet run --project src/Api/Api.csproj"
+      }
+    ]
+  },
+  {
+    "template": "dotnet-project",
+    "file": "src/Lib/Lib.csproj",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "编译这个项目",
+        "linux": "dotnet build src/Lib/Lib.csproj",
+        "windows": "dotnet build src/Lib/Lib.csproj"
+      }
+    ]
+  },
+  {
+    "template": "dotnet-project",
+    "file": "tests/Lib.Tests/Lib.Tests.csproj",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "编译这个项目",
+        "linux": "dotnet build tests/Lib.Tests/Lib.Tests.csproj",
+        "windows": "dotnet build tests/Lib.Tests/Lib.Tests.csproj"
+      },
+      {
+        "name": "test",
+        "description": "运行这个项目的测试",
+        "linux": "dotnet test tests/Lib.Tests/Lib.Tests.csproj",
+        "windows": "dotnet test tests/Lib.Tests/Lib.Tests.csproj"
+      }
+    ]
+  }
+]

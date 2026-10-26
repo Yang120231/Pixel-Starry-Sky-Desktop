@@ -1,0 +1,249 @@
+{
+  "Svelte 5 组件骨架": {
+    "prefix": "svelte5",
+    "body": [
+      "<script lang=\"ts\">",
+      "\tlet { ${1:name} }: { ${1:name}: ${2:string} } = \\$props();",
+      "</script>",
+      "",
+      "<div>",
+      "\t$0",
+      "</div>",
+      "",
+      "<style>",
+      "\tdiv {",
+      "\t}",
+      "</style>"
+    ],
+    "description": "Svelte 5 组件：TypeScript、$props、样式块"
+  },
+  "Svelte 4 组件骨架": {
+    "prefix": "svelte4",
+    "body": [
+      "<script lang=\"ts\">",
+      "\texport let ${1:name}: ${2:string};",
+      "</script>",
+      "",
+      "<div>",
+      "\t$0",
+      "</div>",
+      "",
+      "<style>",
+      "</style>"
+    ],
+    "description": "Svelte 4 组件：export let 属性"
+  },
+  "script 块": {
+    "prefix": "script",
+    "body": ["<script lang=\"ts\">", "\t$0", "</script>"],
+    "description": "TypeScript script 块"
+  },
+  "模块 script 块": {
+    "prefix": "scriptmodule",
+    "body": ["<script lang=\"ts\" module>", "\t$0", "</script>"],
+    "description": "Svelte 5 模块级 script（Svelte 4 写 context=module）"
+  },
+  "style 块": {
+    "prefix": "style",
+    "body": ["<style>", "\t$0", "</style>"],
+    "description": "组件样式块"
+  },
+  "props 属性": {
+    "prefix": "props",
+    "body": "let { ${1:name}, ${2:count} = ${3:0} }: { ${1:name}: ${4:string}; ${2:count}?: ${5:number} } = \\$props();",
+    "description": "$props 接收属性（带类型）"
+  },
+  "state 状态": {
+    "prefix": "state",
+    "body": "let ${1:count} = \\$state(${2:0});",
+    "description": "$state 响应式状态"
+  },
+  "derived 派生": {
+    "prefix": "derived",
+    "body": "let ${1:double} = \\$derived(${2:count} * 2);",
+    "description": "$derived 派生值"
+  },
+  "derived.by 派生": {
+    "prefix": "derivedby",
+    "body": ["let ${1:total} = \\$derived.by(() => {", "\t$0", "\treturn ${2:0};", "});"],
+    "description": "$derived.by 多行派生"
+  },
+  "effect 副作用": {
+    "prefix": "effect",
+    "body": ["\\$effect(() => {", "\t$0", "\treturn () => {", "\t\t// 清理", "\t};", "});"],
+    "description": "$effect 副作用（带清理函数）"
+  },
+  "bindable 双向绑定属性": {
+    "prefix": "bindable",
+    "body": "let { ${1:value} = \\$bindable(${2:''}) } = \\$props();",
+    "description": "$bindable 可双向绑定的属性"
+  },
+  "回调属性": {
+    "prefix": "onprop",
+    "body": "let { ${1:onclick} }: { ${1:onclick}: (${2:event}: ${3:MouseEvent}) => void } = \\$props();",
+    "description": "Svelte 5 用回调属性代替 createEventDispatcher"
+  },
+  "子内容 snippet 属性": {
+    "prefix": "children",
+    "body": [
+      "<script lang=\"ts\">",
+      "\timport type { Snippet } from 'svelte';",
+      "\tlet { children }: { children: Snippet } = \\$props();",
+      "</script>",
+      "",
+      "{@render children()}"
+    ],
+    "description": "接收 children 并渲染"
+  },
+  "snippet 块": {
+    "prefix": "snippet",
+    "body": ["{#snippet ${1:row}(${2:item})}", "\t$0", "{/snippet}"],
+    "description": "{#snippet} 可复用模板片段"
+  },
+  "each 循环": {
+    "prefix": "each",
+    "body": ["{#each ${1:items} as ${2:item} (${3:item.id})}", "\t$0", "{/each}"],
+    "description": "{#each} 带 key"
+  },
+  "each else": {
+    "prefix": "eachelse",
+    "body": ["{#each ${1:items} as ${2:item} (${3:item.id})}", "\t$0", "{:else}", "\t<p>${4:没有内容}</p>", "{/each}"],
+    "description": "{#each} 列表为空时显示 else"
+  },
+  "if 条件": {
+    "prefix": "if",
+    "body": ["{#if ${1:condition}}", "\t$0", "{/if}"],
+    "description": "{#if} 条件块"
+  },
+  "if else": {
+    "prefix": "ifelse",
+    "body": ["{#if ${1:condition}}", "\t$0", "{:else}", "\t", "{/if}"],
+    "description": "{#if} / {:else}"
+  },
+  "await 块": {
+    "prefix": "await",
+    "body": [
+      "{#await ${1:promise}}",
+      "\t<p>加载中…</p>",
+      "{:then ${2:value}}",
+      "\t$0",
+      "{:catch ${3:error}}",
+      "\t<p>{${3:error}.message}</p>",
+      "{/await}"
+    ],
+    "description": "{#await} 加载中 / 成功 / 失败"
+  },
+  "key 块": {
+    "prefix": "key",
+    "body": ["{#key ${1:value}}", "\t$0", "{/key}"],
+    "description": "{#key} 值变化时重建内容"
+  },
+  "const 常量": {
+    "prefix": "const",
+    "body": "{@const ${1:total} = ${2:item.price * item.qty}}",
+    "description": "模板里的 {@const}"
+  },
+  "svelte:head": {
+    "prefix": "head",
+    "body": ["<svelte:head>", "\t<title>${1:标题}</title>", "\t$0", "</svelte:head>"],
+    "description": "<svelte:head> 设置页面标题和 meta"
+  },
+  "svelte:window": {
+    "prefix": "window",
+    "body": "<svelte:window on${1:keydown}={${2:handler}} />",
+    "description": "<svelte:window> 绑定窗口事件"
+  },
+  "事件处理": {
+    "prefix": "onclick",
+    "body": "<button onclick={${1:() => $2}}>${3:按钮}</button>",
+    "description": "Svelte 5 事件属性（onclick）"
+  },
+  "bind:value 输入框": {
+    "prefix": "bindinput",
+    "body": "<input bind:value={${1:text}} ${2:placeholder=\"${3:输入内容}\"} />",
+    "description": "输入框双向绑定"
+  },
+  "SvelteKit 页面 load": {
+    "prefix": "pagels",
+    "body": [
+      "import type { PageLoad } from './\\$types';",
+      "",
+      "export const load: PageLoad = async ({ fetch, params }) => {",
+      "\tconst res = await fetch(`/api/${1:items}/\\${params.${2:id}}`);",
+      "\treturn { ${3:item}: await res.json() };",
+      "};"
+    ],
+    "description": "+page.ts 的 load 函数"
+  },
+  "SvelteKit 服务端 load": {
+    "prefix": "pageserver",
+    "body": [
+      "import type { PageServerLoad } from './\\$types';",
+      "",
+      "export const load: PageServerLoad = async ({ params, locals }) => {",
+      "\t$0",
+      "\treturn {};",
+      "};"
+    ],
+    "description": "+page.server.ts 的 load（服务端运行）"
+  },
+  "SvelteKit actions": {
+    "prefix": "actions",
+    "body": [
+      "import { fail } from '@sveltejs/kit';",
+      "import type { Actions } from './\\$types';",
+      "",
+      "export const actions: Actions = {",
+      "\tdefault: async ({ request }) => {",
+      "\t\tconst data = await request.formData();",
+      "\t\tconst ${1:name} = data.get('${1:name}');",
+      "\t\tif (!${1:name}) return fail(400, { ${1:name}, missing: true });",
+      "\t\t$0",
+      "\t\treturn { success: true };",
+      "\t}",
+      "};"
+    ],
+    "description": "+page.server.ts 的表单 actions"
+  },
+  "SvelteKit API 路由": {
+    "prefix": "endpoint",
+    "body": [
+      "import { json } from '@sveltejs/kit';",
+      "import type { RequestHandler } from './\\$types';",
+      "",
+      "export const GET: RequestHandler = async ({ url }) => {",
+      "\t$0",
+      "\treturn json({ ok: true });",
+      "};"
+    ],
+    "description": "+server.ts 的 GET 处理函数"
+  },
+  "SvelteKit 页面使用 data": {
+    "prefix": "pagedata",
+    "body": [
+      "<script lang=\"ts\">",
+      "\timport type { PageData } from './\\$types';",
+      "\tlet { data }: { data: PageData } = \\$props();",
+      "</script>",
+      "",
+      "<h1>{data.${1:title}}</h1>"
+    ],
+    "description": "+page.svelte 读取 load 返回的 data"
+  },
+  "Vitest 组件测试": {
+    "prefix": "vitestcomp",
+    "body": [
+      "import { render, screen } from '@testing-library/svelte';",
+      "import { describe, expect, it } from 'vitest';",
+      "import ${1:Component} from './${1:Component}.svelte';",
+      "",
+      "describe('${1:Component}', () => {",
+      "\tit('${2:渲染}', () => {",
+      "\t\trender(${1:Component}, { ${3:name}: '${4:x}' });",
+      "\t\texpect(screen.getByText('${4:x}')).toBeTruthy();",
+      "\t});",
+      "});"
+    ],
+    "description": "@testing-library/svelte 组件测试"
+  }
+}

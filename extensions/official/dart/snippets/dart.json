@@ -1,0 +1,247 @@
+{
+  "main 函数": {
+    "prefix": "main",
+    "description": "main 入口函数",
+    "body": ["void main(List<String> args) {", "\t$0", "}"]
+  },
+  "异步 main": {
+    "prefix": "amain",
+    "description": "async main 入口函数",
+    "body": ["Future<void> main(List<String> args) async {", "\t$0", "}"]
+  },
+  "类": {
+    "prefix": "class",
+    "description": "带构造函数的类",
+    "body": ["class ${1:Name} {", "\t${1:Name}(this.${2:value});", "", "\tfinal ${3:int} ${2:value};$0", "}"]
+  },
+  "抽象类": {
+    "prefix": "abstract",
+    "description": "抽象类",
+    "body": ["abstract class ${1:Name} {", "\t${2:void} ${3:run}();$0", "}"]
+  },
+  "枚举": {
+    "prefix": "enum",
+    "description": "枚举",
+    "body": ["enum ${1:Name} { ${2:first}, ${3:second} }$0"]
+  },
+  "增强枚举": {
+    "prefix": "enumx",
+    "description": "带字段的增强枚举",
+    "body": [
+      "enum ${1:Name} {",
+      "\t${2:first}(${3:1}),",
+      "\t${4:second}(${5:2});",
+      "",
+      "\tconst ${1:Name}(this.${6:value});",
+      "",
+      "\tfinal ${7:int} ${6:value};$0",
+      "}"
+    ]
+  },
+  "扩展方法": {
+    "prefix": "ext",
+    "description": "extension 扩展",
+    "body": ["extension ${1:Name}X on ${2:String} {", "\t${3:bool} get ${4:isBlank} => ${5:trim().isEmpty};$0", "}"]
+  },
+  "mixin": {
+    "prefix": "mixin",
+    "description": "mixin 定义",
+    "body": ["mixin ${1:Name} {", "\t$0", "}"]
+  },
+  "命名构造函数": {
+    "prefix": "ctor",
+    "description": "命名构造函数",
+    "body": ["${1:Name}.${2:named}(${3:int} ${4:value}) : ${5:value} = ${4:value};$0"]
+  },
+  "工厂构造函数": {
+    "prefix": "factory",
+    "description": "factory 构造函数（fromJson）",
+    "body": [
+      "factory ${1:Name}.fromJson(Map<String, dynamic> json) {",
+      "\treturn ${1:Name}(${2:json['value'] as int});",
+      "}$0"
+    ]
+  },
+  "toJson": {
+    "prefix": "tojson",
+    "description": "toJson 方法",
+    "body": ["Map<String, dynamic> toJson() => {", "\t'${1:key}': ${2:value},$0", "};"]
+  },
+  "getter": {
+    "prefix": "get",
+    "description": "getter",
+    "body": ["${1:int} get ${2:name} => ${3:_name};$0"]
+  },
+  "setter": {
+    "prefix": "set",
+    "description": "setter",
+    "body": ["set ${1:name}(${2:int} value) {", "\t${3:_name} = value;", "}$0"]
+  },
+  "for 循环": {
+    "prefix": "fori",
+    "description": "带下标的 for 循环",
+    "body": ["for (var ${1:i} = 0; ${1:i} < ${2:list}.length; ${1:i}++) {", "\t$0", "}"]
+  },
+  "for-in 循环": {
+    "prefix": "forin",
+    "description": "for-in 遍历",
+    "body": ["for (final ${1:item} in ${2:items}) {", "\t$0", "}"]
+  },
+  "if/else": {
+    "prefix": "ifelse",
+    "description": "if / else",
+    "body": ["if (${1:condition}) {", "\t$2", "} else {", "\t$0", "}"]
+  },
+  "switch 表达式": {
+    "prefix": "switch",
+    "description": "Dart 3 switch 表达式",
+    "body": ["final ${1:result} = switch (${2:value}) {", "\t${3:1} => ${4:'one'},", "\t_ => ${5:'other'},", "};$0"]
+  },
+  "try/catch": {
+    "prefix": "trycatch",
+    "description": "try / on / catch",
+    "body": ["try {", "\t$1", "} on ${2:Exception} catch (e, st) {", "\tprint('\\$e\\n\\$st');", "}$0"]
+  },
+  "async 函数": {
+    "prefix": "afn",
+    "description": "返回 Future 的异步函数",
+    "body": ["Future<${1:void}> ${2:name}($3) async {", "\t$0", "}"]
+  },
+  "Stream 生成器": {
+    "prefix": "stream",
+    "description": "async* 生成 Stream",
+    "body": ["Stream<${1:int}> ${2:name}() async* {", "\tyield ${3:0};$0", "}"]
+  },
+  "StreamBuilder": {
+    "prefix": "streamb",
+    "description": "Flutter StreamBuilder",
+    "body": [
+      "StreamBuilder<${1:int}>(",
+      "\tstream: ${2:stream},",
+      "\tbuilder: (context, snapshot) {",
+      "\t\tif (!snapshot.hasData) return const CircularProgressIndicator();",
+      "\t\treturn Text('\\${snapshot.data}');",
+      "\t},",
+      ")$0"
+    ]
+  },
+  "无状态组件": {
+    "prefix": "stless",
+    "description": "Flutter StatelessWidget",
+    "body": [
+      "import 'package:flutter/material.dart';",
+      "",
+      "class ${1:MyWidget} extends StatelessWidget {",
+      "\tconst ${1:MyWidget}({super.key});",
+      "",
+      "\t@override",
+      "\tWidget build(BuildContext context) {",
+      "\t\treturn ${2:const Placeholder()};",
+      "\t}",
+      "}$0"
+    ]
+  },
+  "有状态组件": {
+    "prefix": "stful",
+    "description": "Flutter StatefulWidget 和 State",
+    "body": [
+      "import 'package:flutter/material.dart';",
+      "",
+      "class ${1:MyWidget} extends StatefulWidget {",
+      "\tconst ${1:MyWidget}({super.key});",
+      "",
+      "\t@override",
+      "\tState<${1:MyWidget}> createState() => _${1:MyWidget}State();",
+      "}",
+      "",
+      "class _${1:MyWidget}State extends State<${1:MyWidget}> {",
+      "\t@override",
+      "\tWidget build(BuildContext context) {",
+      "\t\treturn ${2:const Placeholder()};",
+      "\t}",
+      "}$0"
+    ]
+  },
+  "initState": {
+    "prefix": "initstate",
+    "description": "State 的 initState",
+    "body": ["@override", "void initState() {", "\tsuper.initState();", "\t$0", "}"]
+  },
+  "dispose": {
+    "prefix": "dispose",
+    "description": "State 的 dispose",
+    "body": ["@override", "void dispose() {", "\t$0", "\tsuper.dispose();", "}"]
+  },
+  "setState": {
+    "prefix": "setstate",
+    "description": "setState 调用",
+    "body": ["setState(() {", "\t$0", "});"]
+  },
+  "Scaffold 页面": {
+    "prefix": "scaffold",
+    "description": "Scaffold 页面骨架",
+    "body": [
+      "Scaffold(",
+      "\tappBar: AppBar(title: const Text('${1:标题}')),",
+      "\tbody: ${2:const Center(child: Text('内容'))},",
+      ")$0"
+    ]
+  },
+  "ListView.builder": {
+    "prefix": "listb",
+    "description": "ListView.builder 列表",
+    "body": [
+      "ListView.builder(",
+      "\titemCount: ${1:items}.length,",
+      "\titemBuilder: (context, index) {",
+      "\t\tfinal item = ${1:items}[index];",
+      "\t\treturn ListTile(title: Text('\\$item'));",
+      "\t},",
+      ")$0"
+    ]
+  },
+  "FutureBuilder": {
+    "prefix": "futureb",
+    "description": "Flutter FutureBuilder",
+    "body": [
+      "FutureBuilder<${1:String}>(",
+      "\tfuture: ${2:future},",
+      "\tbuilder: (context, snapshot) {",
+      "\t\tif (snapshot.hasError) return Text('\\${snapshot.error}');",
+      "\t\tif (!snapshot.hasData) return const CircularProgressIndicator();",
+      "\t\treturn Text(snapshot.data!);",
+      "\t},",
+      ")$0"
+    ]
+  },
+  "测试": {
+    "prefix": "test",
+    "description": "package:test 测试用例",
+    "body": ["test('${1:描述}', () {", "\texpect(${2:actual}, ${3:equals(expected)});", "});$0"]
+  },
+  "测试分组": {
+    "prefix": "group",
+    "description": "测试分组",
+    "body": ["group('${1:名称}', () {", "\ttest('${2:描述}', () {", "\t\t$0", "\t});", "});"]
+  },
+  "组件测试": {
+    "prefix": "testw",
+    "description": "Flutter testWidgets",
+    "body": [
+      "testWidgets('${1:描述}', (WidgetTester tester) async {",
+      "\tawait tester.pumpWidget(const MaterialApp(home: ${2:MyWidget}()));",
+      "\texpect(find.text('${3:文字}'), findsOneWidget);$0",
+      "});"
+    ]
+  },
+  "断言抛错": {
+    "prefix": "throws",
+    "description": "expect 抛出指定异常",
+    "body": ["expect(() => ${1:action}(), throwsA(isA<${2:StateError}>()));$0"]
+  },
+  "打印": {
+    "prefix": "pr",
+    "description": "带变量名的调试打印",
+    "body": ["print('${1:value}: \\$${1:value}');$0"]
+  }
+}

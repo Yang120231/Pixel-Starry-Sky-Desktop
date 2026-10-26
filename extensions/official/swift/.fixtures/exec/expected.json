@@ -1,0 +1,11 @@
+[
+  {
+    "template": "swiftpm",
+    "file": "Package.swift",
+    "tasks": [
+      { "name": "build", "description": "编译所有目标", "linux": "swift build", "windows": "swift build" },
+      { "name": "test", "description": "运行测试", "linux": "swift test", "windows": "swift test" },
+      { "name": "run", "description": "运行可执行目标", "linux": "swift run", "windows": "swift run" }
+    ]
+  }
+]

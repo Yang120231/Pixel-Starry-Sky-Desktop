@@ -1,0 +1,98 @@
+[
+  {
+    "template": "bundler",
+    "file": "Gemfile",
+    "tasks": [
+      {
+        "name": "install",
+        "description": "按 Gemfile 安装依赖",
+        "linux": "bundle install",
+        "windows": "bundle install"
+      },
+      {
+        "name": "update",
+        "description": "更新依赖并改写 Gemfile.lock",
+        "linux": "bundle update",
+        "windows": "bundle update"
+      },
+      {
+        "name": "check",
+        "description": "检查依赖是否都已安装",
+        "linux": "bundle check",
+        "windows": "bundle check"
+      },
+      {
+        "name": "outdated",
+        "description": "列出有新版本的依赖",
+        "linux": "bundle outdated",
+        "windows": "bundle outdated"
+      }
+    ]
+  },
+  {
+    "template": "bundler-rake",
+    "file": "Gemfile",
+    "tasks": [
+      {
+        "name": "test",
+        "description": "运行 Minitest 测试",
+        "linux": "bundle exec rake test",
+        "windows": "bundle exec rake test"
+      }
+    ]
+  },
+  {
+    "template": "bundler",
+    "file": "services/api/Gemfile",
+    "tasks": [
+      {
+        "name": "install",
+        "description": "按 Gemfile 安装依赖",
+        "linux": "cd services/api && bundle install",
+        "windows": "Set-Location -LiteralPath services/api; if ($?) { bundle install }"
+      },
+      {
+        "name": "update",
+        "description": "更新依赖并改写 Gemfile.lock",
+        "linux": "cd services/api && bundle update",
+        "windows": "Set-Location -LiteralPath services/api; if ($?) { bundle update }"
+      },
+      {
+        "name": "check",
+        "description": "检查依赖是否都已安装",
+        "linux": "cd services/api && bundle check",
+        "windows": "Set-Location -LiteralPath services/api; if ($?) { bundle check }"
+      },
+      {
+        "name": "outdated",
+        "description": "列出有新版本的依赖",
+        "linux": "cd services/api && bundle outdated",
+        "windows": "Set-Location -LiteralPath services/api; if ($?) { bundle outdated }"
+      }
+    ]
+  },
+  {
+    "template": "bundler-exec",
+    "file": "services/api/Gemfile",
+    "tasks": [
+      {
+        "name": "rubocop",
+        "description": "RuboCop 代码检查",
+        "linux": "cd services/api && bundle exec rubocop",
+        "windows": "Set-Location -LiteralPath services/api; if ($?) { bundle exec rubocop }"
+      }
+    ]
+  },
+  {
+    "template": "bundler-rake",
+    "file": "services/api/Gemfile",
+    "tasks": [
+      {
+        "name": "test",
+        "description": "运行 Minitest 测试",
+        "linux": "cd services/api && bundle exec rake test",
+        "windows": "Set-Location -LiteralPath services/api; if ($?) { bundle exec rake test }"
+      }
+    ]
+  }
+]

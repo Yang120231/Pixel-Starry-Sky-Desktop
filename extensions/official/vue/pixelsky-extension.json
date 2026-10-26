@@ -1,0 +1,106 @@
+{
+  "id": "pixelsky.vue",
+  "name": "Vue 支持",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "Vue 单文件组件的语法高亮、代码片段，以及 Vite / vue-tsc / Vitest 项目的技能与提示词",
+  "icon": "icon.png",
+  "keywords": ["vue", "vite", "pinia", "vue-router", "vitest", "sfc"],
+  "license": "MIT",
+  "repository": "https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop",
+  "homepage": null,
+  "engines": {
+    "pixelsky": ">=0.4.10"
+  },
+  "l10n": {
+    "en": {
+      "name": "Vue Support",
+      "description": "Vue single-file component syntax highlighting, snippets, plus a skill and prompts for Vite / vue-tsc / Vitest projects"
+    }
+  },
+  "contributes": {
+    "grammars": [
+      {
+        "language": "vue",
+        "aliases": ["Vue", "vue"],
+        "extensions": [".vue"],
+        "scopeName": "text.html.vue",
+        "path": "syntaxes/vue.tmLanguage.json",
+        "configuration": "language-configuration.json",
+        "samples": ["samples/Sample.vue"]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "vue",
+        "path": "snippets/vue.json"
+      }
+    ],
+    "skills": [
+      {
+        "path": "skills/vue-project"
+      }
+    ],
+    "prompts": [
+      {
+        "id": "vue-write-vitest-tests",
+        "title": {
+          "zh": "为选中代码写 Vitest 测试",
+          "en": "Write Vitest tests for the selection"
+        },
+        "description": {
+          "zh": "用 Vitest 和 Vue Test Utils 为选中的组件或函数写测试",
+          "en": "Write tests with Vitest and Vue Test Utils"
+        },
+        "path": "prompts/write-vitest-tests.md",
+        "requires": "selection",
+        "where": ["composer", "editor"]
+      },
+      {
+        "id": "vue-convert-to-script-setup",
+        "title": {
+          "zh": "改写为 script setup + TypeScript",
+          "en": "Rewrite as script setup + TypeScript"
+        },
+        "description": {
+          "zh": "把选项式 API 或 setup() 写法改成 <script setup lang=\"ts\">",
+          "en": "Convert Options API or setup() to <script setup lang=\"ts\">"
+        },
+        "path": "prompts/convert-to-script-setup.md",
+        "requires": "selection",
+        "where": ["composer", "editor"]
+      },
+      {
+        "id": "vue-explain-vue-warning",
+        "title": {
+          "zh": "解释 Vue 警告或报错",
+          "en": "Explain a Vue warning or error"
+        },
+        "description": {
+          "zh": "定位 [Vue warn]、水合不一致、vue-tsc 类型错误的原因",
+          "en": "Find the cause of [Vue warn], hydration mismatches and vue-tsc errors"
+        },
+        "path": "prompts/explain-vue-warning.md",
+        "requires": "selection",
+        "where": ["composer", "editor"]
+      },
+      {
+        "id": "vue-review-reactivity",
+        "title": {
+          "zh": "检查响应式问题",
+          "en": "Review reactivity pitfalls"
+        },
+        "description": {
+          "zh": "检查选中代码里丢失响应式、watch 滥用、内存泄漏等问题",
+          "en": "Check for lost reactivity, misused watchers and leaks"
+        },
+        "path": "prompts/review-reactivity.md",
+        "requires": "selection",
+        "where": ["composer", "editor"]
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

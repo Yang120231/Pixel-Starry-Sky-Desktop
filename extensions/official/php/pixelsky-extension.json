@@ -1,0 +1,262 @@
+{
+  "id": "pixelsky.php",
+  "name": "PHP 支持",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "PHP 的语法高亮、代码片段、Composer 脚本与 Laravel Artisan 任务，以及写测试和查报错的技能与提示词",
+  "icon": "icon.png",
+  "keywords": ["php", "composer", "laravel", "phpunit", "pest"],
+  "license": "MIT",
+  "repository": "https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop",
+  "homepage": null,
+  "engines": {
+    "pixelsky": ">=0.4.10"
+  },
+  "l10n": {
+    "en": {
+      "name": "PHP Support",
+      "description": "PHP syntax highlighting, snippets, Composer script and Laravel Artisan tasks, plus a skill and prompts for writing tests and debugging errors"
+    }
+  },
+  "contributes": {
+    "grammars": [
+      {
+        "language": "php",
+        "aliases": ["PHP", "php"],
+        "extensions": [".php", ".phtml"],
+        "scopeName": "source.php",
+        "path": "syntaxes/php.tmLanguage.json",
+        "configuration": "language-configuration.json",
+        "samples": ["samples/Sample.php"]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "php",
+        "path": "snippets/php.json"
+      }
+    ],
+    "taskTemplates": [
+      {
+        "id": "composer-scripts",
+        "label": {
+          "zh": "Composer 脚本",
+          "en": "Composer scripts"
+        },
+        "files": ["composer.json"],
+        "extract": [
+          {
+            "pattern": "(?<=\"scripts\"[ \\t\\r\\n]*:[ \\t\\r\\n]*\\{[^{}]*?)\"([A-Za-z0-9_][A-Za-z0-9_.:@/+=-]*)\"[ \\t]*:",
+            "flags": "g",
+            "name": 1
+          }
+        ],
+        "command": "composer run-script {name}"
+      },
+      {
+        "id": "laravel-artisan",
+        "label": {
+          "zh": "Laravel Artisan",
+          "en": "Laravel Artisan"
+        },
+        "files": ["composer.json"],
+        "tasks": [
+          {
+            "name": "serve",
+            "description": {
+              "zh": "启动本地开发服务器",
+              "en": "Start the local development server"
+            },
+            "when": "exists:artisan"
+          },
+          {
+            "name": "test",
+            "description": {
+              "zh": "运行测试（PHPUnit / Pest）",
+              "en": "Run tests (PHPUnit / Pest)"
+            },
+            "when": "exists:artisan"
+          },
+          {
+            "name": "migrate",
+            "description": {
+              "zh": "执行数据库迁移",
+              "en": "Run database migrations"
+            },
+            "when": "exists:artisan"
+          },
+          {
+            "name": "migrate:fresh",
+            "description": {
+              "zh": "删掉所有表并重新迁移",
+              "en": "Drop all tables and migrate again"
+            },
+            "when": "exists:artisan"
+          },
+          {
+            "name": "migrate:rollback",
+            "description": {
+              "zh": "回滚最近一批迁移",
+              "en": "Roll back the last migration batch"
+            },
+            "when": "exists:artisan"
+          },
+          {
+            "name": "db:seed",
+            "description": {
+              "zh": "运行数据填充",
+              "en": "Run database seeders"
+            },
+            "when": "exists:artisan"
+          },
+          {
+            "name": "route:list",
+            "description": {
+              "zh": "列出所有路由",
+              "en": "List all routes"
+            },
+            "when": "exists:artisan"
+          },
+          {
+            "name": "queue:work",
+            "description": {
+              "zh": "启动队列处理进程",
+              "en": "Start a queue worker"
+            },
+            "when": "exists:artisan"
+          },
+          {
+            "name": "schedule:work",
+            "description": {
+              "zh": "本地持续运行计划任务",
+              "en": "Run the scheduler continuously"
+            },
+            "when": "exists:artisan"
+          },
+          {
+            "name": "storage:link",
+            "description": {
+              "zh": "创建 public/storage 软链接",
+              "en": "Create the public/storage symlink"
+            },
+            "when": "exists:artisan"
+          },
+          {
+            "name": "optimize:clear",
+            "description": {
+              "zh": "清除配置、路由、视图等缓存",
+              "en": "Clear config, route and view caches"
+            },
+            "when": "exists:artisan"
+          }
+        ],
+        "command": "php artisan {name}"
+      },
+      {
+        "id": "composer",
+        "label": {
+          "zh": "Composer",
+          "en": "Composer"
+        },
+        "files": ["composer.json"],
+        "tasks": [
+          {
+            "name": "install",
+            "description": {
+              "zh": "按锁文件安装依赖",
+              "en": "Install dependencies from the lock file"
+            }
+          },
+          {
+            "name": "update",
+            "description": {
+              "zh": "更新依赖并改写锁文件",
+              "en": "Update dependencies and rewrite the lock file"
+            }
+          },
+          {
+            "name": "dump-autoload",
+            "description": {
+              "zh": "重新生成自动加载文件",
+              "en": "Regenerate the autoloader"
+            }
+          },
+          {
+            "name": "validate",
+            "description": {
+              "zh": "检查 composer.json 是否有效",
+              "en": "Validate composer.json"
+            }
+          }
+        ],
+        "command": "composer {name}"
+      }
+    ],
+    "skills": [
+      {
+        "path": "skills/php-project"
+      }
+    ],
+    "prompts": [
+      {
+        "id": "php-write-phpunit-tests",
+        "title": {
+          "zh": "为选中代码写 PHPUnit / Pest 测试",
+          "en": "Write PHPUnit / Pest tests for the selection"
+        },
+        "description": {
+          "zh": "按项目已有的测试风格补单元测试",
+          "en": "Add unit tests in the project's existing style"
+        },
+        "path": "prompts/write-phpunit-tests.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "php-explain-error",
+        "title": {
+          "zh": "解释 PHP 报错或堆栈",
+          "en": "Explain a PHP error or stack trace"
+        },
+        "description": {
+          "zh": "把选中的报错或堆栈定位到根因",
+          "en": "Trace the selected error or stack trace to its root cause"
+        },
+        "path": "prompts/explain-error.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "php-add-types",
+        "title": {
+          "zh": "补类型声明",
+          "en": "Add type declarations"
+        },
+        "description": {
+          "zh": "给参数、返回值和属性补类型，复杂类型用 PHPDoc 补充",
+          "en": "Add parameter, return and property types; use PHPDoc for complex ones"
+        },
+        "path": "prompts/add-types.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "php-modernize",
+        "title": {
+          "zh": "用新语法改写选中代码",
+          "en": "Modernize the selection"
+        },
+        "description": {
+          "zh": "在项目 PHP 版本允许范围内使用构造器属性提升、match、枚举等",
+          "en": "Use constructor promotion, match, enums and more, within the project's PHP version"
+        },
+        "path": "prompts/modernize.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

@@ -1,0 +1,261 @@
+{
+  "简单函数": {
+    "prefix": "func",
+    "description": "简单函数",
+    "body": ["function ${1:Get-Thing} {", "\tparam (", "\t\t[string]\\$${2:Name}", "\t)", "\t$0", "}"]
+  },
+  "高级函数": {
+    "prefix": "advfunc",
+    "description": "带 CmdletBinding 和管道输入的高级函数",
+    "body": [
+      "function ${1:Get-Thing} {",
+      "\t[CmdletBinding()]",
+      "\tparam (",
+      "\t\t[Parameter(Mandatory, ValueFromPipeline)]",
+      "\t\t[string[]]\\$${2:Name}",
+      "\t)",
+      "",
+      "\tprocess {",
+      "\t\tforeach (\\$n in \\$${2:Name}) {",
+      "\t\t\t$0",
+      "\t\t}",
+      "\t}",
+      "}"
+    ]
+  },
+  "参数块": {
+    "prefix": "param",
+    "description": "param 参数块",
+    "body": ["param (", "\t[Parameter(Mandatory)]", "\t[string]\\$${1:Name}$0", ")"]
+  },
+  "校验参数": {
+    "prefix": "paramv",
+    "description": "带校验特性的参数",
+    "body": ["[Parameter(Mandatory)]", "[ValidateSet(${1:'Debug', 'Release'})]", "[string]\\$${2:Configuration}"]
+  },
+  "脚本头部": {
+    "prefix": "script",
+    "description": "脚本开头：版本要求、严格模式和遇错即停",
+    "body": [
+      "#Requires -Version ${1:5.1}",
+      "Set-StrictMode -Version Latest",
+      "\\$ErrorActionPreference = 'Stop'",
+      "",
+      "$0"
+    ]
+  },
+  "严格模式": {
+    "prefix": "strict",
+    "description": "严格模式并遇错即停",
+    "body": ["Set-StrictMode -Version Latest", "\\$ErrorActionPreference = 'Stop'"]
+  },
+  "if 语句": {
+    "prefix": "if",
+    "description": "if 语句",
+    "body": ["if (${1:condition}) {", "\t$0", "}"]
+  },
+  "if else 语句": {
+    "prefix": "ifelse",
+    "description": "if / else",
+    "body": ["if (${1:condition}) {", "\t$2", "} else {", "\t$0", "}"]
+  },
+  "foreach 语句": {
+    "prefix": "foreach",
+    "description": "foreach 循环语句",
+    "body": ["foreach (\\$${1:item} in \\$${2:items}) {", "\t$0", "}"]
+  },
+  "管道 ForEach-Object": {
+    "prefix": "feo",
+    "description": "管道里的 ForEach-Object",
+    "body": ["${1:\\$items} | ForEach-Object {", "\t$0", "}"]
+  },
+  "管道 Where-Object": {
+    "prefix": "wo",
+    "description": "管道里的 Where-Object",
+    "body": ["${1:\\$items} | Where-Object { \\$_.${2:Name} -${3|eq,ne,like,match,gt,lt|} ${4:'value'} }$0"]
+  },
+  "for 循环": {
+    "prefix": "for",
+    "description": "for 循环",
+    "body": ["for (\\$${1:i} = 0; \\$${1:i} -lt ${2:10}; \\$${1:i}++) {", "\t$0", "}"]
+  },
+  "while 循环": {
+    "prefix": "while",
+    "description": "while 循环",
+    "body": ["while (${1:condition}) {", "\t$0", "}"]
+  },
+  "switch 语句": {
+    "prefix": "switch",
+    "description": "switch 语句",
+    "body": ["switch (\\$${1:value}) {", "\t${2:'a'} { $3 }", "\tdefault { $0 }", "}"]
+  },
+  "try catch": {
+    "prefix": "trycatch",
+    "description": "try / catch",
+    "body": ["try {", "\t$1", "} catch {", "\tWrite-Error \"${2:操作失败}: \\$(\\$_.Exception.Message)\"", "\t$0", "}"]
+  },
+  "try catch finally": {
+    "prefix": "tryfinally",
+    "description": "try / catch / finally",
+    "body": ["try {", "\t$1", "} catch {", "\t$2", "} finally {", "\t$0", "}"]
+  },
+  "类": {
+    "prefix": "class",
+    "description": "PowerShell 类",
+    "body": [
+      "class ${1:MyClass} {",
+      "\t[string]\\$${2:Name}",
+      "",
+      "\t${1:MyClass}([string]\\$${2:Name}) {",
+      "\t\t\\$this.${2:Name} = \\$${2:Name}",
+      "\t}",
+      "",
+      "\t[string] ToString() {",
+      "\t\treturn \\$this.${2:Name}",
+      "\t}",
+      "}"
+    ]
+  },
+  "枚举": {
+    "prefix": "enum",
+    "description": "枚举",
+    "body": ["enum ${1:Color} {", "\t${2:Red}", "\t${3:Green}", "}"]
+  },
+  "哈希表": {
+    "prefix": "hash",
+    "description": "哈希表",
+    "body": ["\\$${1:table} = @{", "\t${2:Key} = ${3:'value'}", "}"]
+  },
+  "自定义对象": {
+    "prefix": "pso",
+    "description": "[pscustomobject]",
+    "body": ["[pscustomobject]@{", "\t${1:Name} = ${2:\\$name}", "\t$0", "}"]
+  },
+  "参数展开": {
+    "prefix": "splat",
+    "description": "splatting 参数哈希表",
+    "body": ["\\$${1:params} = @{", "\t${2:Path} = ${3:'.'}", "}", "${4:Get-ChildItem} @${1:params}"]
+  },
+  "单引号 here-string": {
+    "prefix": "here",
+    "description": "字面 here-string",
+    "body": ["@'", "$0", "'@"]
+  },
+  "双引号 here-string": {
+    "prefix": "hereexp",
+    "description": "可展开变量的 here-string",
+    "body": ["@\"", "$0", "\"@"]
+  },
+  "折叠区域": {
+    "prefix": "region",
+    "description": "#region 折叠区域",
+    "body": ["#region ${1:名称}", "$0", "#endregion"]
+  },
+  "帮助注释": {
+    "prefix": "help",
+    "description": "基于注释的帮助",
+    "body": [
+      "<#",
+      ".SYNOPSIS",
+      "${1:一句话说明}",
+      "",
+      ".DESCRIPTION",
+      "${2:详细说明}",
+      "",
+      ".PARAMETER ${3:Name}",
+      "${4:参数说明}",
+      "",
+      ".EXAMPLE",
+      "${5:Get-Thing -Name a}",
+      "#>"
+    ]
+  },
+  "导入模块": {
+    "prefix": "import",
+    "description": "导入模块，失败即停",
+    "body": ["Import-Module ${1:ModuleName} -ErrorAction Stop"]
+  },
+  "脚本所在目录": {
+    "prefix": "root",
+    "description": "取脚本所在目录",
+    "body": ["\\$${1:root} = \\$PSScriptRoot"]
+  },
+  "路径存在判断": {
+    "prefix": "testpath",
+    "description": "Test-Path 判断",
+    "body": ["if (-not (Test-Path -LiteralPath ${1:\\$path})) {", "\t$0", "}"]
+  },
+  "拼接路径": {
+    "prefix": "joinpath",
+    "description": "Join-Path 拼接路径",
+    "body": ["\\$${1:path} = Join-Path ${2:\\$PSScriptRoot} ${3:'file.txt'}"]
+  },
+  "读 JSON": {
+    "prefix": "readjson",
+    "description": "读 JSON 文件",
+    "body": ["\\$${1:data} = Get-Content -LiteralPath ${2:'data.json'} -Raw -Encoding UTF8 | ConvertFrom-Json"]
+  },
+  "写 JSON": {
+    "prefix": "writejson",
+    "description": "对象写成 JSON 文件",
+    "body": ["${1:\\$data} | ConvertTo-Json -Depth ${2:5} | Set-Content -LiteralPath ${3:'data.json'} -Encoding UTF8"]
+  },
+  "外部命令检查": {
+    "prefix": "native",
+    "description": "运行外部程序并检查退出码",
+    "body": ["${1:git} ${2:status}", "if (\\$LASTEXITCODE -ne 0) {", "\tthrow \"${1:git} 退出码 \\$LASTEXITCODE\"", "}"]
+  },
+  "Pester 测试文件": {
+    "prefix": "describe",
+    "description": "Pester 5 测试文件",
+    "body": [
+      "BeforeAll {",
+      "\t. \\$PSCommandPath.Replace('.Tests.ps1', '.ps1')",
+      "}",
+      "",
+      "Describe '${1:Get-Thing}' {",
+      "\tIt '${2:返回预期结果}' {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ]
+  },
+  "Pester Context": {
+    "prefix": "context",
+    "description": "Pester Context 块",
+    "body": ["Context '${1:场景}' {", "\t$0", "}"]
+  },
+  "Pester It": {
+    "prefix": "it",
+    "description": "Pester It 用例",
+    "body": ["It '${1:应当……}' {", "\t$0", "}"]
+  },
+  "Pester 参数化": {
+    "prefix": "itcases",
+    "description": "Pester 参数化用例",
+    "body": [
+      "It '${1:输入 <value> 得到 <expected>}' -TestCases @(",
+      "\t@{ value = ${2:1}; expected = ${3:2} }",
+      ") {",
+      "\t$0",
+      "}"
+    ]
+  },
+  "Pester BeforeAll": {
+    "prefix": "beforeall",
+    "description": "Pester BeforeAll",
+    "body": ["BeforeAll {", "\t$0", "}"]
+  },
+  "Pester Mock": {
+    "prefix": "mock",
+    "description": "Pester Mock",
+    "body": ["Mock ${1:Get-Date} { ${2:return 'x'} }$0"]
+  },
+  "Pester Should": {
+    "prefix": "should",
+    "description": "Pester Should 断言",
+    "body": [
+      "${1:\\$actual} | Should -${2|Be,BeExactly,BeNullOrEmpty,Throw,Contain,HaveCount,Match|} ${3:\\$expected}$0"
+    ]
+  }
+}

@@ -1,0 +1,244 @@
+{
+  "文件头": {
+    "prefix": "phpf",
+    "description": "PHP 文件头：strict_types 和命名空间",
+    "body": ["<?php", "", "declare(strict_types=1);", "", "namespace ${1:App};", "", "$0"]
+  },
+  "类": {
+    "prefix": "class",
+    "description": "final 类（类名默认取文件名）",
+    "body": ["final class ${1:$TM_FILENAME_BASE}", "{", "\t$0", "}"]
+  },
+  "构造方法（属性提升）": {
+    "prefix": "ctor",
+    "description": "构造方法，参数直接声明为属性",
+    "body": ["public function __construct(", "\tprivate readonly ${1:string} \\$${2:name},", ") {", "\t$0", "}"]
+  },
+  "接口": {
+    "prefix": "interface",
+    "description": "接口（名称默认取文件名）",
+    "body": ["interface ${1:$TM_FILENAME_BASE}", "{", "\tpublic function ${2:handle}(${3}): ${4:void};$0", "}"]
+  },
+  "trait": {
+    "prefix": "trait",
+    "description": "trait（名称默认取文件名）",
+    "body": ["trait ${1:$TM_FILENAME_BASE}", "{", "\t$0", "}"]
+  },
+  "枚举": {
+    "prefix": "enum",
+    "description": "带值枚举（string 值）",
+    "body": [
+      "enum ${1:$TM_FILENAME_BASE}: string",
+      "{",
+      "\tcase ${2:Active} = '${3:active}';",
+      "\tcase ${4:Inactive} = '${5:inactive}';$0",
+      "}"
+    ]
+  },
+  "只读类": {
+    "prefix": "readonly",
+    "description": "只读值对象（PHP 8.2+）",
+    "body": [
+      "final readonly class ${1:$TM_FILENAME_BASE}",
+      "{",
+      "\tpublic function __construct(",
+      "\t\tpublic ${2:string} \\$${3:name},",
+      "\t) {",
+      "\t}$0",
+      "}"
+    ]
+  },
+  "函数": {
+    "prefix": "fn",
+    "description": "带类型的函数",
+    "body": ["function ${1:name}(${2:string} \\$${3:arg}): ${4:void}", "{", "\t$0", "}"]
+  },
+  "公有方法": {
+    "prefix": "method",
+    "description": "public 方法",
+    "body": ["public function ${1:name}(${2}): ${3:void}", "{", "\t$0", "}"]
+  },
+  "静态方法": {
+    "prefix": "smethod",
+    "description": "public static 方法",
+    "body": ["public static function ${1:name}(${2}): ${3:self}", "{", "\t$0", "}"]
+  },
+  "属性": {
+    "prefix": "prop",
+    "description": "带类型的 private 属性",
+    "body": ["private ${1:string} \\$${2:name};$0"]
+  },
+  "类常量": {
+    "prefix": "const",
+    "description": "类常量",
+    "body": ["public const ${1:NAME} = ${2:'value'};$0"]
+  },
+  "箭头函数": {
+    "prefix": "arrow",
+    "description": "箭头函数",
+    "body": ["fn(${1:\\$x}) => ${2:\\$x}$0"]
+  },
+  "匿名函数": {
+    "prefix": "closure",
+    "description": "匿名函数（可带 use）",
+    "body": ["function (${1:\\$x}) use (${2:\\$y}) {", "\t$0", "}"]
+  },
+  "条件判断": {
+    "prefix": "if",
+    "description": "if 语句",
+    "body": ["if (${1:condition}) {", "\t$0", "}"]
+  },
+  "条件判断（带 else）": {
+    "prefix": "ifelse",
+    "description": "if / else 语句",
+    "body": ["if (${1:condition}) {", "\t$2", "} else {", "\t$0", "}"]
+  },
+  "遍历数组的值": {
+    "prefix": "foreach",
+    "description": "遍历数组的值",
+    "body": ["foreach (\\$${1:items} as \\$${2:item}) {", "\t$0", "}"]
+  },
+  "遍历数组的键和值": {
+    "prefix": "foreachk",
+    "description": "遍历数组的键和值",
+    "body": ["foreach (\\$${1:items} as \\$${2:key} => \\$${3:value}) {", "\t$0", "}"]
+  },
+  "计数循环": {
+    "prefix": "for",
+    "description": "计数 for 循环",
+    "body": ["for (\\$${1:i} = 0; \\$${1:i} < ${2:count}; \\$${1:i}++) {", "\t$0", "}"]
+  },
+  "match 表达式": {
+    "prefix": "match",
+    "description": "match 表达式（PHP 8+，严格比较）",
+    "body": ["match (${1:\\$value}) {", "\t${2:1} => ${3:'one'},", "\tdefault => ${4:null},", "}$0"]
+  },
+  "switch 分支": {
+    "prefix": "switch",
+    "description": "switch 语句",
+    "body": ["switch (${1:\\$value}) {", "\tcase ${2:1}:", "\t\t$3", "\t\tbreak;", "\tdefault:", "\t\t$0", "}"]
+  },
+  "捕获异常": {
+    "prefix": "trycatch",
+    "description": "try / catch",
+    "body": ["try {", "\t$1", "} catch (${2:\\Throwable} \\$${3:e}) {", "\t$0", "}"]
+  },
+  "捕获异常（带 finally）": {
+    "prefix": "tryfinally",
+    "description": "try / catch / finally",
+    "body": ["try {", "\t$1", "} catch (${2:\\Throwable} \\$${3:e}) {", "\t$4", "} finally {", "\t$0", "}"]
+  },
+  "抛出异常": {
+    "prefix": "throw",
+    "description": "throw new 异常",
+    "body": ["throw new ${1:\\InvalidArgumentException}(${2:'message'});$0"]
+  },
+  "数组映射": {
+    "prefix": "arrmap",
+    "description": "array_map 加箭头函数",
+    "body": ["array_map(fn(${1:\\$item}) => ${2:\\$item}, ${3:\\$items})$0"]
+  },
+  "数组过滤": {
+    "prefix": "arrfilter",
+    "description": "array_filter 加箭头函数",
+    "body": ["array_filter(${1:\\$items}, fn(${2:\\$item}) => ${3:true})$0"]
+  },
+  "JSON 编码": {
+    "prefix": "jsonenc",
+    "description": "json_encode，失败时抛异常",
+    "body": ["json_encode(${1:\\$data}, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)$0"]
+  },
+  "JSON 解码": {
+    "prefix": "jsondec",
+    "description": "json_decode 成数组，失败时抛异常",
+    "body": ["json_decode(${1:\\$json}, true, 512, JSON_THROW_ON_ERROR)$0"]
+  },
+  "PDO 预处理查询": {
+    "prefix": "pdoquery",
+    "description": "PDO 预处理语句查询",
+    "body": [
+      "\\$stmt = \\$${1:pdo}->prepare('${2:SELECT * FROM users WHERE id = :id}');",
+      "\\$stmt->execute(['${3:id}' => ${4:\\$id}]);",
+      "\\$${5:rows} = \\$stmt->fetchAll(PDO::FETCH_ASSOC);$0"
+    ]
+  },
+  "文档注释": {
+    "prefix": "doc",
+    "description": "PHPDoc 注释块",
+    "body": ["/**", " * ${1:说明}", " *", " * @param ${2:string} \\$${3:name}", " * @return ${4:void}", " */"]
+  },
+  "输出变量": {
+    "prefix": "dump",
+    "description": "var_dump 调试输出",
+    "body": ["var_dump(${1:\\$var});$0"]
+  },
+  "写日志": {
+    "prefix": "errlog",
+    "description": "error_log 写错误日志",
+    "body": ["error_log(sprintf('${1:message}: %s', ${2:\\$value}));$0"]
+  },
+  "PHPUnit 测试类": {
+    "prefix": "testclass",
+    "description": "PHPUnit 测试类（类名默认取文件名）",
+    "body": [
+      "<?php",
+      "",
+      "declare(strict_types=1);",
+      "",
+      "namespace ${1:Tests};",
+      "",
+      "use PHPUnit\\Framework\\TestCase;",
+      "",
+      "final class ${2:$TM_FILENAME_BASE} extends TestCase",
+      "{",
+      "\tpublic function test${3:Something}(): void",
+      "\t{",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ]
+  },
+  "PHPUnit 测试方法": {
+    "prefix": "test",
+    "description": "PHPUnit 测试方法",
+    "body": [
+      "public function test${1:Something}(): void",
+      "{",
+      "\t\\$this->assertSame(${2:expected}, ${3:actual});$0",
+      "}"
+    ]
+  },
+  "PHPUnit 数据提供器": {
+    "prefix": "dataprovider",
+    "description": "PHPUnit 数据提供器和对应的测试（需要 use PHPUnit\\Framework\\Attributes\\DataProvider）",
+    "body": [
+      "#[DataProvider('${1:provide}Cases')]",
+      "public function test${2:Something}(${3:string} \\$${4:input}, ${5:string} \\$${6:expected}): void",
+      "{",
+      "\t$7",
+      "}",
+      "",
+      "public static function ${1:provide}Cases(): iterable",
+      "{",
+      "\tyield '${8:case}' => ['${9:a}', '${10:b}'];$0",
+      "}"
+    ]
+  },
+  "PHPUnit 断言抛错": {
+    "prefix": "expectex",
+    "description": "断言代码抛出指定异常",
+    "body": ["\\$this->expectException(${1:\\InvalidArgumentException}::class);", "$0"]
+  },
+  "Pest 测试用例": {
+    "prefix": "pest",
+    "description": "Pest 测试用例",
+    "body": ["it('${1:does something}', function () {", "\texpect(${2:\\$actual})->toBe(${3:expected});$0", "});"]
+  },
+  "Laravel 路由": {
+    "prefix": "route",
+    "description": "Laravel 路由，指向控制器方法",
+    "body": [
+      "Route::${1|get,post,put,patch,delete|}('/${2:path}', [${3:Controller}::class, '${4:index}'])->name('${5:name}');$0"
+    ]
+  }
+}

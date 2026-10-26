@@ -1,0 +1,106 @@
+{
+  "id": "pixelsky.svelte",
+  "name": "Svelte 支持",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "Svelte 语法高亮、代码片段（Svelte 5 runes 与 SvelteKit），以及写测试和迁移 runes 的技能与提示词",
+  "icon": "icon.png",
+  "keywords": ["svelte", "sveltekit", "runes", "vitest", "playwright"],
+  "license": "MIT",
+  "repository": "https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop",
+  "homepage": null,
+  "engines": {
+    "pixelsky": ">=0.4.10"
+  },
+  "l10n": {
+    "en": {
+      "name": "Svelte Support",
+      "description": "Svelte syntax highlighting, snippets (Svelte 5 runes and SvelteKit), plus a skill and prompts for tests and runes migration"
+    }
+  },
+  "contributes": {
+    "grammars": [
+      {
+        "language": "svelte",
+        "aliases": ["Svelte", "svelte"],
+        "extensions": [".svelte"],
+        "scopeName": "source.svelte",
+        "path": "syntaxes/svelte.tmLanguage.json",
+        "configuration": "language-configuration.json",
+        "samples": ["samples/Sample.svelte"]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "svelte",
+        "path": "snippets/svelte.json"
+      }
+    ],
+    "skills": [
+      {
+        "path": "skills/svelte-project"
+      }
+    ],
+    "prompts": [
+      {
+        "id": "svelte-write-tests",
+        "title": {
+          "zh": "为选中代码写测试",
+          "en": "Write tests for the selection"
+        },
+        "description": {
+          "zh": "按项目已有的 Vitest 风格补组件或函数测试",
+          "en": "Add component or function tests in the project's Vitest style"
+        },
+        "path": "prompts/write-tests.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "svelte-migrate-to-runes",
+        "title": {
+          "zh": "迁移到 Svelte 5 runes",
+          "en": "Migrate to Svelte 5 runes"
+        },
+        "description": {
+          "zh": "把选中的 Svelte 4 写法改成 $props / $state / $derived",
+          "en": "Rewrite the selected Svelte 4 code with $props / $state / $derived"
+        },
+        "path": "prompts/migrate-to-runes.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "svelte-explain-error",
+        "title": {
+          "zh": "解释 Svelte 报错",
+          "en": "Explain a Svelte error"
+        },
+        "description": {
+          "zh": "把选中的编译、检查或水合报错定位到根因",
+          "en": "Trace the selected compile, check or hydration error to its root cause"
+        },
+        "path": "prompts/explain-error.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "svelte-add-types-a11y",
+        "title": {
+          "zh": "补类型和无障碍",
+          "en": "Add types and accessibility"
+        },
+        "description": {
+          "zh": "为选中的组件补 TypeScript 类型并修无障碍问题",
+          "en": "Add TypeScript types to the selected component and fix accessibility issues"
+        },
+        "path": "prompts/add-types-a11y.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

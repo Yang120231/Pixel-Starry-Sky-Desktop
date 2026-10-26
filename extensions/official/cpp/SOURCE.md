@@ -18,4 +18,4 @@
 
 vscode 本身是 MIT（Copyright (c) 2015 - present Microsoft Corporation），全文也在 `LICENSE`。
 
-**待确认的决定**：TextMate Bundle License 不在 AUTHORING 3.5 列的 MIT / Apache-2.0 / BSD 里。它只是该语法的间接上游组件，条款宽松、没有版权声明的传播限制，这里已完整附上；是否接受需要项目负责人明确确认，确认后请记入 AUTHORING。
+**许可**：TextMate Bundle License 不在 MIT / Apache-2.0 / BSD 里，它只是该语法的间接上游组件，条款宽松、没有版权声明的传播限制，这里已完整附上；2026-10-26 项目负责人确认接受，已记入 AUTHORING §3.5。

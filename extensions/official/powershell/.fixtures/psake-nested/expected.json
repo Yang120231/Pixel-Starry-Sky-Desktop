@@ -1,0 +1,21 @@
+[
+  {
+    "template": "psake",
+    "file": "psakefile.ps1",
+    "tasks": [
+      { "name": "default", "linux": "pwsh -NoProfile -Command \"Invoke-psake default\"", "windows": "powershell -NoProfile -Command \"Invoke-psake default\"" },
+      { "name": "Build", "linux": "pwsh -NoProfile -Command \"Invoke-psake Build\"", "windows": "powershell -NoProfile -Command \"Invoke-psake Build\"" }
+    ]
+  },
+  {
+    "template": "psake",
+    "file": "tools/psakefile.ps1",
+    "tasks": [
+      {
+        "name": "Lint",
+        "linux": "cd tools && pwsh -NoProfile -Command \"Invoke-psake Lint\"",
+        "windows": "Set-Location -LiteralPath tools; if ($?) { powershell -NoProfile -Command \"Invoke-psake Lint\" }"
+      }
+    ]
+  }
+]

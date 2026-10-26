@@ -1,0 +1,34 @@
+[
+  {
+    "template": "swiftpm",
+    "file": "Package.swift",
+    "tasks": [
+      { "name": "build", "description": "编译所有目标", "linux": "swift build", "windows": "swift build" },
+      { "name": "test", "description": "运行测试", "linux": "swift test", "windows": "swift test" }
+    ]
+  },
+  {
+    "template": "swiftpm",
+    "file": "tools/gen/Package.swift",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "编译所有目标",
+        "linux": "cd tools/gen && swift build",
+        "windows": "Set-Location -LiteralPath tools/gen; if ($?) { swift build }"
+      },
+      {
+        "name": "test",
+        "description": "运行测试",
+        "linux": "cd tools/gen && swift test",
+        "windows": "Set-Location -LiteralPath tools/gen; if ($?) { swift test }"
+      },
+      {
+        "name": "run",
+        "description": "运行可执行目标",
+        "linux": "cd tools/gen && swift run",
+        "windows": "Set-Location -LiteralPath tools/gen; if ($?) { swift run }"
+      }
+    ]
+  }
+]

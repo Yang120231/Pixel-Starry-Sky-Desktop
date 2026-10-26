@@ -1,0 +1,14 @@
+[
+  {
+    "template": "dotnet-project",
+    "file": "Lib.csproj",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "编译这个项目",
+        "linux": "dotnet build Lib.csproj",
+        "windows": "dotnet build Lib.csproj"
+      }
+    ]
+  }
+]

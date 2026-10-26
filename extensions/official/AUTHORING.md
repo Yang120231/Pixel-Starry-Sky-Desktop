@@ -45,7 +45,7 @@ extensions/official/python/
 ```
 
 - `name` ≤ 40 字（按 UTF-16 算），**不能含「官方」「像素星空」**，写「X 支持」；`description` ≤ 120；`l10n.en.name` ≤ 40、`description` ≤ 160；`keywords` ≤ 10 个、每个 ≤ 20 字、不重复。
-- `engines.pixelsky` 统一写 `>=0.4.10`（软件比较时忽略 `-beta`，`>=0.5.0` 会让现在的开发版不加载）。
+- `engines.pixelsky` 统一写 `>=0.4.10`（软件比较时忽略 `-beta`，`>=0.5.0` 会让现在的开发版不加载）；用了新能力的写那一版（任务模板通配是 `>=0.6.2`）。验收测试按「仓库里的下一版」加载。
 - 不认识的字段会被拒；不要写 `$schema`、`categories`。
 - 显示给人看的文字（任务 `label` / `description`、提示词 `title` / `description`）一律写 `{ "zh": "…", "en": "…" }`。
 
@@ -61,7 +61,7 @@ extensions/official/python/
 
 ### 3.2 任务模板 `taskTemplates`
 
-- `files` **只能写精确文件名**（区分大小写，不能写 `*.csproj`、不能带路径）；软件只找根目录往下 3 层、全部模板合计最多 30 个文件；跳过 `.` 开头的目录和 `node_modules .git dist build out target vendor`。
+- `files` 写精确文件名（区分大小写）或带 `*` 的通配（如 `*.csproj`，不分大小写；除 `*` 外至少 3 个字符；不能通配到下面「不能用」的文件）；不能带路径、不能用 `?`。**用了通配的扩展 `engines.pixelsky` 写 `>=0.6.2`**（之前的软件不认 `*`，商店会提示「需要 0.6.2 以上」）；软件只找根目录往下 3 层、全部模板合计最多 30 个文件；跳过 `.` 开头的目录和 `node_modules .git dist build out target vendor`。
 - **不能用**：`package.json`、`Makefile`/`makefile`/`GNUmakefile`、`Cargo.toml`、`build.gradle(.kts)`、`settings.gradle(.kts)`（内置已认）；`id` 不能是 `npm` `make` `cargo` `gradle`。
 - `id`：`^[a-z0-9][a-z0-9-]*$`，≤ 48，包内唯一。
 - 任务名 `^[A-Za-z0-9_][A-Za-z0-9_.:@/+=-]{0,79}$`：**不能有空格**；带参数的写进 `command`，不同命令形状就分成不同模板（如 `go {name} ./...` 和 `go mod {name}`）。`command` 里可以不用 `{name}`（只有一个任务时，如 `go run .`）。
@@ -92,7 +92,7 @@ extensions/official/python/
 
 ### 3.5 语法 `grammars`（只有带语法的扩展）
 
-- 用上游开源语法，许可只收 MIT / Apache-2.0 / BSD；在 `SOURCE.md` 写来源地址和提交号，在 `LICENSE` 末尾附上游版权声明和许可证全文，README 写明来源。
+- 用上游开源语法，许可只收 MIT / Apache-2.0 / BSD，以及 TextMate Bundle License（宽松许可，VS Code 也随包发；2026-10-26 确认接受，Java、C/C++、Ruby 等的语法间接来自它）；在 `SOURCE.md` 写来源地址和提交号，在 `LICENSE` 末尾附上游版权声明和许可证全文，README 写明来源。
 - `language` 用 VS Code 的 id（和内置相同的 `java` `c` `cpp` `csharp` `kotlin`）；和内置相同时**默认仍用内置高亮**，用户在扩展详情里打开「用这个扩展代替内置高亮」才换（内置有代码折叠，扩展语法没有）——README 要写这一点。
 - `scopeName` 只能小写、数字、`.+-`；必须和语法文件里一致；语法文件严格 JSON、≤ 2 MB。
 - `samples/` 下每个语法至少一个 ≥ 30 行的示例（自己写，覆盖注释、字符串、数字、关键字、函数、类型…），合计 ≤ 200 KB；必须过测速（单行 ≤ 30 ms、5000 行 ≤ 1 s）。过不了就不放这个语法，在 README 里说明。

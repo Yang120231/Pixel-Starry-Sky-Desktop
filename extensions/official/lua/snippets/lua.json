@@ -1,0 +1,186 @@
+{
+  "局部变量": { "prefix": "loc", "body": ["local ${1:name} = ${2:value}"], "description": "local 变量" },
+  "函数": {
+    "prefix": "fn",
+    "body": ["function ${1:name}(${2:args})", "\t$0", "end"],
+    "description": "全局或表字段函数"
+  },
+  "局部函数": {
+    "prefix": "lfn",
+    "body": ["local function ${1:name}(${2:args})", "\t$0", "end"],
+    "description": "local 函数"
+  },
+  "方法": {
+    "prefix": "method",
+    "body": ["function ${1:Class}:${2:name}(${3:args})", "\t$0", "end"],
+    "description": "冒号语法的方法，self 隐式传入"
+  },
+  "匿名函数": { "prefix": "afn", "body": ["function(${1:args})", "\t$0", "end"], "description": "匿名函数表达式" },
+  "if": { "prefix": "if", "body": ["if ${1:condition} then", "\t$0", "end"], "description": "if 语句" },
+  "if else": {
+    "prefix": "ifelse",
+    "body": ["if ${1:condition} then", "\t$2", "else", "\t$0", "end"],
+    "description": "if / else"
+  },
+  "if elseif else": {
+    "prefix": "ifelif",
+    "body": ["if ${1:condition} then", "\t$2", "elseif ${3:condition} then", "\t$4", "else", "\t$0", "end"],
+    "description": "if / elseif / else"
+  },
+  "数值 for": {
+    "prefix": "fori",
+    "body": ["for ${1:i} = ${2:1}, ${3:10} do", "\t$0", "end"],
+    "description": "数值 for 循环"
+  },
+  "ipairs 遍历": {
+    "prefix": "ipairs",
+    "body": ["for ${1:i}, ${2:v} in ipairs(${3:list}) do", "\t$0", "end"],
+    "description": "按序遍历数组部分"
+  },
+  "pairs 遍历": {
+    "prefix": "pairs",
+    "body": ["for ${1:k}, ${2:v} in pairs(${3:tbl}) do", "\t$0", "end"],
+    "description": "遍历表的所有键值（顺序不保证）"
+  },
+  "while": { "prefix": "while", "body": ["while ${1:condition} do", "\t$0", "end"], "description": "while 循环" },
+  "repeat": {
+    "prefix": "repeat",
+    "body": ["repeat", "\t$0", "until ${1:condition}"],
+    "description": "repeat-until 循环"
+  },
+  "require": { "prefix": "req", "body": ["local ${1:mod} = require(\"${2:module}\")"], "description": "加载模块" },
+  "模块骨架": {
+    "prefix": "module",
+    "body": ["local M = {}", "", "function M.${1:name}(${2:args})", "\t$0", "end", "", "return M"],
+    "description": "返回表的模块"
+  },
+  "类骨架": {
+    "prefix": "class",
+    "body": [
+      "local ${1:Class} = {}",
+      "${1:Class}.__index = ${1:Class}",
+      "",
+      "function ${1:Class}.new(${2:args})",
+      "\tlocal self = setmetatable({}, ${1:Class})",
+      "\t$0",
+      "\treturn self",
+      "end",
+      "",
+      "return ${1:Class}"
+    ],
+    "description": "基于元表的类"
+  },
+  "继承": {
+    "prefix": "inherit",
+    "body": ["local ${1:Child} = setmetatable({}, { __index = ${2:Parent} })", "${1:Child}.__index = ${1:Child}"],
+    "description": "单继承：子类查找回退到父类"
+  },
+  "pcall": {
+    "prefix": "pcall",
+    "body": ["local ok, err = pcall(function()", "\t$1", "end)", "if not ok then", "\t${2:print(err)}", "end", "$0"],
+    "description": "保护调用"
+  },
+  "xpcall": {
+    "prefix": "xpcall",
+    "body": [
+      "local ok, err = xpcall(function()",
+      "\t$1",
+      "end, debug.traceback)",
+      "if not ok then",
+      "\t${2:print(err)}",
+      "end",
+      "$0"
+    ],
+    "description": "带堆栈的保护调用"
+  },
+  "error": { "prefix": "err", "body": ["error(\"${1:message}\", ${2:2})"], "description": "抛错，level 2 指向调用者" },
+  "assert": { "prefix": "assert", "body": ["assert(${1:value}, \"${2:message}\")"], "description": "断言" },
+  "格式化输出": {
+    "prefix": "printf",
+    "body": ["print(string.format(\"${1:%s}\", ${2:value}))"],
+    "description": "string.format 后打印"
+  },
+  "元方法 tostring": {
+    "prefix": "tostr",
+    "body": ["function ${1:Class}:__tostring()", "\treturn string.format(\"${2:%s}\", ${3:self.name})", "end"],
+    "description": "__tostring 元方法"
+  },
+  "table 插入": { "prefix": "tins", "body": ["table.insert(${1:list}, ${2:value})"], "description": "追加到数组末尾" },
+  "排序": {
+    "prefix": "tsort",
+    "body": ["table.sort(${1:list}, function(a, b)", "\treturn ${2:a < b}", "end)"],
+    "description": "带比较函数的排序"
+  },
+  "字符串分割": {
+    "prefix": "split",
+    "body": [
+      "local parts = {}",
+      "for part in string.gmatch(${1:str}, \"([^${2:,}]+)\") do",
+      "\tparts[#parts + 1] = part",
+      "end"
+    ],
+    "description": "按分隔符切字符串（跳过空段）"
+  },
+  "读文件": {
+    "prefix": "readfile",
+    "body": ["local f = assert(io.open(${1:path}, \"rb\"))", "local content = f:read(\"*a\")", "f:close()"],
+    "description": "整个文件读成字符串"
+  },
+  "写文件": {
+    "prefix": "writefile",
+    "body": ["local f = assert(io.open(${1:path}, \"wb\"))", "f:write(${2:content})", "f:close()"],
+    "description": "写字符串到文件"
+  },
+  "LuaLS 类型注解": {
+    "prefix": "ann",
+    "body": ["---@param ${1:name} ${2:string}", "---@return ${3:string}"],
+    "description": "LuaLS（lua-language-server）参数和返回值注解"
+  },
+  "busted 测试": {
+    "prefix": "describe",
+    "body": [
+      "describe(\"${1:module}\", function()",
+      "\tit(\"${2:does something}\", function()",
+      "\t\tassert.are.equal(${3:expected}, ${4:actual})",
+      "\tend)",
+      "end)"
+    ],
+    "description": "busted 的 describe / it"
+  },
+  "LÖVE 回调": {
+    "prefix": "love",
+    "body": [
+      "function love.load()",
+      "\t$1",
+      "end",
+      "",
+      "function love.update(dt)",
+      "\t$2",
+      "end",
+      "",
+      "function love.draw()",
+      "\t$0",
+      "end"
+    ],
+    "description": "LÖVE 三个主回调"
+  },
+  "Neovim 插件入口": {
+    "prefix": "nvimplugin",
+    "body": [
+      "local M = {}",
+      "",
+      "function M.setup(opts)",
+      "\topts = vim.tbl_deep_extend(\"force\", {}, opts or {})",
+      "\t$0",
+      "end",
+      "",
+      "return M"
+    ],
+    "description": "Neovim 插件的 setup 函数"
+  },
+  "Neovim 键位": {
+    "prefix": "keymap",
+    "body": ["vim.keymap.set(\"${1:n}\", \"${2:<leader>x}\", ${3:function() end}, { desc = \"${4:描述}\" })"],
+    "description": "vim.keymap.set 映射"
+  }
+}

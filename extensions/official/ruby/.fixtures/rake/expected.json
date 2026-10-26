@@ -1,0 +1,48 @@
+[
+  {
+    "template": "rake",
+    "file": "Rakefile",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "构建 gem 包",
+        "linux": "rake build",
+        "windows": "rake build"
+      },
+      {
+        "name": "install",
+        "description": "构建并安装到本机",
+        "linux": "rake install",
+        "windows": "rake install"
+      },
+      {
+        "name": "lint",
+        "description": "Run the linter",
+        "linux": "rake lint",
+        "windows": "rake lint"
+      },
+      {
+        "name": "docs:build",
+        "description": "Generate docs for \"everything\"",
+        "linux": "rake docs:build",
+        "windows": "rake docs:build"
+      },
+      {
+        "name": "default",
+        "description": "Run unit tests and lint",
+        "linux": "rake default",
+        "windows": "rake default"
+      },
+      {
+        "name": "console",
+        "linux": "rake console",
+        "windows": "rake console"
+      },
+      {
+        "name": "unit",
+        "linux": "rake unit",
+        "windows": "rake unit"
+      }
+    ]
+  }
+]

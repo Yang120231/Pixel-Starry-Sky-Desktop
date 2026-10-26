@@ -1,0 +1,231 @@
+{
+  "main 入口": {
+    "prefix": "main",
+    "body": ["@main", "struct ${1:App} {", "\tstatic func main() {", "\t\t$0", "\t}", "}"],
+    "description": "@main 程序入口"
+  },
+  "结构体": {
+    "prefix": "struct",
+    "body": ["struct ${1:Name} {", "\t$0", "}"],
+    "description": "结构体"
+  },
+  "类": {
+    "prefix": "class",
+    "body": ["final class ${1:Name} {", "\t$0", "}"],
+    "description": "final 类"
+  },
+  "枚举": {
+    "prefix": "enum",
+    "body": ["enum ${1:Name} {", "\tcase ${2:first}", "\tcase ${3:second}", "}"],
+    "description": "枚举"
+  },
+  "协议": {
+    "prefix": "protocol",
+    "body": ["protocol ${1:Name} {", "\t$0", "}"],
+    "description": "协议"
+  },
+  "扩展": {
+    "prefix": "extension",
+    "body": ["extension ${1:Type} {", "\t$0", "}"],
+    "description": "类型扩展"
+  },
+  "actor": {
+    "prefix": "actor",
+    "body": ["actor ${1:Name} {", "\t$0", "}"],
+    "description": "actor 类型"
+  },
+  "函数": {
+    "prefix": "func",
+    "body": ["func ${1:name}(${2:_ value: Int}) -> ${3:Void} {", "\t$0", "}"],
+    "description": "函数"
+  },
+  "抛错函数": {
+    "prefix": "funct",
+    "body": ["func ${1:name}(${2}) throws -> ${3:Void} {", "\t$0", "}"],
+    "description": "会抛错的函数"
+  },
+  "异步函数": {
+    "prefix": "funca",
+    "body": ["func ${1:name}(${2}) async throws -> ${3:Void} {", "\t$0", "}"],
+    "description": "async throws 函数"
+  },
+  "构造方法": {
+    "prefix": "init",
+    "body": ["init(${1}) {", "\t$0", "}"],
+    "description": "构造方法"
+  },
+  "guard let": {
+    "prefix": "guardlet",
+    "body": ["guard let ${1:value} = ${2:optional} else {", "\t${3:return}", "}"],
+    "description": "guard let 解包"
+  },
+  "if let": {
+    "prefix": "iflet",
+    "body": ["if let ${1:value} = ${2:optional} {", "\t$0", "}"],
+    "description": "if let 解包"
+  },
+  "for in": {
+    "prefix": "forin",
+    "body": ["for ${1:item} in ${2:items} {", "\t$0", "}"],
+    "description": "for-in 循环"
+  },
+  "区间循环": {
+    "prefix": "forrange",
+    "body": ["for ${1:i} in 0..<${2:count} {", "\t$0", "}"],
+    "description": "半开区间 for 循环"
+  },
+  "switch": {
+    "prefix": "switch",
+    "body": ["switch ${1:value} {", "case ${2:.first}:", "\t$0", "default:", "\tbreak", "}"],
+    "description": "switch 语句"
+  },
+  "do catch": {
+    "prefix": "docatch",
+    "body": ["do {", "\ttry ${1:call()}", "} catch {", "\t${2:print(error)}", "}"],
+    "description": "do-catch"
+  },
+  "Task": {
+    "prefix": "task",
+    "body": ["Task {", "\t$0", "}"],
+    "description": "启动并发任务"
+  },
+  "MainActor 切换": {
+    "prefix": "mainactor",
+    "body": ["await MainActor.run {", "\t$0", "}"],
+    "description": "回到主 actor"
+  },
+  "async let": {
+    "prefix": "asynclet",
+    "body": [
+      "async let ${1:a} = ${2:fetchA()}",
+      "async let ${3:b} = ${4:fetchB()}",
+      "let (${5:ra}, ${6:rb}) = try await (${1:a}, ${3:b})"
+    ],
+    "description": "并行等待两个结果"
+  },
+  "任务组": {
+    "prefix": "taskgroup",
+    "body": [
+      "try await withThrowingTaskGroup(of: ${1:Int}.self) { group in",
+      "\tfor ${2:item} in ${3:items} {",
+      "\t\tgroup.addTask { try await ${4:work}(${2:item}) }",
+      "\t}",
+      "\tfor try await ${5:result} in group {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "抛错任务组"
+  },
+  "计算属性": {
+    "prefix": "computed",
+    "body": ["var ${1:name}: ${2:Int} {", "\t$0", "}"],
+    "description": "计算属性"
+  },
+  "属性观察器": {
+    "prefix": "didset",
+    "body": ["var ${1:name}: ${2:Int} = ${3:0} {", "\tdidSet {", "\t\t$0", "\t}", "}"],
+    "description": "didSet 观察器"
+  },
+  "lazy 属性": {
+    "prefix": "lazy",
+    "body": ["lazy var ${1:name}: ${2:Type} = {", "\t$0", "}()"],
+    "description": "懒加载属性"
+  },
+  "weak self 闭包": {
+    "prefix": "weakself",
+    "body": ["{ [weak self] in", "\tguard let self else { return }", "\t$0", "}"],
+    "description": "捕获 weak self 的闭包"
+  },
+  "Codable 结构体": {
+    "prefix": "codable",
+    "body": ["struct ${1:Name}: Codable {", "\tlet ${2:id}: ${3:Int}", "\t$0", "}"],
+    "description": "Codable 结构体"
+  },
+  "Hashable 实现": {
+    "prefix": "hashable",
+    "body": [
+      "func hash(into hasher: inout Hasher) {",
+      "\thasher.combine(${1:id})",
+      "}",
+      "",
+      "static func == (lhs: Self, rhs: Self) -> Bool {",
+      "\tlhs.${1:id} == rhs.${1:id}",
+      "}"
+    ],
+    "description": "Hashable / Equatable 实现"
+  },
+  "SwiftUI 视图": {
+    "prefix": "view",
+    "body": ["struct ${1:ContentView}: View {", "\tvar body: some View {", "\t\t$0", "\t}", "}"],
+    "description": "SwiftUI 视图"
+  },
+  "SwiftUI 预览": {
+    "prefix": "preview",
+    "body": ["#Preview {", "\t${1:ContentView}()", "}"],
+    "description": "#Preview 宏"
+  },
+  "XCTest 测试类": {
+    "prefix": "xctest",
+    "body": [
+      "import XCTest",
+      "@testable import ${1:Module}",
+      "",
+      "final class ${2:$TM_FILENAME_BASE}: XCTestCase {",
+      "\tfunc test${3:Something}() throws {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "XCTest 测试类"
+  },
+  "XCTest 异步测试": {
+    "prefix": "xctasync",
+    "body": ["func test${1:Something}() async throws {", "\t$0", "}"],
+    "description": "XCTest 异步测试方法"
+  },
+  "Swift Testing 测试": {
+    "prefix": "testing",
+    "body": [
+      "import Testing",
+      "@testable import ${1:Module}",
+      "",
+      "@Test func ${2:something}() throws {",
+      "\t#expect(${3:true})",
+      "}"
+    ],
+    "description": "Swift Testing 测试函数"
+  },
+  "Package.swift": {
+    "prefix": "package",
+    "body": [
+      "// swift-tools-version: ${1:6.0}",
+      "import PackageDescription",
+      "",
+      "let package = Package(",
+      "\tname: \"${2:Name}\",",
+      "\ttargets: [",
+      "\t\t.executableTarget(name: \"${2:Name}\"),",
+      "\t\t.testTarget(name: \"${2:Name}Tests\", dependencies: [\"${2:Name}\"]),",
+      "\t]",
+      ")"
+    ],
+    "description": "SwiftPM 清单"
+  },
+  "MARK 分段": {
+    "prefix": "mark",
+    "body": ["// MARK: - ${1:Section}"],
+    "description": "MARK 分段注释"
+  },
+  "文档注释": {
+    "prefix": "doc",
+    "body": [
+      "/// ${1:概要}",
+      "///",
+      "/// - Parameter ${2:name}: ${3:说明}",
+      "/// - Returns: ${4:说明}",
+      "/// - Throws: ${5:说明}"
+    ],
+    "description": "文档注释"
+  }
+}

@@ -1,0 +1,53 @@
+[
+  {
+    "template": "composer-scripts",
+    "file": "composer.json",
+    "tasks": [
+      {
+        "name": "test",
+        "linux": "composer run-script test",
+        "windows": "composer run-script test"
+      },
+      {
+        "name": "analyse",
+        "linux": "composer run-script analyse",
+        "windows": "composer run-script analyse"
+      },
+      {
+        "name": "cs:fix",
+        "linux": "composer run-script cs:fix",
+        "windows": "composer run-script cs:fix"
+      }
+    ]
+  },
+  {
+    "template": "composer",
+    "file": "composer.json",
+    "tasks": [
+      {
+        "name": "install",
+        "description": "按锁文件安装依赖",
+        "linux": "composer install",
+        "windows": "composer install"
+      },
+      {
+        "name": "update",
+        "description": "更新依赖并改写锁文件",
+        "linux": "composer update",
+        "windows": "composer update"
+      },
+      {
+        "name": "dump-autoload",
+        "description": "重新生成自动加载文件",
+        "linux": "composer dump-autoload",
+        "windows": "composer dump-autoload"
+      },
+      {
+        "name": "validate",
+        "description": "检查 composer.json 是否有效",
+        "linux": "composer validate",
+        "windows": "composer validate"
+      }
+    ]
+  }
+]

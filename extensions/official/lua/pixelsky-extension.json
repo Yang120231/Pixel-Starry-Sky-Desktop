@@ -1,0 +1,106 @@
+{
+  "id": "pixelsky.lua",
+  "name": "Lua 支持",
+  "version": "1.0.0",
+  "publisher": "pixelsky",
+  "description": "Lua 的语法高亮、代码片段，以及 luarocks / busted / luacheck 项目、Neovim 插件和 LÖVE 游戏脚本的技能与提示词",
+  "icon": "icon.png",
+  "keywords": ["lua", "luajit", "luarocks", "neovim", "love2d", "busted"],
+  "license": "MIT",
+  "repository": "https://github.com/xiaoheoxo/Pixel-Starry-Sky-Desktop",
+  "homepage": null,
+  "engines": {
+    "pixelsky": ">=0.4.10"
+  },
+  "l10n": {
+    "en": {
+      "name": "Lua Support",
+      "description": "Lua syntax highlighting, snippets, plus a skill and prompts for luarocks / busted / luacheck projects, Neovim plugins and LÖVE games"
+    }
+  },
+  "contributes": {
+    "grammars": [
+      {
+        "language": "lua",
+        "aliases": ["Lua", "lua"],
+        "extensions": [".lua"],
+        "scopeName": "source.lua",
+        "path": "syntaxes/lua.tmLanguage.json",
+        "configuration": "language-configuration.json",
+        "samples": ["samples/sample.lua"]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "lua",
+        "path": "snippets/lua.json"
+      }
+    ],
+    "skills": [
+      {
+        "path": "skills/lua-project"
+      }
+    ],
+    "prompts": [
+      {
+        "id": "lua-write-busted-tests",
+        "title": {
+          "zh": "为选中代码写 busted 测试",
+          "en": "Write busted tests for the selection"
+        },
+        "description": {
+          "zh": "按项目已有的测试风格补单元测试",
+          "en": "Add tests in the project's existing style"
+        },
+        "path": "prompts/write-busted-tests.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "lua-explain-error",
+        "title": {
+          "zh": "解释 Lua 报错",
+          "en": "Explain a Lua error"
+        },
+        "description": {
+          "zh": "把选中的报错或堆栈定位到根因",
+          "en": "Trace the selected error or stack trace to its root cause"
+        },
+        "path": "prompts/explain-error.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "lua-add-luals-annotations",
+        "title": {
+          "zh": "补 LuaLS 类型注解",
+          "en": "Add LuaLS annotations"
+        },
+        "description": {
+          "zh": "为选中的函数和表补 ---@param 等注解",
+          "en": "Add ---@param and related annotations"
+        },
+        "path": "prompts/add-luals-annotations.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      },
+      {
+        "id": "lua-make-compatible",
+        "title": {
+          "zh": "兼容 Lua 5.1 与 5.4",
+          "en": "Make compatible with Lua 5.1 and 5.4"
+        },
+        "description": {
+          "zh": "列出版本不兼容点并给出垫片写法",
+          "en": "List version incompatibilities and add small shims"
+        },
+        "path": "prompts/make-compatible.md",
+        "where": ["composer", "editor"],
+        "requires": "selection"
+      }
+    ]
+  },
+  "main": null,
+  "permissions": [],
+  "price": null
+}

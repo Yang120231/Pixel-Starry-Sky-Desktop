@@ -1,0 +1,11 @@
+// swift-tools-version: 5.9
+import PackageDescription
+
+let package = Package(
+    name: "Kit",
+    products: [.library(name: "Kit", targets: ["Kit"])],
+    targets: [
+        .target(name: "Kit"),
+        .testTarget(name: "KitTests", dependencies: ["Kit"]),
+    ]
+)

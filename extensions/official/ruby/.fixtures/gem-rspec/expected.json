@@ -1,0 +1,50 @@
+[
+  {
+    "template": "bundler",
+    "file": "Gemfile",
+    "tasks": [
+      {
+        "name": "install",
+        "description": "按 Gemfile 安装依赖",
+        "linux": "bundle install",
+        "windows": "bundle install"
+      },
+      {
+        "name": "update",
+        "description": "更新依赖并改写 Gemfile.lock",
+        "linux": "bundle update",
+        "windows": "bundle update"
+      },
+      {
+        "name": "check",
+        "description": "检查依赖是否都已安装",
+        "linux": "bundle check",
+        "windows": "bundle check"
+      },
+      {
+        "name": "outdated",
+        "description": "列出有新版本的依赖",
+        "linux": "bundle outdated",
+        "windows": "bundle outdated"
+      }
+    ]
+  },
+  {
+    "template": "bundler-exec",
+    "file": "Gemfile",
+    "tasks": [
+      {
+        "name": "rspec",
+        "description": "运行 RSpec 测试",
+        "linux": "bundle exec rspec",
+        "windows": "bundle exec rspec"
+      },
+      {
+        "name": "rubocop",
+        "description": "RuboCop 代码检查",
+        "linux": "bundle exec rubocop",
+        "windows": "bundle exec rubocop"
+      }
+    ]
+  }
+]

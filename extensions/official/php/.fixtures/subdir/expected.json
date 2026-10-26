@@ -1,0 +1,161 @@
+[
+  {
+    "template": "composer-scripts",
+    "file": "composer.json",
+    "tasks": [
+      {
+        "name": "lint",
+        "linux": "composer run-script lint",
+        "windows": "composer run-script lint"
+      }
+    ]
+  },
+  {
+    "template": "composer",
+    "file": "composer.json",
+    "tasks": [
+      {
+        "name": "install",
+        "description": "按锁文件安装依赖",
+        "linux": "composer install",
+        "windows": "composer install"
+      },
+      {
+        "name": "update",
+        "description": "更新依赖并改写锁文件",
+        "linux": "composer update",
+        "windows": "composer update"
+      },
+      {
+        "name": "dump-autoload",
+        "description": "重新生成自动加载文件",
+        "linux": "composer dump-autoload",
+        "windows": "composer dump-autoload"
+      },
+      {
+        "name": "validate",
+        "description": "检查 composer.json 是否有效",
+        "linux": "composer validate",
+        "windows": "composer validate"
+      }
+    ]
+  },
+  {
+    "template": "composer-scripts",
+    "file": "apps/web/composer.json",
+    "tasks": [
+      {
+        "name": "post-root-package-install",
+        "linux": "cd apps/web && composer run-script post-root-package-install",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { composer run-script post-root-package-install }"
+      },
+      {
+        "name": "test:unit",
+        "linux": "cd apps/web && composer run-script test:unit",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { composer run-script test:unit }"
+      }
+    ]
+  },
+  {
+    "template": "laravel-artisan",
+    "file": "apps/web/composer.json",
+    "tasks": [
+      {
+        "name": "serve",
+        "description": "启动本地开发服务器",
+        "linux": "cd apps/web && php artisan serve",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan serve }"
+      },
+      {
+        "name": "test",
+        "description": "运行测试（PHPUnit / Pest）",
+        "linux": "cd apps/web && php artisan test",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan test }"
+      },
+      {
+        "name": "migrate",
+        "description": "执行数据库迁移",
+        "linux": "cd apps/web && php artisan migrate",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan migrate }"
+      },
+      {
+        "name": "migrate:fresh",
+        "description": "删掉所有表并重新迁移",
+        "linux": "cd apps/web && php artisan migrate:fresh",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan migrate:fresh }"
+      },
+      {
+        "name": "migrate:rollback",
+        "description": "回滚最近一批迁移",
+        "linux": "cd apps/web && php artisan migrate:rollback",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan migrate:rollback }"
+      },
+      {
+        "name": "db:seed",
+        "description": "运行数据填充",
+        "linux": "cd apps/web && php artisan db:seed",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan db:seed }"
+      },
+      {
+        "name": "route:list",
+        "description": "列出所有路由",
+        "linux": "cd apps/web && php artisan route:list",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan route:list }"
+      },
+      {
+        "name": "queue:work",
+        "description": "启动队列处理进程",
+        "linux": "cd apps/web && php artisan queue:work",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan queue:work }"
+      },
+      {
+        "name": "schedule:work",
+        "description": "本地持续运行计划任务",
+        "linux": "cd apps/web && php artisan schedule:work",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan schedule:work }"
+      },
+      {
+        "name": "storage:link",
+        "description": "创建 public/storage 软链接",
+        "linux": "cd apps/web && php artisan storage:link",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan storage:link }"
+      },
+      {
+        "name": "optimize:clear",
+        "description": "清除配置、路由、视图等缓存",
+        "linux": "cd apps/web && php artisan optimize:clear",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { php artisan optimize:clear }"
+      }
+    ]
+  },
+  {
+    "template": "composer",
+    "file": "apps/web/composer.json",
+    "tasks": [
+      {
+        "name": "install",
+        "description": "按锁文件安装依赖",
+        "linux": "cd apps/web && composer install",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { composer install }"
+      },
+      {
+        "name": "update",
+        "description": "更新依赖并改写锁文件",
+        "linux": "cd apps/web && composer update",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { composer update }"
+      },
+      {
+        "name": "dump-autoload",
+        "description": "重新生成自动加载文件",
+        "linux": "cd apps/web && composer dump-autoload",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { composer dump-autoload }"
+      },
+      {
+        "name": "validate",
+        "description": "检查 composer.json 是否有效",
+        "linux": "cd apps/web && composer validate",
+        "windows": "Set-Location -LiteralPath apps/web; if ($?) { composer validate }"
+      }
+    ]
+  }
+]

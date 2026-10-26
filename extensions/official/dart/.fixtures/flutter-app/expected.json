@@ -1,0 +1,158 @@
+[
+  {
+    "template": "flutter-pub",
+    "file": "pubspec.yaml",
+    "tasks": [
+      {
+        "name": "get",
+        "description": "获取依赖",
+        "linux": "flutter pub get",
+        "windows": "flutter pub get"
+      },
+      {
+        "name": "upgrade",
+        "description": "升级依赖",
+        "linux": "flutter pub upgrade",
+        "windows": "flutter pub upgrade"
+      },
+      {
+        "name": "outdated",
+        "description": "查看过期依赖",
+        "linux": "flutter pub outdated",
+        "windows": "flutter pub outdated"
+      }
+    ]
+  },
+  {
+    "template": "flutter",
+    "file": "pubspec.yaml",
+    "tasks": [
+      {
+        "name": "test",
+        "description": "运行测试",
+        "linux": "flutter test",
+        "windows": "flutter test"
+      },
+      {
+        "name": "analyze",
+        "description": "静态分析",
+        "linux": "flutter analyze",
+        "windows": "flutter analyze"
+      },
+      {
+        "name": "run",
+        "description": "运行应用",
+        "linux": "flutter run",
+        "windows": "flutter run"
+      }
+    ]
+  },
+  {
+    "template": "dart-format",
+    "file": "pubspec.yaml",
+    "tasks": [
+      {
+        "name": "format",
+        "description": "格式化代码（dart format）",
+        "linux": "dart format .",
+        "windows": "dart format ."
+      }
+    ]
+  },
+  {
+    "template": "build-runner",
+    "file": "pubspec.yaml",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "生成代码（build_runner build）",
+        "linux": "dart run build_runner build --delete-conflicting-outputs",
+        "windows": "dart run build_runner build --delete-conflicting-outputs"
+      },
+      {
+        "name": "watch",
+        "description": "监听并生成代码（build_runner watch）",
+        "linux": "dart run build_runner watch --delete-conflicting-outputs",
+        "windows": "dart run build_runner watch --delete-conflicting-outputs"
+      }
+    ]
+  },
+  {
+    "template": "dart-pub",
+    "file": "packages/ui/pubspec.yaml",
+    "tasks": [
+      {
+        "name": "get",
+        "description": "获取依赖",
+        "linux": "cd packages/ui && dart pub get",
+        "windows": "Set-Location -LiteralPath packages/ui; if ($?) { dart pub get }"
+      },
+      {
+        "name": "upgrade",
+        "description": "升级依赖",
+        "linux": "cd packages/ui && dart pub upgrade",
+        "windows": "Set-Location -LiteralPath packages/ui; if ($?) { dart pub upgrade }"
+      },
+      {
+        "name": "outdated",
+        "description": "查看过期依赖",
+        "linux": "cd packages/ui && dart pub outdated",
+        "windows": "Set-Location -LiteralPath packages/ui; if ($?) { dart pub outdated }"
+      }
+    ]
+  },
+  {
+    "template": "dart",
+    "file": "packages/ui/pubspec.yaml",
+    "tasks": [
+      {
+        "name": "test",
+        "description": "运行测试",
+        "linux": "cd packages/ui && dart test",
+        "windows": "Set-Location -LiteralPath packages/ui; if ($?) { dart test }"
+      },
+      {
+        "name": "analyze",
+        "description": "静态分析",
+        "linux": "cd packages/ui && dart analyze",
+        "windows": "Set-Location -LiteralPath packages/ui; if ($?) { dart analyze }"
+      },
+      {
+        "name": "run",
+        "description": "运行程序",
+        "linux": "cd packages/ui && dart run",
+        "windows": "Set-Location -LiteralPath packages/ui; if ($?) { dart run }"
+      }
+    ]
+  },
+  {
+    "template": "dart-format",
+    "file": "packages/ui/pubspec.yaml",
+    "tasks": [
+      {
+        "name": "format",
+        "description": "格式化代码（dart format）",
+        "linux": "cd packages/ui && dart format .",
+        "windows": "Set-Location -LiteralPath packages/ui; if ($?) { dart format . }"
+      }
+    ]
+  },
+  {
+    "template": "build-runner",
+    "file": "packages/ui/pubspec.yaml",
+    "tasks": [
+      {
+        "name": "build",
+        "description": "生成代码（build_runner build）",
+        "linux": "cd packages/ui && dart run build_runner build --delete-conflicting-outputs",
+        "windows": "Set-Location -LiteralPath packages/ui; if ($?) { dart run build_runner build --delete-conflicting-outputs }"
+      },
+      {
+        "name": "watch",
+        "description": "监听并生成代码（build_runner watch）",
+        "linux": "cd packages/ui && dart run build_runner watch --delete-conflicting-outputs",
+        "windows": "Set-Location -LiteralPath packages/ui; if ($?) { dart run build_runner watch --delete-conflicting-outputs }"
+      }
+    ]
+  }
+]
