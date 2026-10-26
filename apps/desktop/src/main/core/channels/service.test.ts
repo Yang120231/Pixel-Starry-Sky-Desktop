@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EngineEvent, HostEvent, ProjectRecord, SessionSnapshot, SessionSummary } from '@pixelsky/protocol'
 import {
   RELAY_PRESETS,
@@ -580,7 +580,7 @@ describe('协作频道：AI 互相派活（docs/ui/import-collab.md 第 5 项①
     expect(first).not.toContain('- 前端助手')
     await finishLast(
       c,
-      '按钮改好了。\n\n@审查员 请看一下按钮改动。\n\n```\n@构建 代码里的不算\n```\n顺便提一句 `@构建` 和 @前端助手 也不算',
+      '按钮改好了。\n\n@审查员 请看一下按钮改动。\n\n```\n@构建 代码里的不算\n```\n~~~\n@构建 波浪线围栏里的也不算\n~~~\n顺便提一句 `@构建` 和 @前端助手 也不算',
       ['src/Button.tsx', 'src/tokens.css'],
     )
     const [orig, relay] = tasks(c, channelId)
@@ -942,6 +942,28 @@ describe('协作频道：附件（本机频道）', () => {
     const last = sentWith().at(-1)!
     expect(last.attachments?.map(i => i.id)).toEqual(['a', 'b', 'c', 'd', 'e'])
     expect(last.text).toContain('（频道里还有 1 张图片 超过一条消息的上限，这次没带上）')
+  })
+
+  it('读附件期间取消了任务卡：不再发给会话，卡片仍是已取消', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端助手'))
+    const channelId = await c.create({ name: 'ch', memberIds: [a] })
+    const store = (c as unknown as { store: ChannelStore }).store
+    const original = store.readAttachments.bind(store)
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    vi.spyOn(store, 'readAttachments').mockImplementation(async (...args) => {
+      await gate
+      return original(...args)
+    })
+    await c.post(channelId, { text: '@前端助手 看下这个报错', clientId: 'p1', files: [file('err')] })
+    await settle()
+    const task = tasks(c, channelId)[0]
+    await c.taskAction(task.id, 'cancel')
+    release()
+    await settle()
+    expect(sentWith()).toEqual([])
+    expect(tasks(c, channelId)[0]).toMatchObject({ status: 'stopped', note: 'cancelled' })
   })
 
   it('格式不对的附件不收；团队频道不支持附件', async () => {

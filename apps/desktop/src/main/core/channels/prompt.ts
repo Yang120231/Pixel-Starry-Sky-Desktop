@@ -174,7 +174,7 @@ export function historyLines(
 
 /** 去掉代码块和行内代码：AI 回复里代码中的 @ 不算派活 */
 export function withoutCode(text: string): string {
-  return text.replace(/```[\s\S]*?(?:```|$)/g, '').replace(/`[^`\n]*`/g, '')
+  return text.replace(/(`{3,}|~{3,})[\s\S]*?(?:\1|$)/g, '').replace(/`[^`\n]*`/g, '')
 }
 
 /** AI 互相派活时交接的内容：谁、做完了哪项活、他的回复、改了哪些文件 */

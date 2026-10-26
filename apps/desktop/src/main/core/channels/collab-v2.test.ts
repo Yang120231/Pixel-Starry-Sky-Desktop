@@ -208,6 +208,25 @@ describe('频道工具（§1）', () => {
     await expect(c.toolReply(s, '  ')).rejects.toThrow('不能为空')
   })
 
+  it('成员被移出频道：正在做的这一轮照常能用工具，这一轮结束后会话被拒', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端'))
+    const b = await c.saveMember(null, agent('文档'))
+    const ch = await c.create({ name: 'web', memberIds: [a, b] })
+    await c.post(ch, { text: '@前端 改按钮', clientId: 'go' })
+    await settle()
+    const s = sends()[0].sessionId
+
+    await c.removeMember(ch, a)
+    expect(c.sessionMember(s)).toEqual({ memberId: a, tools: null })
+    expect(c.toolRead(s, {})).toContain('改按钮')
+
+    finishLast(c, '改好了')
+    await settle()
+    expect(c.sessionMember(s)).toBeNull()
+    expect(() => c.toolRead(s, {})).toThrow('不是频道派活的会话')
+  })
+
   it('task_propose 发提议卡（@你），点「派出去」才派，派活人是你；不要了就不派；名字不对报可选的成员', async () => {
     const c = await open()
     const a = await c.saveMember(null, agent('前端'))
@@ -283,6 +302,17 @@ describe('频道工具（§1）', () => {
     c.hostEvent(ev(s, { type: 'turn_completed', turnId: turn, outcome: 'completed', error: null }))
     await settle()
     expect(tasks(c, ch)).toHaveLength(2)
+  })
+
+  it('事项文字里的 @成员、@全体 不多派：只交给选的负责人', async () => {
+    const c = await open()
+    const a = await c.saveMember(null, agent('前端'))
+    const b = await c.saveMember(null, agent('审查员'))
+    const ch = await c.create({ name: 'web', memberIds: [a, b] })
+    await c.dispatchIssue(ch, { id: 'i1', title: '支持 @全体 的显示', note: '字面文本 @审查员', memberId: a })
+    await settle()
+    expect(tasks(c, ch).map(t => t.assigneeId)).toEqual([a])
+    expect(sends()).toHaveLength(1)
   })
 })
 

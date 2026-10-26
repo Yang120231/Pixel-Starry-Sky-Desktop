@@ -43,9 +43,12 @@ export function cleanSchedule(raw: unknown, prior: TaskSchedule | null | undefin
     permission,
     session: r.session,
     lastSlot: prior?.lastSlot ?? 0,
-    lastSessionId: prior?.lastSessionId ?? null,
+    lastSessionId: null,
     runs: prior?.runs ?? [],
   }
+  // 续用的会话按它建时的引擎、模型、权限跑：这几项改了下次就新开一个，新设置才生效
+  if (prior && prior.engine === next.engine && prior.model === next.model && prior.permission === next.permission)
+    next.lastSessionId = prior.lastSessionId ?? null
   const same =
     prior &&
     prior.enabled &&

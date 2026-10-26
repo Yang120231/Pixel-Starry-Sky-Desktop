@@ -612,6 +612,24 @@ describe('额度用完自动换账号', () => {
     expect(notice && notice.kind === 'notice' && notice.account).toMatchObject({ from: 'default', to: b.id })
   })
 
+  it('原账号的失败晚到、期间已删掉原账号（当前成了 B）：不把 B 记成用完，在 B 上重发，不跳到 C', async () => {
+    const gate = latch()
+    const env = setup({ limited: n => n === 1, gate: n => (n === 1 ? gate.wait() : Promise.resolve()) })
+    await env.addAccount('work@example.com')
+    const list = await env.addAccount('third@example.com')
+    const [, b] = list.accounts
+    env.host.setAccountAuto('codex', { enabled: true })
+    const id = await send(env)
+    await vi.waitFor(() => expect(env.sends).toHaveLength(1))
+    expect((await env.host.removeAccount('codex', 'default')).current).toBe(b.id)
+    gate.open()
+    await vi.waitFor(() => expect(env.sends).toHaveLength(2))
+    await vi.waitFor(() => expect(env.host.open(id).state).toBe('idle'))
+    expect((await env.host.accounts('codex')).current).toBe(b.id)
+    const notice = env.host.open(id).items.find(i => i.kind === 'notice' && i.id.startsWith('account-switch-'))
+    expect(notice && notice.kind === 'notice' && notice.account).toMatchObject({ to: b.id })
+  })
+
   it('同一账号的两个会话一起用完：只换一次（到 B），第二个也在 B 上重发，不把 B 记成用完', async () => {
     const gate = latch()
     const env = setup({ limited: n => n <= 2, gate: n => (n <= 2 ? gate.wait() : Promise.resolve()) })

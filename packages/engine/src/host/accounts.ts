@@ -684,12 +684,13 @@ export class HostAccounts {
     if (!s.auto.enabled || s.accounts.length < 2 || this.autoSwitched.has(queueId)) return null
     const current = this.currentId(e)
     // 用完的是这个进程启动时的账号（rt.sessionAccount）：它晚到的失败不能记到别人头上——期间可能手动换过，
-    // 或者同一账号的另一个会话已经先换走了；账号已不在列表里时按当前的算
-    const from = rt.sessionAccount && s.accounts.some(a => a.id === rt.sessionAccount) ? rt.sessionAccount : current
+    // 或者同一账号的另一个会话已经先换走了；账号已经删了也不算到当前账号头上
+    const from = rt.sessionAccount ?? current
     const fromRow = s.accounts.find(a => a.id === from)
     // 用完的是哪个窗口、几点恢复：换之前按原账号的邮箱取（换完再取就是新账号的了）
     const used = this.usedFor(sessionId, e, fromRow)
-    this.markUsed(e, from)
+    // 启动时的账号已经删了：不记到任何账号上（当前账号还能用就留在它上面重发）
+    if (fromRow) this.markUsed(e, from)
     // 当前账号已经不是用完的那个（换过了）、而且还能用：不再往下换，这条在当前账号上重发
     const currentRow = from !== current ? s.accounts.find(a => a.id === current) : undefined
     const stay =
@@ -698,7 +699,7 @@ export class HostAccounts {
     if (!next) return null
     this.autoSwitched.add(queueId)
     if (this.autoSwitched.size > 500) this.autoSwitched.delete(this.autoSwitched.values().next().value!)
-    if (s.switchedFrom === null && !stay) {
+    if (s.switchedFrom === null && !stay && fromRow) {
       s.switchedFrom = from
       s.switchedFromResetsAt = used.resetsAt
     }
@@ -732,8 +733,7 @@ export class HostAccounts {
     if (!(ENGINES as readonly string[]).includes(record.engine) || viaGateway(record)) return none
     const e = record.engine as AccountEngine
     const s = this.engineState(e)
-    const from =
-      rt.sessionAccount && s.accounts.some(a => a.id === rt.sessionAccount) ? rt.sessionAccount : this.currentId(e)
+    const from = rt.sessionAccount ?? this.currentId(e)
     return this.usedFor(
       sessionId,
       e,
@@ -774,10 +774,10 @@ export class HostAccounts {
     const s = this.engineState(e)
     if (!s.auto.platform || this.platformSwitched.has(queueId)) return null
     const current = this.currentId(e)
-    const from = rt.sessionAccount && s.accounts.some(a => a.id === rt.sessionAccount) ? rt.sessionAccount : current
+    const from = rt.sessionAccount ?? current
     const fromRow = s.accounts.find(a => a.id === from)
     const used = this.usedFor(sessionId, e, fromRow)
-    this.markUsed(e, from)
+    if (fromRow) this.markUsed(e, from)
     // 开着自动换账号、还有能换的（这次没换是因为同一条消息已经换过一次）：不改用平台，下一条消息再换账号
     const usable = (a: EngineAccount): boolean =>
       a.id !== from && a.status !== 'expired' && (usedOf(this.quotas.get(`${e}:${a.id}`)) ?? 0) < 100

@@ -24,6 +24,10 @@ describe('cleanSchedule', () => {
     const prior = { ...(cleanSchedule(input, null, now) as TaskSchedule), lastSlot: 5, runs: [run], lastSessionId: 's' }
     const next = cleanSchedule({ ...input, runs: [], lastSlot: 99 }, prior, now)
     expect(next).toMatchObject({ lastSlot: 5, runs: [run], lastSessionId: 's' })
+    // 引擎、模型、权限改了：不再续用旧会话，新设置下次才生效
+    expect(cleanSchedule({ ...input, engine: 'codex' }, prior, now)?.lastSessionId).toBeNull()
+    expect(cleanSchedule({ ...input, model: 'm2' }, prior, now)?.lastSessionId).toBeNull()
+    expect(cleanSchedule({ ...input, permission: 'edits' }, prior, now)?.lastSessionId).toBeNull()
     expect(cleanSchedule({ ...input, hour: 10 }, prior, now)?.lastSlot).toBe(new Date(2026, 9, 26, 10, 0).getTime())
   })
   it('null 清除；非法值报错；不给 full 权限', () => {

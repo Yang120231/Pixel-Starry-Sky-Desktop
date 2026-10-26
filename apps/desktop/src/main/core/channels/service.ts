@@ -1158,7 +1158,12 @@ export class Channels {
     return threadRootOf(list, root.id)
   }
 
-  async post(channelId: string, input: PostInput): Promise<{ message: ChannelTextMessage; tasks: string[] }> {
+  /** only：只派给这个成员，正文里的 @ 不算（看板「交给负责人」用，IPC 传不进来） */
+  async post(
+    channelId: string,
+    input: PostInput,
+    only?: string,
+  ): Promise<{ message: ChannelTextMessage; tasks: string[] }> {
     if (this.isTeam(channelId)) return this.postTeam(channelId, input)
     const c = this.writable(channelId)
     const text = typeof input?.text === 'string' ? input.text.trim() : ''
@@ -1188,7 +1193,7 @@ export class Channels {
       format: 'plain',
       replyToId,
       ...(threadId ? { threadId } : {}),
-      mentions: parseMentions(text, members).filter(id => id !== SELF_ID),
+      mentions: only ? [only] : parseMentions(text, members).filter(id => id !== SELF_ID),
     }
     if (images.length || files.length) {
       // 全文先写好再追加消息：消息出现时附件一定读得到
@@ -1717,7 +1722,7 @@ export class Channels {
     if (note) parts.push(note)
     if (acceptance.length)
       parts.push([en ? 'Acceptance criteria:' : '验收标准：', ...acceptance.map((a, i) => `${i + 1}. ${a}`)].join('\n'))
-    const { tasks } = await this.post(channelId, { text: parts.join('\n\n'), clientId: randomUUID() })
+    const { tasks } = await this.post(channelId, { text: parts.join('\n\n'), clientId: randomUUID() }, memberId)
     const taskId = tasks.find(t => this.store.task(t)?.assigneeId === memberId) ?? tasks[0]
     if (!taskId) throw new Error('没有派出去：成员没接这项活')
     this.patch(channelId, taskId, { issue: { id, title } })
@@ -1793,6 +1798,9 @@ export class Channels {
       this.patch(run.channelId, run.taskId, { sessionId, status: 'queued' })
       this.saveRuns()
       const extra = await this.attachmentsFor(current, member)
+      // 读附件期间可能被取消、停止：再核对一次，取消了就不发
+      const now = this.store.runs.get(run.taskId)
+      if (!now || now.phase !== 'sent' || now.clientMessageId !== cmid) return
       // 几条消息的附件合在一起超过一条消息的上限、带不上的，告诉 AI 一声
       const lost = droppedNote(extra.dropped.images, extra.dropped.files, this.deps.locale())
       await this.deps.call('engine:send', [
@@ -1981,6 +1989,8 @@ export class Channels {
       : [...this.store.channels.values()].find(x => x.memberIds.includes(member.id))
     if (!c) return null
     run ??= task ? (this.store.runs.get(task.id) ?? null) : null
+    // 移出频道后：正在做的那一轮照常做完，之后不能再读写这个频道
+    if (!c.memberIds.includes(member.id) && run?.phase !== 'sent') return null
     return { member, c, task: task?.channelId === c.id ? task : null, run }
   }
 
