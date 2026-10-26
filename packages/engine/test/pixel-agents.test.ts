@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import type { EngineEvent } from '@pixelsky/protocol'
 import { PixelAdapter } from '../src'
-import { runsFromSession, subagentItemId } from '../src/pixel/agents'
+import { runsFromSession, subagentItemId, subagentTotals } from '../src/pixel/agents'
 import { PixelTranslator } from '../src/pixel/translate'
 import { transcriptItems } from '../src/pixel/transcript'
 
@@ -248,3 +248,55 @@ function runsFromSessionRows(rows: Array<Record<string, unknown>>) {
   writeFileSync(file, jsonl(rows.map(data => ({ type: 'custom', customType: 'pixelsky-subagent', data }))))
   return runsFromSession(file).map(({ sessionFile: _, ...run }) => run)
 }
+
+describe('子智能体的用量算进这一轮（docs/own-cli.md §15）', () => {
+  const usage = (input: number, output: number, cost: number, requests: number) => ({
+    'm-child': { input, output, cacheRead: 0, cacheWrite: 0, cost, requests },
+  })
+  const update = (t: PixelTranslator, details: Record<string, unknown>, final = false) =>
+    t.event(
+      final
+        ? { type: 'tool_execution_end', toolCallId: 'c1', toolName: 'task', result: { details }, isError: false }
+        : { type: 'tool_execution_update', toolCallId: 'c1', toolName: 'task', partialResult: { details } },
+    )
+
+  it('进度报累计，只加多出来的；同样的进度重复报不重复算；会话累计也加上', () => {
+    const events: EngineEvent[] = []
+    const t = new PixelTranslator(e => events.push(e), { cwd: '/proj' })
+    t.beginTurn()
+    update(t, progress({ usage: usage(100, 10, 0.01, 1) }))
+    update(t, progress({ usage: usage(100, 10, 0.01, 1) }))
+    update(t, progress({ usage: usage(250, 30, 0.03, 2), state: 'completed' }), true)
+    expect(t.turnUsage(5).models['m-child']).toMatchObject({ input: 250, output: 30, requests: 2 })
+    expect(t.turnUsage(5).models['m-child'].costUsd).toBeCloseTo(0.03)
+    expect(events.filter(e => e.type === 'usage').pop()).toMatchObject({
+      usage: { inputTokens: 250, outputTokens: 30 },
+    })
+  })
+
+  it('不知道价格的模型（自选站点）报费用 0：记成不知道，不当成免费', () => {
+    const t = new PixelTranslator(() => {}, { cwd: '/proj' })
+    t.beginTurn()
+    update(t, progress({ usage: usage(100, 10, 0, 1) }))
+    expect(t.turnUsage(5).models['m-child']).toMatchObject({ input: 100, costUsd: null })
+  })
+
+  it('老版本命令行不报 usage：不动用量', () => {
+    const t = new PixelTranslator(() => {}, { cwd: '/proj' })
+    t.beginTurn()
+    update(t, progress())
+    expect(t.turnUsage(5).models).toEqual({})
+  })
+
+  it('重新打开：会话文件里每个调用取最后一条记录的用量合计', () => {
+    const rows = [
+      { type: 'custom', customType: 'pixelsky-subagent', data: { toolCallId: 'a', usage: usage(10, 1, 0.1, 1) } },
+      { type: 'custom', customType: 'pixelsky-subagent', data: { toolCallId: 'a', usage: usage(30, 3, 0.3, 2) } },
+      { type: 'custom', customType: 'pixelsky-subagent', data: { toolCallId: 'b', usage: usage(5, 5, 0.05, 1) } },
+      { type: 'custom', customType: 'pixelsky-subagent', data: { toolCallId: 'c' } },
+    ]
+    const sum = subagentTotals(rows)
+    expect(sum).toMatchObject({ input: 35, output: 8, cacheRead: 0, cacheWrite: 0 })
+    expect(sum.cost).toBeCloseTo(0.35)
+  })
+})

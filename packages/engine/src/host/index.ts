@@ -150,7 +150,7 @@ export class EngineHost {
         sessionEnv: opts.sessionEnv,
         launchOptions: () => {
           const o = settings.launchOptions('pixel')
-          return { args: o.args, contextWindows: o.contextWindows }
+          return { args: o.args, contextWindows: o.contextWindows, autoCompactPct: o.autoCompactPct }
         },
       }),
     }

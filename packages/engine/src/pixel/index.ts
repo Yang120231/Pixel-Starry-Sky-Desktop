@@ -29,6 +29,9 @@ import {
 import { pixelSideModel, pixelSideQuestion } from './side'
 import { transcriptItems } from './transcript'
 
+/** 自动压缩阈值交给命令行的环境变量：Pi 补丁里的 shouldCompact 读它（patches/@earendil-works__pi-coding-agent@1.4.0.patch，docs/own-cli.md §15） */
+export const AUTO_COMPACT_ENV = 'PIXELSKY_AUTOCOMPACT_PCT'
+
 export interface PixelAdapterOptions {
   /** 用户在设置里替换的命令（脚本入口或可执行文件，绝对路径或 PATH 上的命令名） */
   overridePath?: () => string | null
@@ -159,12 +162,11 @@ export class PixelAdapter implements EngineAdapter {
     const result = this.cached
     if (!result?.launcher || result.info.status !== 'ready')
       throw new Error(result?.info.message ?? 'Pixel is unavailable')
-    return new PixelSession(
-      result.launcher,
-      this.sessionEnvironment(result.launcher, ctx.record()),
-      ctx,
-      this.opts.launchOptions?.() ?? {},
-    )
+    const launch = this.opts.launchOptions?.() ?? {}
+    const env = this.sessionEnvironment(result.launcher, ctx.record())
+    // 只给会话进程：旁聊是复制出来的会话文件，问一次就丢，不该花钱压缩
+    if (launch.autoCompactPct) env[AUTO_COMPACT_ENV] = String(launch.autoCompactPct)
+    return new PixelSession(result.launcher, env, ctx, launch)
   }
 
   /** 旁聊：复制会话文件单独问一次（side.ts），不用工具，不改原会话；MCP、技能都不带 */

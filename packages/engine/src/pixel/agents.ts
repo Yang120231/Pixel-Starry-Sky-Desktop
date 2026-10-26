@@ -67,6 +67,54 @@ export function subagentRun(details: Message, toolCallId: string): AgentRun {
   }
 }
 
+/** 子智能体按模型的累计用量（subagent.ts 的 SubagentModelUsage；老版本命令行没有） */
+export type SubagentUsage = Record<
+  string,
+  { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number; requests: number }
+>
+
+export function subagentUsage(details: Message): SubagentUsage {
+  const out: SubagentUsage = {}
+  for (const [model, raw] of Object.entries(object(details.usage))) {
+    const u = object(raw)
+    out[model] = {
+      input: number(u.input),
+      output: number(u.output),
+      cacheRead: number(u.cacheRead),
+      cacheWrite: number(u.cacheWrite),
+      cost: number(u.cost),
+      requests: number(u.requests),
+    }
+  }
+  return out
+}
+
+/** 主会话文件里记下的子智能体用量合计（同一个工具调用以最后一条为准）：切回旧会话时加进会话累计（Pi 的统计不含子进程） */
+export function subagentTotals(list: Message[]): {
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  cost: number
+} {
+  const byCall = new Map<string, SubagentUsage>()
+  for (const e of list)
+    if (e.type === 'custom' && e.customType === SUBAGENT_ENTRY) {
+      const data = object(e.data)
+      if (string(data.toolCallId)) byCall.set(string(data.toolCallId), subagentUsage(data))
+    }
+  const sum = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 }
+  for (const usage of byCall.values())
+    for (const u of Object.values(usage)) {
+      sum.input += u.input
+      sum.output += u.output
+      sum.cacheRead += u.cacheRead
+      sum.cacheWrite += u.cacheWrite
+      sum.cost += u.cost
+    }
+  return sum
+}
+
 /** 子智能体条（运行中的那几个）上显示的一项 */
 export function subagentStatus(run: AgentRun, lastTool: string | null): SubagentStatus {
   return {
@@ -97,9 +145,12 @@ export function entries(file: string): Message[] {
 }
 
 /** 主会话文件里记下的子智能体（同一个工具调用以最后一条为准） */
-export function runsFromSession(file: string): Array<AgentRun & { sessionFile: string | null }> {
+export function runsFromSession(
+  file: string,
+  list: Message[] = entries(file),
+): Array<AgentRun & { sessionFile: string | null }> {
   const byCall = new Map<string, AgentRun & { sessionFile: string | null }>()
-  for (const e of entries(file)) {
+  for (const e of list) {
     if (e.type !== 'custom' || e.customType !== SUBAGENT_ENTRY) continue
     const data = object(e.data)
     const call = string(data.toolCallId)

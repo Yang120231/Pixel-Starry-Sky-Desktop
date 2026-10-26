@@ -22,6 +22,10 @@ export const contextMessages = {
     zh: '{engine} 还没报告模型列表，检测成功后显示。',
     en: "{engine} hasn't reported its models yet. They appear after detection succeeds.",
   },
+  'contextWindow.pixelCompactHint': {
+    zh: '占用到窗口的这个比例就压缩（一轮中途发请求前、一轮结束时都会检查）；像素星空自己的规则（离窗口还剩约 16K）先到时照旧按它。窗口按模型定，不知道窗口的模型不受这里影响。改了以后下一条消息生效。',
+    en: "Compacts when usage reaches this share of the window (checked before each request mid-turn and when a turn ends). If Pixel Starry Sky's own rule (about 16K before the window) comes first, it still applies. The window depends on the model; models with an unknown window are not affected. Takes effect from the next message.",
+  },
   'contextWindow.codexCompactHint': {
     zh: 'Codex 按「窗口 × 这个比例」算出压缩的位置；窗口依次取这里填的、Codex 报过的、内置价格表里的，都不知道时由 Codex 自己决定。对 Codex 的所有会话生效（云端、本机、自定义 API）。',
     en: 'Codex compacts at window × this percentage. The window comes from what you set here, then what Codex reported, then the built-in price table; when none is known Codex decides. Applies to all Codex conversations (cloud, own account, custom API).',

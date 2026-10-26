@@ -23,7 +23,18 @@ diff --git a/dist/core/compaction/compaction.js b/dist/core/compaction/compactio
 index 9b1a409..a3bd1ed 100644
 --- a/dist/core/compaction/compaction.js
 +++ b/dist/core/compaction/compaction.js
-@@ -179,14 +179,24 @@ export function shouldCompact(contextTokens, contextWindow, settings) {
+@@ -173,20 +173,35 @@ export function shouldCompact(contextTokens, contextWindow, settings) {
+ export function shouldCompact(contextTokens, contextWindow, settings) {
+     if (!settings.enabled)
+         return false;
++    // 像素星空补丁：桌面端设了自动压缩阈值（PIXELSKY_AUTOCOMPACT_PCT，1–99）时，占用到窗口的这个比例就压缩；
++    // 和下面 Pi 自己的规则取先到的那个（同 Claude Code 的阈值覆盖）。一轮中途发请求前、一轮结束时都经过这里
++    const pixelskyPct = Number(process.env.PIXELSKY_AUTOCOMPACT_PCT);
++    if (Number.isInteger(pixelskyPct) && pixelskyPct >= 1 && pixelskyPct <= 99 && contextWindow > 0 && contextTokens >= (contextWindow * pixelskyPct) / 100)
++        return true;
+     return contextTokens > contextWindow - settings.reserveTokens;
+ }
+ // ============================================================================
  // Cut point detection
  // ============================================================================
  const ESTIMATED_IMAGE_CHARS = 4800;
@@ -50,7 +61,7 @@ index 9b1a409..a3bd1ed 100644
          }
          else if (block.type === "image") {
              chars += ESTIMATED_IMAGE_CHARS;
-@@ -195,8 +205,7 @@ function estimateTextAndImageContentChars(content) {
+@@ -195,8 +210,7 @@ function estimateTextAndImageContentChars(content) {
      return chars;
  }
  /**
@@ -60,7 +71,7 @@ index 9b1a409..a3bd1ed 100644
   */
  export function estimateTokens(message) {
      let chars = 0;
-@@ -207,45 +216,45 @@ export function estimateTokens(message) {
+@@ -207,45 +221,45 @@ export function estimateTokens(message) {
              if (system.sections) {
                  for (const section of Object.values(system.sections)) {
                      if (section)

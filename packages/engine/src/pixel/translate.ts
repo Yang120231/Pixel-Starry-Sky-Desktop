@@ -21,7 +21,7 @@ import { MAX_RESULT_IMAGES, displayPath } from '../claude/tools'
 import { diffAdded, diffText } from '../diff'
 import { MAX_OUTPUT, clip } from '../output'
 import { cut } from '../text'
-import { SUBAGENT_TOOL, subagentItemId, subagentRun, subagentStatus } from './agents'
+import { SUBAGENT_TOOL, subagentItemId, subagentRun, subagentStatus, subagentUsage, type SubagentUsage } from './agents'
 import { array, number, object, string, type Message } from './process'
 
 /** Pixel 只给一句报错原文：从原文认状态码和归类（notice.error）；认不出时 undefined */
@@ -540,6 +540,7 @@ export class PixelTranslator {
     model: string,
     counts: { input: number; output: number; cacheRead: number; cacheWrite: number },
     cost: number,
+    requests = 1,
   ): void {
     const t = this.totals
     t.input += counts.input
@@ -553,7 +554,7 @@ export class PixelTranslator {
     m.cacheWrite += counts.cacheWrite
     m.output += counts.output
     m.costUsd = (m.costUsd ?? 0) + cost
-    m.requests = (m.requests ?? 0) + 1
+    m.requests = (m.requests ?? 0) + requests
   }
 
   emitUsage(): void {
@@ -599,6 +600,8 @@ export class PixelTranslator {
   /** 这个会话的子智能体（整个会话的，不随一轮清空）：工具调用 id → 追踪里的一项 */
   private readonly agents = new Map<string, AgentRun>()
   private readonly agentTools = new Map<string, string | null>()
+  /** 每个子智能体已经算进用量的部分：进度报的是累计，只加多出来的（docs/own-cli.md §15） */
+  private readonly agentUsage = new Map<string, SubagentUsage>()
   /** 打开会话时从主会话文件读回以前的子智能体 */
   seedRuns(runs: readonly AgentRun[]): void {
     for (const run of runs) {
@@ -619,6 +622,31 @@ export class PixelTranslator {
     this.agents.set(call, run)
     this.agentTools.set(call, string(details.lastTool) || this.agentTools.get(call) || null)
     this.emitRuns()
+    this.addSubagentUsage(call, details)
+  }
+  /** 子智能体的请求也算进这一轮和会话累计（按它用的模型记）；只加和上次进度相比多出来的 */
+  private addSubagentUsage(call: string, details: Message): void {
+    if (!details.usage) return
+    const now = subagentUsage(details),
+      seen = this.agentUsage.get(call) ?? {}
+    let added = false
+    for (const [model, u] of Object.entries(now)) {
+      const p = seen[model] ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, requests: 0 }
+      const requests = u.requests - p.requests
+      if (requests <= 0) continue
+      const d = (k: 'input' | 'output' | 'cacheRead' | 'cacheWrite'): number => Math.max(0, u[k] - p[k])
+      this.addUsage(
+        model,
+        { input: d('input'), output: d('output'), cacheRead: d('cacheRead'), cacheWrite: d('cacheWrite') },
+        Math.max(0, u.cost - p.cost),
+        requests,
+      )
+      // 自选站点的模型 Pi 不知道价格，报的费用是 0：记成不知道（用量页显示「—」），不当成免费；主会话同一个模型有真实费用时不动
+      if (u.cost === 0 && !this.turnModels[model].costUsd) this.turnModels[model].costUsd = null
+      added = true
+    }
+    this.agentUsage.set(call, now)
+    if (added) this.emitUsage()
   }
   private emitRuns(): void {
     const runs = [...this.agents.values()]

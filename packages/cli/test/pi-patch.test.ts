@@ -209,3 +209,28 @@ describe('Pi 补丁：compaction.js 的 token 估算更保守', () => {
     expect(estimateTokens(result)).toBe(500)
   })
 })
+
+describe('Pi 补丁：compaction.js 的 shouldCompact 认桌面端的自动压缩阈值', () => {
+  it('PIXELSKY_AUTOCOMPACT_PCT 设了就按窗口比例压缩，和 Pi 自己的 reserveTokens 取先到的；没设或不合法时照旧', async () => {
+    const { shouldCompact } = (await import(/* @vite-ignore */ distUrl('core/compaction/compaction.js'))) as {
+      shouldCompact: (tokens: number, window: number, settings: { enabled: boolean; reserveTokens: number }) => boolean
+    }
+    const settings = { enabled: true, reserveTokens: 16384 }
+    const before = process.env.PIXELSKY_AUTOCOMPACT_PCT
+    try {
+      delete process.env.PIXELSKY_AUTOCOMPACT_PCT
+      expect(shouldCompact(150_000, 200_000, settings)).toBe(false)
+      process.env.PIXELSKY_AUTOCOMPACT_PCT = '70'
+      expect(shouldCompact(140_000, 200_000, settings)).toBe(true)
+      expect(shouldCompact(139_999, 200_000, settings)).toBe(false)
+      // Pi 自己的规则先到（小窗口）：照旧压缩
+      expect(shouldCompact(17_000, 32_000, settings)).toBe(true)
+      expect(shouldCompact(190_000, 200_000, { ...settings, enabled: false })).toBe(false)
+      process.env.PIXELSKY_AUTOCOMPACT_PCT = '0'
+      expect(shouldCompact(150_000, 200_000, settings)).toBe(false)
+    } finally {
+      if (before === undefined) delete process.env.PIXELSKY_AUTOCOMPACT_PCT
+      else process.env.PIXELSKY_AUTOCOMPACT_PCT = before
+    }
+  })
+})

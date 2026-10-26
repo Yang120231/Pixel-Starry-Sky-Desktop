@@ -24,7 +24,9 @@ import { effortOfLevel, effortsFromLevels, findModel, modelEfforts, piThinkingLe
 import { pixelWindow } from './context-window'
 import {
   APPROVAL_CONTEXT_STATUS,
+  entries,
   runsFromSession,
+  subagentTotals,
   subagentApproval,
   subagentItemId,
   type SubagentApproval,
@@ -117,6 +119,8 @@ export interface PixelLaunchOptions {
   args?: string[]
   /** 设置 › 模型通道里给模型填的上下文窗口（云端线路用 platform 那份，context-window.ts） */
   contextWindows?: ContextWindows
+  /** 设置 › 引擎「自动压缩阈值」（百分比）：经环境变量交给 Pi 补丁里的 shouldCompact（docs/own-cli.md §15） */
+  autoCompactPct?: number | null
   /** 测试用：等 Pi 开始处理一条提示最多多久没动静（默认 PROMPT_START_MS） */
   promptStartMs?: number
 }
@@ -411,19 +415,24 @@ export class PixelSession implements EngineSession {
       await this.syncEfforts(proc, string(state.thinkingLevel))
       this.ctx.setEngineSessionId(string(state.sessionFile) || string(state.sessionId))
       // 以前的子智能体：之后的 runs 事件是整份替换，要带上它们
-      this.translator.seedRuns(runsFromSession(string(state.sessionFile)).map(({ sessionFile: _, ...run }) => run))
+      const saved = entries(string(state.sessionFile))
+      this.translator.seedRuns(
+        runsFromSession(string(state.sessionFile), saved).map(({ sessionFile: _, ...run }) => run),
+      )
       // 切回旧会话：用 Pi 记的累计作基线，用量不从零开始
       const stats = object(
         (await proc.request('get_session_stats').catch(() => ({ command: 'get_session_stats', data: {} as Message })))
           .data,
       )
       const tokens = object(stats.tokens)
+      // Pi 的统计只有主进程自己的请求，子智能体（子进程）的用量从会话文件里的记录补上
+      const agents = subagentTotals(saved)
       this.translator.totals = {
-        input: Number(tokens.input) || 0,
-        output: Number(tokens.output) || 0,
-        cacheRead: Number(tokens.cacheRead) || 0,
-        cacheWrite: Number(tokens.cacheWrite) || 0,
-        cost: Number(stats.cost) || 0,
+        input: (Number(tokens.input) || 0) + agents.input,
+        output: (Number(tokens.output) || 0) + agents.output,
+        cacheRead: (Number(tokens.cacheRead) || 0) + agents.cacheRead,
+        cacheWrite: (Number(tokens.cacheWrite) || 0) + agents.cacheWrite,
+        cost: (Number(stats.cost) || 0) + agents.cost,
       }
       const used = object(stats.contextUsage).tokens
       this.translator.setContext(typeof used === 'number' ? used : null)

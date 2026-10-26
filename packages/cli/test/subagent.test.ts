@@ -12,6 +12,7 @@ import {
 import {
   APPROVAL_CONTEXT_STATUS,
   SUBAGENT_TOOL,
+  addModelUsage,
   createSubagentExtension,
   matchChildCall,
 } from '../src/tools/subagent.ts'
@@ -339,5 +340,23 @@ describe('子智能体：主会话换权限模式', () => {
     off()
     await commands['pixelsky-mode']('default', ctx)
     expect(seen).toEqual(['plan'])
+  })
+})
+
+describe('子智能体按模型的用量', () => {
+  const msg = (model: string, input: number, output: number, cost: number) => ({
+    role: 'assistant',
+    model,
+    usage: { input, output, cacheRead: 0, cacheWrite: 0, cost: { total: cost } },
+  })
+  it('按模型累加，返回新对象；没用量的消息不动', () => {
+    const one = addModelUsage(undefined, msg('m1', 100, 10, 0.01))
+    const two = addModelUsage(one, msg('m1', 50, 5, 0.02))
+    expect(two).not.toBe(one)
+    expect(one?.m1).toMatchObject({ input: 100, requests: 1 })
+    expect(two?.m1).toMatchObject({ input: 150, output: 15, requests: 2 })
+    expect(two?.m1.cost).toBeCloseTo(0.03)
+    expect(addModelUsage(two, { role: 'assistant', usage: {} })).toBe(two)
+    expect(addModelUsage(two, { ...msg('m1', 1, 1, 0), responseModel: 'm2' })?.m2).toMatchObject({ input: 1 })
   })
 })

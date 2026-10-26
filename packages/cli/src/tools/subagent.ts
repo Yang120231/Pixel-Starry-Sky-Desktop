@@ -194,6 +194,8 @@ export interface SubagentProgress {
   startedAt: number
   durationMs: number
   tokens: number
+  /** 按模型分的用量（桌面端把它算进主会话这一轮的用量和花费；老版本没有） */
+  usage?: Record<string, SubagentModelUsage>
   toolCalls: number
   lastTool: string | null
   /** 子进程的会话文件（读子智能体的对话用） */
@@ -205,6 +207,16 @@ export interface SubagentProgress {
   typeName?: string
   /** 在排队等空位（同时运行上限） */
   queued?: boolean
+}
+
+/** 子智能体在一个模型上的累计用量（字段和 Pi 助手消息的 usage 一样，cost 是美元） */
+export interface SubagentModelUsage {
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  cost: number
+  requests: number
 }
 
 type Json = Record<string, unknown>
@@ -224,6 +236,34 @@ export function messageText(message: unknown): string {
 export function usageTokens(usage: unknown): number {
   const u = object(usage)
   return ['input', 'output', 'cacheRead', 'cacheWrite'].reduce((n, k) => n + (Number(u[k]) || 0), 0)
+}
+
+/**
+ * 一条助手消息的用量加进按模型的累计；返回新对象（进度是浅拷贝发出去的，不能原地改）。
+ * 模型名和桌面端主会话用的一样：responseModel，没有就 model
+ */
+export function addModelUsage(
+  usage: Record<string, SubagentModelUsage> | undefined,
+  message: unknown,
+): Record<string, SubagentModelUsage> | undefined {
+  const m = object(message)
+  const u = object(m.usage)
+  const n = (k: string): number => Number(u[k]) || 0
+  const cost = Number(object(u.cost).total) || 0
+  if (!n('input') && !n('output') && !n('cacheRead') && !n('cacheWrite') && !cost) return usage
+  const model = text(m.responseModel) || text(m.model) || 'Pixel'
+  const prior = usage?.[model] ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, requests: 0 }
+  return {
+    ...usage,
+    [model]: {
+      input: prior.input + n('input'),
+      output: prior.output + n('output'),
+      cacheRead: prior.cacheRead + n('cacheRead'),
+      cacheWrite: prior.cacheWrite + n('cacheWrite'),
+      cost: prior.cost + cost,
+      requests: prior.requests + 1,
+    },
+  }
 }
 
 /** 子进程的启动参数 */
@@ -601,6 +641,7 @@ export function createSubagentExtension(options: SubagentOptions): ExtensionFact
             } else if (type === 'message_end' && object(m.message).role === 'assistant') {
               const message = object(m.message)
               progress.tokens += usageTokens(message.usage)
+              progress.usage = addModelUsage(progress.usage, message)
               const reply = messageText(message) || streaming
               streaming = ''
               if (reply.trim()) progress.result = reply.trim()
