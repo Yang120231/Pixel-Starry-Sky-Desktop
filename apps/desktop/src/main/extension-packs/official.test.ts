@@ -14,7 +14,12 @@ import { extTaskCommand } from '../../renderer/src/features/coding/tasks/extComm
 import { loadPack } from './loader'
 
 const ROOT = resolve(__dirname, '../../../../../extensions/official')
-const APP_VERSION = JSON.parse(readFileSync(resolve(__dirname, '../../../package.json'), 'utf8')).version as string
+// 按「下一版」加载：仓库里的代码就是下一版，官方扩展可以要求下一版才有的能力（如 0.6.2 起任务模板 files 能写 *.csproj）
+const RELEASED = JSON.parse(readFileSync(resolve(__dirname, '../../../package.json'), 'utf8')).version as string
+const APP_VERSION = RELEASED.replace(
+  /^(\d+)\.(\d+)\.(\d+).*$/,
+  (_m, a: string, b: string, c: string) => `${a}.${b}.${Number(c) + 1}`,
+)
 const only = process.env.OFFICIAL_EXT
 
 const packs = existsSync(ROOT)

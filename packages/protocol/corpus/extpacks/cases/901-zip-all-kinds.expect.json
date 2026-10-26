@@ -1,5 +1,5 @@
 {
-  "rulesVersion": 2,
+  "rulesVersion": 3,
   "upload": {
     "pass": true,
     "issues": [

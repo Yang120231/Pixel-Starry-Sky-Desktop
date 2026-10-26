@@ -80,6 +80,7 @@ export {
   hasNestedQuantifier,
   hasQuantifiedAlternation,
   parseCondition,
+  taskFileMatches,
   validateTaskTemplate,
 } from './tasks'
 export { checkSvg, contrastRatio, parseHexColor, parseJsonc, satisfiesEngine } from './text'

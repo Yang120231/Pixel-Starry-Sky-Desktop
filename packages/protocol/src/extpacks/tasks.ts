@@ -1,6 +1,11 @@
 // 任务模板的校验（authoring-spec §8）：只做静态检查，不碰文件系统；图标文件由 validateContributions 查。
 import type { ExtPackIssue, ExtTaskTemplate } from './types'
 import { EXT_LIMITS, EXT_RESERVED_TASK_FILES, EXT_RESERVED_TASK_IDS } from './types'
+import { wildcardMatch } from './text'
+
+/** 任务模板 files 里的一项匹配这个文件名吗：带 * 的按通配（不分大小写），其余精确匹配（区分大小写） */
+export const taskFileMatches = (pattern: string, name: string): boolean =>
+  pattern.includes('*') ? wildcardMatch(pattern, name) : pattern === name
 
 export const EXT_TASK_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_.:@/+=-]{0,79}$/
 
@@ -563,16 +568,17 @@ export function validateTaskTemplate(raw: unknown): { template: ExtTaskTemplate 
     issues.push(err('task.files', 'files 至少写一个文件名', 'files needs at least one file name', 'files'))
   } else {
     for (const f of raw.files) {
-      if (typeof f !== 'string' || !/^[^/\\*?]+$/.test(f)) {
+      // 可以用 * 通配（如 *.csproj），除了 * 至少还要 3 个字符，免得「*」「*.x」把整棵目录都认进来
+      if (typeof f !== 'string' || !/^[^/\\?]+$/.test(f) || (f.includes('*') && f.replace(/\*/g, '').length < 3)) {
         issues.push(
           err(
             'task.files',
-            `files 里的文件名不能含 / \\ * ?：${String(f)}`,
-            `File names in files must not contain / \\ * ?: ${String(f)}`,
+            `files 里的文件名不能含 / \\ ?，带 * 的除了 * 至少还要 3 个字符：${String(f)}`,
+            `File names in files must not contain / \\ ?, and a pattern with * needs at least 3 other characters: ${String(f)}`,
             'files',
           ),
         )
-      } else if (EXT_RESERVED_TASK_FILES.some(r => r.toLowerCase() === f.toLowerCase())) {
+      } else if (EXT_RESERVED_TASK_FILES.some(r => r.toLowerCase() === f.toLowerCase() || taskFileMatches(f, r))) {
         issues.push(
           err(
             'task.fileReserved',

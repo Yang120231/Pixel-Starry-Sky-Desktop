@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm'
 import {
   EXT_LIMITS,
   EXT_TASK_NAME_RE,
+  taskFileMatches,
   validateTaskTemplate,
   type ExtTaskExtract,
   type ExtTaskTemplate,
@@ -121,8 +122,8 @@ interface Found {
   name: string
 }
 
-/** 广度优先往下最多 3 层，按文件名精确匹配；不跟随符号链接，不进隐藏文件夹 */
-async function findFiles(root: string, names: ReadonlySet<string>): Promise<{ files: Found[]; truncated: boolean }> {
+/** 广度优先往下最多 3 层，按模板的文件名（精确或 * 通配）匹配；不跟随符号链接，不进隐藏文件夹 */
+async function findFiles(root: string, names: readonly string[]): Promise<{ files: Found[]; truncated: boolean }> {
   const files: Found[] = []
   let level = ['']
   for (let depth = 0; depth <= MAX_DEPTH && level.length; depth++) {
@@ -140,7 +141,7 @@ async function findFiles(root: string, names: ReadonlySet<string>): Promise<{ fi
         if (entry.isDirectory()) {
           const child = dir ? `${dir}/${entry.name}` : entry.name
           if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.') && !UNSAFE_PATH.test(child)) next.push(child)
-        } else if (entry.isFile() && names.has(entry.name) && !UNSAFE_PATH.test(dir))
+        } else if (entry.isFile() && names.some(n => taskFileMatches(n, entry.name)) && !UNSAFE_PATH.test(dir))
           files.push({ dir, name: entry.name })
       }
     }
@@ -252,7 +253,7 @@ export async function readExtTaskGroups(
   const clean = sanitizeTemplates(templates)
   let truncated = clean.dropped > 0
   if (!clean.templates.length) return { groups: [], truncated }
-  const names = new Set(clean.templates.flatMap(t => t.template.files))
+  const names = [...new Set(clean.templates.flatMap(t => t.template.files))]
   const found = await findFiles(root, names)
   truncated ||= found.truncated
   const groups: RunTaskGroup[] = []
@@ -262,7 +263,7 @@ export async function readExtTaskGroups(
     if (text === null) continue
     for (const wire of clean.templates) {
       const { template } = wire
-      if (!template.files.includes(file.name)) continue
+      if (!template.files.some(n => taskFileMatches(n, file.name))) continue
       const result = await templateTasks(template, text, absDir, io)
       truncated ||= result.truncated
       if (!result.tasks.length) continue

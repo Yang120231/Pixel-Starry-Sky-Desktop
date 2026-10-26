@@ -1,4 +1,5 @@
 import { hasAmbiguousQuantifiers, hasNestedQuantifier, hasQuantifiedAlternation } from './tasks'
+import { wildcardMatch } from './text'
 import type { ExtGrammar, ExtLocale, ExtPackContributes, ExtPackManifest, ExtText } from './types'
 
 /** 取多语言文本；英文缺失时退回中文 */
@@ -32,6 +33,8 @@ export function resolvePackPath(baseDir: string, rel: string): string | null {
   return out.length ? out.join('/') : null
 }
 
+export { wildcardMatch }
+
 /** posix dirname；根目录下的文件返回 '' */
 export function packDir(path: string): string {
   const i = path.lastIndexOf('/')
@@ -45,32 +48,6 @@ export function globToRegExp(pattern: string): RegExp {
     .map(part => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
     .join('.*')
   return new RegExp(`^${body}$`, 'i')
-}
-
-/** 只认 '*'，整串匹配，不分大小写；双指针回溯，最坏 O(名字长度 × 模式长度)，不会像拼正则那样指数 / 高次方变慢 */
-export function wildcardMatch(pattern: string, name: string): boolean {
-  const p = pattern.toLowerCase()
-  const s = name.toLowerCase()
-  let i = 0
-  let j = 0
-  let star = -1
-  let mark = 0
-  while (i < s.length) {
-    if (j < p.length && p[j] === '*') {
-      star = j++
-      mark = i
-    } else if (j < p.length && p[j] === s[i]) {
-      i++
-      j++
-    } else if (star >= 0) {
-      j = star + 1
-      i = ++mark
-    } else {
-      return false
-    }
-  }
-  while (j < p.length && p[j] === '*') j++
-  return j === p.length
 }
 
 /** firstLine 正则只测前这么多个字符，限制回溯代价 */

@@ -245,7 +245,7 @@ export const EXT_LIMITS = {
 } as const
 
 /** 规则语义变化时加一；写进命令行的 JSON 和共享用例的期望 */
-export const EXT_RULES_VERSION = 2
+export const EXT_RULES_VERSION = 3
 
 /** 软件内置的 26 个语言 id（authoring-spec §4.5） */
 export const EXT_BUILTIN_LANGUAGE_IDS: readonly string[] = [

@@ -5,6 +5,7 @@ import {
   hasNestedQuantifier,
   hasQuantifiedAlternation,
   parseCondition,
+  taskFileMatches,
   validateTaskTemplate,
 } from './tasks'
 
@@ -66,9 +67,17 @@ describe('validateTaskTemplate 反例', () => {
     expect(errors(with_({ label: { en: 'x' } }))).toContain('task.label')
     expect(errors(with_({ label: { zh: '甲', en: 'A' } }))).toEqual([])
   })
-  it('T3 files 为空或含 / \\ * ?', () => {
+  it('T3 files 为空、含 / \\ ?，或通配太宽', () => {
     expect(errors(with_({ files: [] }))).toContain('task.files')
-    for (const f of ['a/b', 'a\\b', '*.xml', 'a?']) expect(errors(with_({ files: [f] }))).toContain('task.files')
+    for (const f of ['a/b', 'a\\b', 'a?', '*', '*.x', '**ab'])
+      expect(errors(with_({ files: [f] }))).toContain('task.files')
+    for (const f of ['*.csproj', '*.sln', 'Dockerfile.*']) expect(errors(with_({ files: [f] }))).toEqual([])
+  })
+  it('T3 通配：* 不分大小写，精确文件名区分大小写', () => {
+    expect(taskFileMatches('*.csproj', 'App.CSPROJ')).toBe(true)
+    expect(taskFileMatches('*.csproj', 'app.csproj.user')).toBe(false)
+    expect(taskFileMatches('pom.xml', 'POM.xml')).toBe(false)
+    expect(taskFileMatches('pom.xml', 'pom.xml')).toBe(true)
   })
   it('T4 内置文件名（含 Gradle）被保留', () => {
     for (const f of [
@@ -83,6 +92,8 @@ describe('validateTaskTemplate 反例', () => {
       expect(errors(with_({ files: [f] }))).toContain('task.fileReserved')
     }
     expect(errors(with_({ files: ['pom.xml'] }))).toEqual([])
+    // 通配会认到内置文件的也不行
+    for (const f of ['*.json', 'Cargo.*', '*file']) expect(errors(with_({ files: [f] }))).toContain('task.fileReserved')
   })
   it('T5 超过 200 个任务被截断并警告；非法任务名被丢弃并警告，模板仍然可用', () => {
     const many = Array.from({ length: 205 }, (_v, i) => ({ name: `t${i}` }))

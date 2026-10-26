@@ -220,3 +220,29 @@ export function contrastRatio(fg: string, bg: string): number | null {
   const l2 = luminance(b)
   return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
 }
+
+/** 只认 '*'，整串匹配，不分大小写；双指针回溯，最坏 O(名字长度 × 模式长度)，不会像拼正则那样指数 / 高次方变慢 */
+export function wildcardMatch(pattern: string, name: string): boolean {
+  const p = pattern.toLowerCase()
+  const s = name.toLowerCase()
+  let i = 0
+  let j = 0
+  let star = -1
+  let mark = 0
+  while (i < s.length) {
+    if (j < p.length && p[j] === '*') {
+      star = j++
+      mark = i
+    } else if (j < p.length && p[j] === s[i]) {
+      i++
+      j++
+    } else if (star >= 0) {
+      j = star + 1
+      i = ++mark
+    } else {
+      return false
+    }
+  }
+  while (j < p.length && p[j] === '*') j++
+  return j === p.length
+}

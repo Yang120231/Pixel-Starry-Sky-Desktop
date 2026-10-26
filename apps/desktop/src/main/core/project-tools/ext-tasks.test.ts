@@ -101,6 +101,22 @@ describe('readExtTaskGroups', () => {
     expect(groups[0].dir).toBe('sub')
   })
 
+  it('files 带 * 时按通配认（不分大小写），每个认到的文件各成一组', async () => {
+    const DOTNET: ExtTaskTemplate = {
+      id: 'dotnet',
+      label: '.NET',
+      files: ['*.csproj'],
+      tasks: [{ name: 'build' }],
+      command: 'dotnet {name} {file}',
+    }
+    await mkdir(join(root, 'src'))
+    await writeFile(join(root, 'src', 'App.CSPROJ'), '<Project />')
+    await writeFile(join(root, 'src', 'App.csproj.user'), '<Project />')
+    await writeFile(join(root, 'Lib.csproj'), '<Project />')
+    const { groups } = await readExtTaskGroups(root, [wire(DOTNET)])
+    expect(groups.map(g => g.file)).toEqual(['Lib.csproj', 'src/App.CSPROJ'])
+  })
+
   it('含弯单引号（PowerShell 也当引号）的文件夹不读', async () => {
     await mkdir(join(root, 'sub'))
     const bad = ['x\u2019; calc; \u2018y', 'a\u2018b', 'a\u201Ab', 'a\u201Bb']

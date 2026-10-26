@@ -379,6 +379,7 @@ export {
   validateContributions,
   validateManifest,
   validatePackFiles,
+  taskFileMatches,
   validateTaskTemplate,
   zipIssue,
 } from './extpacks/index'
