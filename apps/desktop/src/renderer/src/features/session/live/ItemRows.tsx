@@ -889,6 +889,12 @@ export function TodoCard({ item }: { item: ItemOf<'todo'> }) {
         <span className="shrink-0 text-meta text-fg-faint tabular-nums">
           {done}/{item.steps.length}
         </span>
+        {/* 同一轮改了几次清单（合成一行原地更新的，C16） */}
+        {item.updates && (
+          <span className="shrink-0 text-meta text-fg-faint">
+            · {tr('session.todo.updates', { count: item.updates })}
+          </span>
+        )}
         {note && <span className="min-w-0 truncate text-fg-faint">{note}</span>}
         <Chevron open={open} />
       </button>

@@ -286,7 +286,8 @@ export class CodexTranslator {
   plan(params: Message): void {
     const id = 'cx-plan-' + string(params.turnId)
     this.lastAt = Date.now()
-    const item: Item = {
+    const prev = this.items.get(id)
+    const item: Extract<Item, { kind: 'todo' }> = {
       kind: 'todo',
       id,
       steps: array(params.plan).map(v => {
@@ -297,6 +298,12 @@ export class CodexTranslator {
         }
       }),
       status: 'running',
+    }
+    // 同一轮清单真的变了才算一次更新（和 Claude 合成一行时的「更新 N 次」一样）
+    if (prev?.kind === 'todo') {
+      const same = JSON.stringify(prev.steps) === JSON.stringify(item.steps)
+      const updates = same ? prev.updates : (prev.updates ?? 1) + 1
+      if (updates) item.updates = updates
     }
     this.items.set(id, item)
     this.emit({ type: 'item_completed', item })

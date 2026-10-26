@@ -131,6 +131,8 @@ export class ClaudeTranslator {
   private taskBoard = new TaskBoard()
   /** 这一轮任务清单那一行的条目 id：同一轮的任务调用都更新这一行，执行块里不刷出一串「待办」 */
   private taskItemId: string | null = null
+  /** 这一轮旧版 TodoWrite 那一行（最新一份）：同一轮再调 TodoWrite 原地更新这一行，和 Codex 每轮一张一样（docs/ui/conversation-review-2026-10-11.md C16） */
+  private todo: Extract<Item, { kind: 'todo' }> | null = null
   /** 用户拒绝过的工具调用（结果标成 declined 而不是 failed） */
   private declined = new Set<string>()
   private usage: Usage = {
@@ -223,6 +225,7 @@ export class ClaudeTranslator {
     this.requestCache.begin(turnId)
     this.turnId = turnId
     this.taskItemId = null
+    this.todo = null
     this.halted = false
     this.retry = null
     this.apiError = null
@@ -773,12 +776,17 @@ export class ClaudeTranslator {
         const name = str(block.name)
         const steps = this.taskBoard.apply(id, name, obj(block.input))
         if (steps) this.taskItemId ??= id
-        const item: Item = steps
+        let item: Item = steps
           ? { kind: 'todo', id: this.taskItemId ?? id, steps, status: 'running' }
           : toolItem(id, name, obj(block.input), this.cwd)
+        if (!steps && item.kind === 'todo') {
+          const prev = this.todo
+          item = this.todo = prev ? { ...item, id: prev.id, updates: (prev.updates ?? 1) + 1 } : item
+        }
         this.toolInputs.set(id, obj(block.input))
         // 共用那一行的、还没拿到结果的调用也换成最新清单：中断收尾时按它们写，不会写回旧快照
-        if (steps) for (const [key, open] of this.tools) if (open.id === item.id) this.tools.set(key, item)
+        if (item.kind === 'todo')
+          for (const [key, open] of this.tools) if (open.id === item.id) this.tools.set(key, item)
         this.tools.set(id, item)
         this.cb.emit({ type: 'item_started', item })
       }
@@ -830,7 +838,14 @@ export class ClaudeTranslator {
       // 任务清单那一行几次调用共用：结果晚到时写现在的清单，不拿这次调用时的旧快照盖掉后面的
       this.cb.emit({
         type: 'item_completed',
-        item: done.kind === 'todo' && this.taskItemId === done.id ? { ...done, steps: this.taskBoard.steps() } : done,
+        item:
+          done.kind !== 'todo'
+            ? done
+            : this.taskItemId === done.id
+              ? { ...done, steps: this.taskBoard.steps() }
+              : this.todo?.id === done.id
+                ? { ...this.todo, status: done.status }
+                : done,
       })
     }
   }

@@ -108,3 +108,18 @@ describe('Codex 思考用时', () => {
     expect('durationMs' in translator.items.get('cx-r1')!).toBe(false)
   })
 })
+
+describe('Codex 计划：每轮一行，记下更新次数（C16）', () => {
+  it('清单变了才算一次，内容一样的重发不加', () => {
+    const events: EngineEvent[] = []
+    const translator = new CodexTranslator(e => events.push(e))
+    const plan = (status: string) => translator.plan({ turnId: 't1', plan: [{ step: '改代码', status }] })
+    const last = () => events.findLast(e => e.type === 'item_completed')
+    plan('inProgress')
+    expect(last()).toMatchObject({ item: { id: 'cx-plan-t1' } })
+    expect(last()?.type === 'item_completed' && last()?.item).not.toHaveProperty('updates')
+    plan('inProgress')
+    plan('completed')
+    expect(last()).toMatchObject({ item: { id: 'cx-plan-t1', updates: 2 } })
+  })
+})

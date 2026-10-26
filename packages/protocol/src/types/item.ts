@@ -182,7 +182,14 @@ export type Item =
       /** 结果里的图片（例如 Read 了一张图片），有大小上限；超出的只在 output 里留「[图片]」 */
       images?: ImageAttachment[]
     }
-  | { kind: 'todo'; id: string; steps: TodoStep[]; status: ItemStatus }
+  | {
+      kind: 'todo'
+      id: string
+      steps: TodoStep[]
+      status: ItemStatus
+      /** 这一轮里清单改了几次（同一轮的多次更新合成一行时才有，至少 2） */
+      updates?: number
+    }
   /** detail：引擎给出的原始报错详情（附加说明、错误类型、HTTP 状态码等），界面默认折叠 */
   /**
    * task：后台任务（子智能体、编排、后台命令……）结束的提示带的结构化信息，界面据此画完成小框（docs/ui/subagent-box.md §4.4）；

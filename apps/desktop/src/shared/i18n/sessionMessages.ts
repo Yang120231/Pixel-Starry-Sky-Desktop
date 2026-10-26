@@ -208,6 +208,7 @@ export const sessionMessages = {
   'session.progress.dismiss': { zh: '这一轮不再显示', en: 'Hide for this turn' },
   'session.todo.current': { zh: '当前：{text}', en: 'Now: {text}' },
   'session.todo.allDone': { zh: '全部完成', en: 'All done' },
+  'session.todo.updates': { zh: '更新 {count} 次', en: 'Updated {count} times' },
   'session.compaction.running': { zh: '正在压缩上下文', en: 'Compacting context' },
   'session.compaction.done': { zh: '已压缩上下文', en: 'Context compacted' },
   'session.compaction.autoDone': { zh: '已自动压缩上下文', en: 'Context auto-compacted' },

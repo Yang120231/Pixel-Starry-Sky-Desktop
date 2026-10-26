@@ -152,6 +152,11 @@ export function TodoCard({ item }: { item: Extract<Item, { kind: 'todo' }> }) {
       <div className="mb-2 flex items-center gap-1.5 text-meta font-medium text-fg-muted">
         <ListTodo size={15} /> {L('计划', 'Plan')} · {item.steps.filter(s => s.status === 'completed').length}/
         {item.steps.length}
+        {item.updates && (
+          <span className="font-normal text-fg-faint">
+            · {L(`更新 ${item.updates} 次`, `Updated ${item.updates} times`)}
+          </span>
+        )}
       </div>
       <ul className="flex flex-col gap-1.5">
         {item.steps.map((s, i) => (

@@ -132,3 +132,27 @@ describe('任务清单在执行块里只占一行', () => {
     expect(todos().at(-1)?.id).toBe('b')
   })
 })
+
+describe('旧的 TodoWrite 同一轮合成一行（C16）', () => {
+  const w = (content: string, status: string) => ({ todos: [{ content, status }] })
+  it('同一轮再调原地更新第一行，记下更新次数；结果晚到不写回旧清单', () => {
+    const { t, todos } = translator()
+    use(t, 'w1', 'TodoWrite', w('读代码', 'in_progress'))
+    expect(todos().at(-1)).toMatchObject({ id: 'w1' })
+    expect(todos().at(-1)?.updates).toBeUndefined()
+    use(t, 'w2', 'TodoWrite', w('读代码', 'completed'))
+    use(t, 'w3', 'TodoWrite', w('改代码', 'in_progress'))
+    result(t, 'w2', 'Todos have been modified successfully', {})
+    expect(new Set(todos().map(i => i.id))).toEqual(new Set(['w1']))
+    expect(todos().at(-1)).toMatchObject({ updates: 3, steps: [{ text: '改代码', status: 'in_progress' }] })
+  })
+  it('新的一轮另开一行，次数重新算', () => {
+    const { t, todos } = translator()
+    use(t, 'a', 'TodoWrite', w('一', 'pending'))
+    use(t, 'b', 'TodoWrite', w('一', 'completed'))
+    t.startTurn('turn-2')
+    use(t, 'c', 'TodoWrite', w('二', 'pending'))
+    expect(todos().at(-1)).toMatchObject({ id: 'c' })
+    expect(todos().at(-1)?.updates).toBeUndefined()
+  })
+})
