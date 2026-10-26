@@ -5,6 +5,7 @@ export const systemMessages = {
   'markdown.image.unavailable': { zh: '无法显示图片：{p0}', en: 'Could not display image: {p0}' },
   'composer.attachment.closePreview': { zh: '关闭图片预览', en: 'Close image preview' },
   'composer.attachment.loading': { zh: '正在读取附件…', en: 'Reading attachments…' },
+  'composer.attachment.cancelReading': { zh: '取消', en: 'Cancel' },
   'composer.attachment.saveError': {
     zh: '图片草稿保存失败，当前图片仍保留，请重试',
     en: 'Could not save the image draft. Your images are preserved; please retry',

@@ -45,6 +45,14 @@ describe('Word', () => {
       },
       '方案.docx',
     )
+  it('正文解压后超过 512KB（带图片的长文档）也能读出：不走会被 CSP 拦下的后台 Worker', async () => {
+    const body = Array.from({ length: 12000 }, (_, i) => p(`第 ${i} 段 论文正文`)).join('')
+    expect(body.length).toBeGreaterThan(512 * 1024)
+    const out = await read(docx(body, { 'word/media/image1.png': 'x'.repeat(2000) }))
+    expect(out.source).toBe('docx')
+    expect(out.text.startsWith('第 0 段 论文正文')).toBe(true)
+    expect(out.text).toContain('第 1000 段 论文正文')
+  })
   it('标题、段落、有序 / 无序列表、表格、脚注、批注；删除的修订不要', async () => {
     const file = docx(
       p('季度计划', '<w:pStyle w:val="a3"/>') +

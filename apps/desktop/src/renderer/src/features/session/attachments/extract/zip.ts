@@ -1,5 +1,7 @@
-// 解压 Office / OpenDocument / EPUB 这类 zip 包：只解出要用的那几个文件（fflate 的异步解压在后台线程里做）
-import { unzip, type Unzipped } from 'fflate'
+// 解压 Office / OpenDocument / EPUB 这类 zip 包：只解出要用的那几个文件。
+// 用同步解压：fflate 的异步解压遇到 512KB 以上的文件会起 blob: Worker，界面的 CSP 不许，Worker 被静默拦下、回调永远不来（长 Word 一直「正在读取附件」）。
+// 只解 XML、合计又有上限，20MB 也就几十毫秒
+import { unzipSync, type Unzipped } from 'fflate'
 
 export class ZipEntries {
   constructor(
@@ -25,30 +27,22 @@ export const MAX_UNZIPPED_BYTES = 256 * 1024 * 1024
 export class UnzipTooLarge extends Error {}
 
 /** 解压：pick 决定要哪些文件（不解出图片、字体这些用不上的大块）；按包里写的原始大小先算合计，超了不解 */
-export function unzipEntries(bytes: Uint8Array, pick: (name: string) => boolean): Promise<ZipEntries> {
+export async function unzipEntries(bytes: Uint8Array, pick: (name: string) => boolean): Promise<ZipEntries> {
   const all: string[] = []
   let total = 0,
     tooLarge = false
-  return new Promise((resolve, reject) =>
-    unzip(
-      bytes,
-      {
-        // 每个文件解压前先过这里（原始大小来自包里的目录）：超了的那个和后面的都不解
-        filter: f => {
-          if (!f.name.endsWith('/')) all.push(f.name)
-          if (tooLarge || !pick(f.name)) return false
-          total += f.originalSize
-          if (total > MAX_UNZIPPED_BYTES) tooLarge = true
-          return !tooLarge
-        },
-      },
-      (error, files) => {
-        if (tooLarge) reject(new UnzipTooLarge())
-        else if (error) reject(error)
-        else resolve(new ZipEntries(files, all))
-      },
-    ),
-  )
+  const files = unzipSync(bytes, {
+    // 每个文件解压前先过这里（原始大小来自包里的目录）：超了的那个和后面的都不解
+    filter: f => {
+      if (!f.name.endsWith('/')) all.push(f.name)
+      if (tooLarge || !pick(f.name)) return false
+      total += f.originalSize
+      if (total > MAX_UNZIPPED_BYTES) tooLarge = true
+      return !tooLarge
+    },
+  })
+  if (tooLarge) throw new UnzipTooLarge()
+  return new ZipEntries(files, all)
 }
 
 /** zip 包里的路径：rels 里的相对路径（../slides/slide1.xml）按所在目录拼出来 */

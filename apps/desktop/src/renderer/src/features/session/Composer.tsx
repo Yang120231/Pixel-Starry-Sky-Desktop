@@ -84,6 +84,14 @@ import { ComposerInput, type ComposerInputHandle } from './composerInput/Compose
 /** text-prose 是 14px / 1.7，行高取整成 24px，增高计算和样式共用 */
 const LINE_HEIGHT = 24
 const MAX_ROWS = 8
+/** 提取文字（Word、PDF 这类）最多等这么久：再久就按路径引用，智能体自己去读，输入框不一直卡在「读取中」 */
+const EXTRACT_TIMEOUT_MS = 30_000
+
+function withinTime<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error('timeout')), ms)))
+  return Promise.race([work, late]).finally(() => clearTimeout(timer))
+}
 /** 输入区上下内边距（pt-3.5 + pb-3.5） */
 export const CARD_STYLE =
   'composer-card rounded-2xl border border-line-composer bg-surface shadow-composer transition-[border-color,box-shadow] duration-(--dur-base) ease-(--ease-out) focus-within:border-line-composer-focus focus-within:ring-2 focus-within:ring-composer-ring'
@@ -144,6 +152,8 @@ export function Composer({
   const uploads = useRef<Promise<unknown>>(Promise.resolve())
   const adding = useRef(Promise.resolve())
   const pendingReads = useRef(0)
+  // 这一批读附件的取消开关：点「取消」后排着的不再读，正在读的结果丢掉
+  const readAbort = useRef<AbortController | null>(null)
   const [draggingImages, setDraggingImages] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const [text, setText] = useComposerDraft(key)
@@ -391,22 +401,33 @@ export function Composer({
   const hasContent = hasText || images.length > 0 || textFiles.length > 0 || !!annotationDraft
   const canSend = hasContent && !busy && !reading && !imageDraft.loading && !fileDraft.loading
 
-  /** 读附件排队进行，读的时候发送键不可用 */
-  const read = (work: () => Promise<void>): void => {
+  /** 读附件排队进行，读的时候发送键不可用；取消时不等卡住的那个，队列照样往下走 */
+  const read = (work: (signal: AbortSignal) => Promise<void>): void => {
+    const controller = (readAbort.current ??= new AbortController())
+    const { signal } = controller
     setReading(n => n + 1)
     pendingReads.current++
     adding.current = adding.current.then(async () => {
       try {
-        await work()
+        if (signal.aborted) return
+        const cancelled = new Promise<never>((_, reject) =>
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+        )
+        await Promise.race([work(signal), cancelled])
         setError(null)
       } catch (error) {
-        setError((error as Error).message)
+        if (!signal.aborted) setError((error as Error).message)
       } finally {
         pendingReads.current--
         setReading(n => n - 1)
+        if (!pendingReads.current && readAbort.current === controller) readAbort.current = null
       }
     })
     void adding.current
+  }
+  const cancelReading = (): void => {
+    readAbort.current?.abort()
+    readAbort.current = null
   }
 
   /** 拖进来、粘贴、从「+」选的文件：可解析的文字照常附上，其余用目标机器可读的路径引用 */
@@ -465,7 +486,7 @@ export function Composer({
       if (file.size > MAX_FILE_BYTES) return reference(file, path)
       let doc: FileAttachment
       try {
-        doc = await readTextFile(file)
+        doc = await withinTime(readTextFile(file), EXTRACT_TIMEOUT_MS)
       } catch {
         return reference(file, path)
       }
@@ -480,11 +501,18 @@ export function Composer({
         return doc
       }
     }
-    read(async () => {
+    read(async signal => {
       uploadAbort.current = controller
+      signal.addEventListener('abort', () => controller.abort(), { once: true })
       try {
         // 读文本并行；上传在 send 里排队。一个失败不耽误别的：成的照常加进来，失败的说原因（只是取消的不算错）
         const results = await Promise.allSettled(others.map(withPath))
+        if (signal.aborted) {
+          // 取消了：已经传到目标机器暂存目录的副本删掉
+          for (const r of results)
+            if (r.status === 'fulfilled' && r.value.staged && r.value.path) void discardStaged(r.value.path, workspace)
+          return
+        }
         const loaded = results.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []))
         if (loaded.length) await updateFiles(key, current => [...current, ...loaded])
         const failed = results.find(
@@ -513,9 +541,10 @@ export function Composer({
       setError(tr('composer.attachment.totalTooLarge'))
       return
     }
-    read(async () => {
+    read(async signal => {
       // 和文件一样：一张读不了（HEIC 这类）不耽误别的
       const results = await Promise.allSettled(list.map(readImage))
+      if (signal.aborted) return
       const loaded = results.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []))
       if (already + loaded.reduce((sum, image) => sum + image.bytes, 0) > MAX_IMAGE_TOTAL)
         throw new Error(tr('composer.attachment.totalTooLarge'))
@@ -928,15 +957,13 @@ export function Composer({
                     })
                   : tr('composer.attachment.loading')}
               </span>
-              {upload && (
-                <button
-                  type="button"
-                  className="press shrink-0 rounded px-1 text-fg-secondary hover:bg-hover hover:text-fg"
-                  onClick={() => uploadAbort.current?.abort()}
-                >
-                  {tr('composer.file.cancelUpload')}
-                </button>
-              )}
+              <button
+                type="button"
+                className="press shrink-0 rounded px-1 text-fg-secondary hover:bg-hover hover:text-fg"
+                onClick={() => (upload ? uploadAbort.current?.abort() : cancelReading())}
+              >
+                {tr(upload ? 'composer.file.cancelUpload' : 'composer.attachment.cancelReading')}
+              </button>
             </p>
           )}
           {(imageDraft.error || fileDraft.error) && (
