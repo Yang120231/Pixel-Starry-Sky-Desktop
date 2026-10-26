@@ -173,9 +173,26 @@ export function historyLines(
   return lines
 }
 
-/** 去掉代码块和行内代码：AI 回复里代码中的 @ 不算派活 */
+/**
+ * 去掉代码块和行内代码：AI 回复里代码中的 @ 不算派活。围栏照 Markdown（和界面显示一致）：结束围栏单独一行、
+ * 同一种字符、不比开头短，代码里字符串含 ``` / ~~~ 不算结束；没闭合的算到末尾。代码块的位置留一个空行，前后仍分两段
+ */
 export function withoutCode(text: string): string {
-  return text.replace(/(`{3,}|~{3,})[\s\S]*?(?:\1|$)/g, '').replace(/`[^`\n]*`/g, '')
+  const kept: string[] = []
+  let close: RegExp | null = null
+  for (const line of text.split('\n')) {
+    if (close) {
+      if (close.test(line)) close = null
+      continue
+    }
+    const open = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+    // 反引号围栏的信息串里再有反引号：是行内代码，不是围栏
+    if (open && !(open[1][0] === '`' && open[2].includes('`'))) {
+      close = new RegExp(`^ {0,3}${open[1][0]}{${open[1].length},}[ \\t]*$`)
+      kept.push('')
+    } else kept.push(line)
+  }
+  return kept.join('\n').replace(/`[^`\n]*`/g, '')
 }
 
 /** AI 互相派活时交接的内容：谁、做完了哪项活、他的回复、改了哪些文件 */
