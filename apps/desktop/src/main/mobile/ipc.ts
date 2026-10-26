@@ -15,10 +15,18 @@ import { trayStatus } from '../app/tray'
 import type { MobileLinkStatus, MobilePrefs, MobileSeats, MobileState } from '../../shared/types/mobile'
 import { listDirectories } from '../core/directories'
 import { addProjectPath } from '../core/engine/ops'
-import { baseUrl, bridgeFetch, bridgeToken, onAccountChange, signedInEmail } from '../account/account'
+import {
+  accountSnapshot,
+  baseUrl,
+  bridgeFetch,
+  bridgeToken,
+  onAccountChange,
+  refreshAccountIfStale,
+  signedInEmail,
+} from '../account/account'
 import { createDesktopRegistrar } from './desktop-register'
 import { parseRelay, parseSeats, pickRelay } from './cloud-devices'
-import { MobileGateway, type CloudDevices } from './gateway'
+import { MobileGateway, phoneAccount, type CloudDevices } from './gateway'
 import { RelayLink } from './relay'
 import { MobileStore } from './store'
 
@@ -180,6 +188,11 @@ export function initMobile(ctx: AppContext): void {
     changed,
     local: {
       defaultEngine: () => ctx.engine?.defaults().engine ?? 'claude',
+      account: () => {
+        // 不等云端：缓存过期就后台刷新，这次先回已有的，下次打开是新的
+        void refreshAccountIfStale()
+        return phoneAccount(accountSnapshot())
+      },
       search: async (text, projectId, signal) => {
         if (!ctx.engine) throw new Error('项目尚未加载')
         return ctx.engine.search({ requestId: ++searchSeq, text, scope: 'all', projectId }, signal)

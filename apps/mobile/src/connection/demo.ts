@@ -208,6 +208,22 @@ function tail(sessionId: string) {
   const snapshot = emptySnapshot(summary.record, sessionId === 's1' ? items : items.slice(0, 6))
   snapshot.state = summary.state
   if (summary.state === 'running') snapshot.turnId = 'turn-1'
+  // 输入框里的上下文圆环：s1 用了 62%，其余 85%（警告色）
+  snapshot.context = {
+    model: null,
+    used: sessionId === 's1' ? 124_000 : 170_000,
+    window: 200_000,
+    input: null,
+    cacheRead: null,
+    cacheWrite: null,
+    output: null,
+    observedAt: null,
+    source: 'request',
+    stale: false,
+    compacting: false,
+    diagnostic: null,
+    diagnosticStale: false,
+  }
   if (sessionId === 's1' && new URLSearchParams(location.search).get('demo') === 'approval')
     snapshot.pending = [
       {
@@ -223,7 +239,14 @@ function tail(sessionId: string) {
   return { snapshot, seq: 1, before: null, truncated: [], total: snapshot.items.length }
 }
 
-const change = (path: string, code: string) => ({ path, origPath: null, code, local: path, submodule: false })
+const change = (path: string, code: string, insertions?: number | null, deletions?: number | null) => ({
+  path,
+  origPath: null,
+  code,
+  local: path,
+  submodule: false,
+  ...(insertions !== undefined ? { insertions, deletions } : {}),
+})
 
 /** 假的电脑连接：和 DesktopLink 一样的对外样子，call 直接回假数据 */
 export class DemoLink {
@@ -263,6 +286,8 @@ export class DemoLink {
         return reply(tail(String(args[0])))
       case 'defaults':
         return reply({ engine: 'claude' })
+      case 'account':
+        return reply({ name: '林夏', balance: 96.25, currency: 'USD', plan: null, updatedAt: now })
       case 'search':
         return reply({ results: [], truncated: false })
       case 'engine:catalog':
@@ -308,8 +333,11 @@ export class DemoLink {
           ahead: 1,
           behind: 0,
           remotes: ['origin'],
-          staged: [change('apps/mobile/src/ui/Markdown.tsx', 'M')],
-          unstaged: [change('apps/mobile/src/styles/tokens.css', 'M')],
+          staged: [
+            change('apps/mobile/src/ui/Markdown.tsx', 'M', 27, 8),
+            change('apps/mobile/public/icon.png', 'M', null, null),
+          ],
+          unstaged: [change('apps/mobile/src/styles/tokens.css', 'M', 15, 2)],
           untracked: [change('apps/mobile/src/connection/demo.ts', '?')],
           conflicted: [],
           truncated: false,
@@ -320,8 +348,9 @@ export class DemoLink {
       case 'files:list':
         return reply({
           entries: [
-            { name: 'apps', kind: 'dir' },
-            { name: 'README.md', kind: 'file' },
+            { name: 'apps', path: 'apps', kind: 'directory' },
+            { name: 'README.md', path: 'README.md', kind: 'file', size: 18_432 },
+            { name: 'package.json', path: 'package.json', kind: 'file', size: 812 },
           ],
         })
       default:

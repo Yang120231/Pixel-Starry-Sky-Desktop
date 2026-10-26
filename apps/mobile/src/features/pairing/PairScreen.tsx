@@ -1,5 +1,6 @@
 // 配对页（docs/mobile-remote.md §4.1、§13.3）：手机相机扫码打开网页版 → 这里显示电脑名和指纹 → 填手机名 → 连接 →
 // 等电脑上确认（对一下两边显示的手机指纹）→ 已配对。
+// iOS 样子（§26）：步骤条 + 灰底圆角的电脑卡片 + 整行宽的胶囊键；各状态沿用同一套灰底圆角分组。
 import { useState } from 'react'
 import { Check, Laptop, Lock, ShieldCheck, Smartphone, X } from 'lucide-react'
 import { connections, pairWithOffer, phoneFingerprint, type Offer, type Pairing } from '@/connection'
@@ -54,7 +55,7 @@ export function PairScreen({ offer, error, onDone }: { offer: Offer | null; erro
 
   if (!offer)
     return (
-      <Screen title={L('配对', 'Pairing')} onBack={onDone}>
+      <Screen title={L('配对', 'Pairing')} onBack={onDone} close>
         <Empty
           icon={X}
           title={L('不是有效的配对二维码', 'Not a valid pairing QR code')}
@@ -84,13 +85,13 @@ export function PairScreen({ offer, error, onDone }: { offer: Offer | null; erro
   const step = !current ? 1 : current.status === 'paired' ? 3 : 2
 
   return (
-    <Screen title={L('连接电脑', 'Connect to computer')} onBack={onDone}>
-      <div className="flex flex-col gap-6 py-4">
+    <Screen title={L('连接电脑', 'Connect to computer')} onBack={onDone} close>
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-5 py-2">
         <Steps at={step} />
 
-        <div className="mx-4 flex flex-col items-center gap-3 rounded-3xl border border-line-subtle bg-surface px-5 py-6 text-center">
+        <div className="mx-4 flex flex-col items-center gap-3 rounded-3xl bg-subtle px-5 py-5 text-center">
           <div className="flex items-center gap-3 text-fg-muted">
-            <span className="flex size-12 items-center justify-center rounded-2xl bg-subtle">
+            <span className="flex size-12 items-center justify-center rounded-2xl bg-surface">
               <Smartphone size={24} strokeWidth={1.5} />
             </span>
             <span className="flex items-center gap-1">
@@ -108,7 +109,7 @@ export function PairScreen({ offer, error, onDone }: { offer: Offer | null; erro
                 />
               ))}
             </span>
-            <span className="flex size-12 items-center justify-center rounded-2xl bg-subtle">
+            <span className="flex size-12 items-center justify-center rounded-2xl bg-surface">
               <Laptop size={24} strokeWidth={1.5} />
             </span>
           </div>
@@ -135,12 +136,17 @@ export function PairScreen({ offer, error, onDone }: { offer: Offer | null; erro
                 value={name}
                 onChange={e => setName(e.target.value)}
                 maxLength={64}
-                className="block min-h-13 w-full bg-transparent px-4 text-ui text-fg outline-none"
+                className="block min-h-12 w-full bg-transparent px-4 text-ui text-fg outline-none"
               />
             </Section>
             {failure && <Banner tone="danger">{failure}</Banner>}
             <div className="flex flex-col gap-3 px-4">
-              <Button variant="primary" disabled={busy || offer.expired} onClick={() => void connect()}>
+              <Button
+                variant="primary"
+                disabled={busy || offer.expired}
+                onClick={() => void connect()}
+                className="min-h-11! rounded-full!"
+              >
                 {busy && <Spinner size={16} />}
                 {busy ? L('正在连接…', 'Connecting…') : L('连接这台电脑', 'Connect to this computer')}
               </Button>
@@ -158,7 +164,7 @@ export function PairScreen({ offer, error, onDone }: { offer: Offer | null; erro
             <div className="flex items-center gap-2 text-section font-semibold text-success">
               <ShieldCheck size={22} /> {L('已配对', 'Paired')}
             </div>
-            <Button variant="primary" className="w-full" onClick={onDone}>
+            <Button variant="primary" className="min-h-11! w-full rounded-full!" onClick={onDone}>
               {L('开始使用', 'Get started')}
             </Button>
           </div>
@@ -166,6 +172,7 @@ export function PairScreen({ offer, error, onDone }: { offer: Offer | null; erro
           <div className="flex flex-col gap-3 px-4">
             <Banner tone="danger">{L('电脑上拒绝了这次连接。', 'The computer declined this connection.')}</Banner>
             <Button
+              className="min-h-11! rounded-full!"
               onClick={() => {
                 connections.forget(current.deviceId)
                 onDone()

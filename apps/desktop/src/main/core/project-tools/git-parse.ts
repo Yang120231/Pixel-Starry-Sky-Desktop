@@ -217,15 +217,8 @@ export function parseLog(stdout: string, mergeStats = true): GitCommit[] {
 
 const COMMIT_CODES = new Set(['A', 'M', 'D', 'R', 'C', 'T'])
 
-/**
- * `git diff --name-status -z -M` + `--numstat -z -M` → 改动文件。
- * name-status：`R100\0旧\0新\0`；numstat：`增\t删\t路径\0`，改名时路径为空、后面跟 `旧\0新\0`，二进制是 `-\t-`。
- */
-export function parseCommitFiles(
-  nameStatus: string,
-  numstat: string,
-  max = MAX_ENTRIES,
-): { files: GitCommitFile[]; truncated: boolean } {
+/** `git diff --numstat -z` → 路径（改名取新路径）到 [增, 删]；二进制是 [null, null] */
+export function parseNumstat(numstat: string): Map<string, [number | null, number | null]> {
   const stats = new Map<string, [number | null, number | null]>()
   const nums = numstat.split('\0')
   for (let i = 0; i < nums.length; i++) {
@@ -238,6 +231,19 @@ export function parseCommitFiles(
     }
     stats.set(path, [m[1] === '-' ? null : Number(m[1]), m[2] === '-' ? null : Number(m[2])])
   }
+  return stats
+}
+
+/**
+ * `git diff --name-status -z -M` + `--numstat -z -M` → 改动文件。
+ * name-status：`R100\0旧\0新\0`；numstat：`增\t删\t路径\0`，改名时路径为空、后面跟 `旧\0新\0`，二进制是 `-\t-`。
+ */
+export function parseCommitFiles(
+  nameStatus: string,
+  numstat: string,
+  max = MAX_ENTRIES,
+): { files: GitCommitFile[]; truncated: boolean } {
+  const stats = parseNumstat(numstat)
   const files: GitCommitFile[] = []
   let truncated = false
   const tokens = nameStatus.split('\0')

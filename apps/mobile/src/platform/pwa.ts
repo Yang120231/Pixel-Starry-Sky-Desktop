@@ -24,7 +24,7 @@ export function isStandalone(): boolean {
 /** 在 main.tsx 里、渲染 React 之前调用一次 */
 export function captureInstallPrompt(): void {
   window.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault() // 不要浏览器自己的迷你提示条，由「我的」里的入口触发
+    e.preventDefault() // 不要浏览器自己的迷你提示条，由「设置」里的入口触发
     deferred = e as InstallPromptEvent
     emit()
   })

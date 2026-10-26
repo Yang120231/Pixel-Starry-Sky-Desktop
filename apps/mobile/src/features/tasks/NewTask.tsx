@@ -1,8 +1,10 @@
-// 新建任务：选项目、引擎，写第一句话（可以带图片）。引擎默认用电脑上设的那个（docs/mobile-remote.md §17 第 7 项）；
+// 新对话页（iOS 样子，docs/mobile-remote.md §26）：居中的问候下面两颗胶囊——项目、引擎，点开各自的面板选；
+// 底部是和会话页一样的浮起输入框卡片（写第一句话、可以带图片），「+」右边的胶囊是模式，右边圆键开始。没有快捷建议。
+// 引擎默认用电脑上设的那个（docs/mobile-remote.md §17 第 7 项）；
 // 权限模式、模型、强度、快速模式默认用电脑上的设置，也可以在「模式」里先选好（C2，§21.5；完全放行只能在电脑上开；
 // 快速模式 §25，打开确认一次）。线路总是用电脑上的。
 import { useRef, useState } from 'react'
-import { Check, ChevronRight, Folder, Send } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, Folder } from 'lucide-react'
 import {
   ENGINES,
   ENGINE_ORDER,
@@ -25,9 +27,14 @@ import {
 import { imageDataUrl, usePendingImages } from '@/data/images'
 import { attemptFor, sendKey, type SendAttempt } from '@/data/retry'
 import { L } from '@/i18n'
-import { Banner, Button, Empty, Screen, Section, Segmented, Spinner, cn } from '@/ui'
+import { Empty, FINE_POINTER, Screen, Segmented, Spinner, cn, useMedia } from '@/ui'
 import { AttachButton, AttachmentStrip } from '@/ui/images'
 import { ModeSheet } from '@/ui/ModeSheet'
+import { Sheet } from '@/ui/sheet'
+
+/** 胶囊（和会话页输入框里的同款）：项目、引擎、模式 */
+const pill =
+  'inline-flex h-9 min-w-0 items-center gap-1.5 rounded-full border border-line-subtle bg-surface px-3 text-meta text-fg active:bg-hover'
 
 /** 新会话的模式；null 都是「用电脑上的设置」 */
 interface Settings {
@@ -69,6 +76,8 @@ export function NewTask({
       : { ...DESKTOP, permissionMode: kept && ENGINES[engine]?.caps.permissionModes.includes(kept) ? kept : null }
   const setMode = (patch: Partial<Settings>) => setSettings({ engine, value: { ...mode, ...patch } })
   const [modeOpen, setModeOpen] = useState(false)
+  const [picker, setPicker] = useState<'project' | 'engine' | null>(null)
+  const enterSends = useMedia(FINE_POINTER)
   const [text, setText] = useState(initialText)
   const images = usePendingImages()
   const [busy, setBusy] = useState(false)
@@ -117,21 +126,64 @@ export function NewTask({
     }
   }
 
+  const ready = state === 'ready' && !!chosen && hasContent && !busy && !images.busy
+  const project = projects.find(p => p.id === chosen)
+  const shownError = error ?? images.error
+
   return (
     <Screen
-      title={L('新建会话', 'New conversation')}
+      title={L('新对话', 'New conversation')}
+      subtitle={L(`在 ${pairing.desktopName} 上`, `On ${pairing.desktopName}`)}
       onBack={onBack}
       footer={
-        <div className="border-t border-line-subtle p-3">
-          <Button
-            variant="primary"
-            className="w-full"
-            disabled={busy || images.busy || state !== 'ready' || !chosen || !hasContent}
-            onClick={() => void create()}
-          >
-            {busy ? <Spinner size={16} /> : <Send size={17} />}
-            {busy ? L('正在创建…', 'Creating…') : L('开始', 'Start')}
-          </Button>
+        <div className="mx-auto w-full max-w-3xl px-3 pt-1 pb-3">
+          {shownError && <p className="px-1 pb-1.5 text-meta text-danger">{shownError}</p>}
+          <div className="rounded-[22px] border border-line-composer bg-surface px-2.5 pt-2.5 pb-2 shadow-composer focus-within:border-line-composer-focus">
+            <AttachmentStrip
+              images={images.images.map(i => ({ id: i.id, src: imageDataUrl(i) }))}
+              busy={images.busy}
+              onRemove={images.remove}
+            />
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => {
+                if (!enterSends || e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+                e.preventDefault()
+                if (ready) void create()
+              }}
+              rows={1}
+              autoFocus
+              data-key-target="composer"
+              enterKeyHint="send"
+              placeholder={L(
+                '例如：把登录页的按钮改成圆角，并补上单元测试',
+                'e.g. Round the buttons on the login page and add unit tests',
+              )}
+              className="field-sizing-content block max-h-40 min-h-7 w-full resize-none bg-transparent px-1 text-prose text-fg outline-none placeholder:text-fg-faint"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <AttachButton disabled={busy} onFiles={files => void images.add(files)} />
+              {/* 模式（权限、模型、强度、速度）：一颗胶囊，窄屏收窄、文字截断 */}
+              <div className="flex min-w-0 flex-1 items-center">
+                <button type="button" onClick={() => setModeOpen(true)} className={cn(pill, 'shrink')}>
+                  <span className="truncate">{modeText(mode)}</span>
+                </button>
+              </div>
+              <button
+                type="button"
+                aria-label={busy ? L('正在创建…', 'Creating…') : L('开始', 'Start')}
+                disabled={!ready}
+                onClick={() => void create()}
+                className={cn(
+                  'flex size-9 shrink-0 items-center justify-center rounded-full transition-colors',
+                  ready ? 'bg-primary text-primary-fg' : 'bg-subtle text-fg-faint',
+                )}
+              >
+                {busy ? <Spinner size={16} /> : <ArrowUp size={17} strokeWidth={2.25} />}
+              </button>
+            </div>
+          </div>
         </div>
       }
     >
@@ -145,65 +197,59 @@ export function NewTask({
           )}
         />
       ) : (
-        <div className="flex flex-col gap-6 py-4">
-          <Section title={L('要做什么', 'What should it do')}>
-            <textarea
-              value={text}
-              onChange={e => setText(e.target.value)}
-              rows={5}
-              autoFocus
-              placeholder={L(
-                '例如：把登录页的按钮改成圆角，并补上单元测试',
-                'e.g. Round the buttons on the login page and add unit tests',
+        <div className="flex min-h-full flex-col items-center justify-center gap-1.5 px-6 pb-10 text-center">
+          <h2 className="text-section font-semibold">{L('想让 AI 做点什么？', 'What should the AI do?')}</h2>
+          <p className="text-meta text-fg-faint">{L('会在电脑上的项目里运行', 'Runs in a project on your computer')}</p>
+          <div className="mt-3 flex max-w-full flex-wrap items-center justify-center gap-2">
+            <button type="button" onClick={() => setPicker('project')} className={cn(pill, 'max-w-full')}>
+              <Folder size={15} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
+              <span className="truncate">{project?.name ?? L('选项目', 'Project')}</span>
+              <ChevronDown size={14} className="shrink-0 text-fg-faint" />
+            </button>
+            <button type="button" onClick={() => setPicker('engine')} className={cn(pill, 'max-w-full')}>
+              <span className="truncate">{ENGINES[engine]?.name ?? engine}</span>
+              <ChevronDown size={14} className="shrink-0 text-fg-faint" />
+            </button>
+          </div>
+        </div>
+      )}
+      {picker === 'project' && (
+        <Sheet title={L('项目', 'Project')} onClose={() => setPicker(null)}>
+          {projects.map((p, i) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => {
+                setProjectId(p.id)
+                setPicker(null)
+              }}
+              className={cn(
+                'flex min-h-14 w-full items-center gap-3 px-5 py-2.5 text-left active:bg-hover',
+                i > 0 && 'border-t border-line',
               )}
-              className="block min-h-32 w-full resize-none bg-transparent px-4 py-3.5 text-prose text-fg outline-none placeholder:text-fg-faint"
-            />
-            <div className="flex items-end gap-1 border-t border-line-subtle px-2 pt-1.5 pb-1">
-              <AttachButton disabled={busy} onFiles={files => void images.add(files)} />
-              <div className="min-w-0 flex-1">
-                {images.images.length || images.busy ? (
-                  <AttachmentStrip
-                    images={images.images.map(i => ({ id: i.id, src: imageDataUrl(i) }))}
-                    busy={images.busy}
-                    onRemove={images.remove}
-                  />
-                ) : (
-                  <span className="block py-2.5 text-meta text-fg-faint">
-                    {L('可以加截图或照片', 'You can add screenshots or photos')}
-                  </span>
-                )}
-              </div>
-            </div>
-          </Section>
-          {images.error && <Banner tone="danger">{images.error}</Banner>}
-          <Section title={L('项目', 'Project')}>
-            {projects.map((p, i) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setProjectId(p.id)}
-                className={cn(
-                  'flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left active:bg-hover',
-                  i > 0 && 'border-t border-line-subtle',
-                )}
-              >
-                <Folder size={20} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-ui">{p.name}</span>
-                  <span className="truncate font-mono text-label text-fg-faint" dir="rtl">
-                    {p.path}
-                  </span>
+            >
+              <Folder size={20} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-ui">{p.name}</span>
+                <span className="truncate font-mono text-label text-fg-faint" dir="rtl">
+                  {p.path}
                 </span>
-                {chosen === p.id && <Check size={20} className="shrink-0 text-accent-fg" />}
-              </button>
-            ))}
-          </Section>
-          <div className="px-4">
-            <div className="px-1 pb-2 text-meta font-medium text-fg-muted">{L('引擎', 'Engine')}</div>
+              </span>
+              {chosen === p.id && <Check size={20} className="shrink-0 text-accent-fg" />}
+            </button>
+          ))}
+        </Sheet>
+      )}
+      {picker === 'engine' && (
+        <Sheet title={L('引擎', 'Engine')} onClose={() => setPicker(null)}>
+          <div className="px-5 pt-1 pb-4">
             <Segmented<EngineId>
               options={ENGINE_ORDER.map(id => ({ value: id, label: ENGINES[id].name }))}
               value={engine}
-              onChange={setPicked}
+              onChange={id => {
+                setPicked(id)
+                setPicker(null)
+              }}
             />
             {defaultEngine && !picked && (
               <p className="mt-2 px-1 text-label text-fg-faint">
@@ -211,18 +257,7 @@ export function NewTask({
               </p>
             )}
           </div>
-          <Section title={L('模式', 'Mode')}>
-            <button
-              type="button"
-              onClick={() => setModeOpen(true)}
-              className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left active:bg-hover"
-            >
-              <span className="min-w-0 flex-1 truncate text-ui">{modeText(mode)}</span>
-              <ChevronRight size={18} className="shrink-0 text-fg-faint" />
-            </button>
-          </Section>
-          {error && <Banner tone="danger">{error}</Banner>}
-        </div>
+        </Sheet>
       )}
       {modeOpen && (
         <NewMode

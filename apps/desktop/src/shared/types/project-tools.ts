@@ -296,6 +296,9 @@ export interface GitFileChange {
   /** 相对当前工作区的路径（可以在编辑器中打开）；文件不在工作区子目录内时为 null */
   local: string | null
   submodule: boolean
+  /** 这一行的增删行数（只有请求了 stats 的暂存 / 更改行才有；二进制是 null，没有就不显示） */
+  insertions?: number | null
+  deletions?: number | null
 }
 export type GitOperation = 'merge' | 'rebase' | 'cherry-pick' | 'revert'
 export interface GitStatus {

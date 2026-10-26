@@ -31,6 +31,16 @@ describe('项目文件', () => {
     expect((await service.list(ref, '')).entries.map(e => e.path)).toEqual(['src', 'README.md'])
     expect((await service.search(ref, 'main')).entries).toMatchObject([{ path: 'src/main.ts', kind: 'file' }])
   })
+  it('sizes：只有文件带字节数（符号链接是目标的大小）；不要就不带', async () => {
+    await mkdir(join(root, 'src'))
+    await writeFile(join(root, 'a.txt'), 'hello')
+    await writeFile(join(root, 'empty'), '')
+    if (process.platform !== 'win32') await symlink(join(root, 'a.txt'), join(root, 'link'))
+    const sized = Object.fromEntries((await service.list(ref, '', true)).entries.map(e => [e.name, e.size]))
+    expect(sized).toMatchObject({ src: undefined, 'a.txt': 5, empty: 0 })
+    if (process.platform !== 'win32') expect(sized.link).toBe(5)
+    expect((await service.list(ref, '')).entries.every(e => !('size' in e))).toBe(true)
+  })
   it('只问有没有（路径链接、@ 菜单）：目录不存在返回 null、不报错；其他错误照常报', async () => {
     await mkdir(join(root, 'src'))
     await writeFile(join(root, 'src', 'main.ts'), '')

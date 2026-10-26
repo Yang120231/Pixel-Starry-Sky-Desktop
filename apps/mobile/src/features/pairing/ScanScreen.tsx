@@ -1,7 +1,8 @@
 // 扫码（App 里，或 https 的网页版）：相机画面 + jsQR 逐帧识别。局域网 http 下浏览器不给相机，这时提示用系统相机扫。
+// iOS 样子（§26）：只换外围——圆返回键（Screen 自带）、居中的提示字、胶囊形的「粘贴配对链接」键；相机画面和取景框不动。
 import { useEffect, useRef, useState } from 'react'
 import jsQR from 'jsqr'
-import { CameraOff, ClipboardPaste, ScanLine } from 'lucide-react'
+import { CameraOff, Link2, ScanLine } from 'lucide-react'
 import { Button, Empty, Screen } from '@/ui'
 import { L } from '@/i18n'
 
@@ -78,7 +79,7 @@ export function ScanScreen({
   }, [onResult])
 
   return (
-    <Screen title={L('扫码连接电脑', 'Scan to connect a computer')} onBack={onBack}>
+    <Screen title={L('扫码连接电脑', 'Scan to connect a computer')} onBack={onBack} close>
       {error ? (
         <Empty
           icon={CameraOff}
@@ -86,14 +87,14 @@ export function ScanScreen({
           body={error}
           action={
             onPaste && (
-              <Button variant="primary" onClick={onPaste} className="mt-2">
-                <ClipboardPaste size={18} /> {L('粘贴配对链接', 'Paste pairing link')}
+              <Button variant="primary" onClick={onPaste} className="mt-2 min-h-11! rounded-full!">
+                <Link2 size={18} /> {L('粘贴配对链接', 'Paste pairing link')}
               </Button>
             )
           }
         />
       ) : (
-        <div className="flex flex-col items-center gap-5 px-6 py-6">
+        <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-4 px-6 py-3">
           <div className="relative aspect-square w-full max-w-sm overflow-hidden rounded-3xl bg-subtle">
             <video ref={video} playsInline muted className="size-full object-cover" />
             <div className="pointer-events-none absolute inset-8 rounded-2xl border-2 border-accent-on/80" />
@@ -108,6 +109,11 @@ export function ScanScreen({
               'On your computer, open PixelSky › Settings › Phone › Add a phone, and fit the QR code in the frame. If the QR code is on this device’s screen, paste the pairing link instead.',
             )}
           </p>
+          {onPaste && (
+            <Button variant="secondary" onClick={onPaste} className="min-h-11! w-full rounded-full!">
+              <Link2 size={18} /> {L('粘贴配对链接', 'Paste pairing link')}
+            </Button>
+          )}
         </div>
       )}
     </Screen>

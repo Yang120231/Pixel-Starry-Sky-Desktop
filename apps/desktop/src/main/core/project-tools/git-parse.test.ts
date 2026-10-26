@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyGitError, localPath, parseStatusV2 } from './git-parse'
+import { classifyGitError, localPath, parseNumstat, parseStatusV2 } from './git-parse'
 
 const z = (...entries: string[]) => entries.join('\0') + '\0'
 
@@ -114,5 +114,21 @@ describe('git 失败分类', () => {
       'retry',
     ])
     expect(classifyGitError('x'.repeat(5000), { action: 'push' }).detail).toHaveLength(4000)
+  })
+})
+
+describe('git diff --numstat -z 解析', () => {
+  it('普通、二进制（-）、改名（路径为空，后面跟旧、新）；路径含空格和制表符也按原样', () => {
+    const stats = parseNumstat(z('3\t1\ta.ts', '-\t-\timg.png', '2\t0\t', 'old.ts', 'new.ts', '1\t1\tdir/a b\tc.txt'))
+    expect([...stats]).toEqual([
+      ['a.ts', [3, 1]],
+      ['img.png', [null, null]],
+      ['new.ts', [2, 0]],
+      ['dir/a b\tc.txt', [1, 1]],
+    ])
+  })
+  it('空输出、无关内容得到空表', () => {
+    expect(parseNumstat('').size).toBe(0)
+    expect(parseNumstat('garbage\0').size).toBe(0)
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectRecord, SessionSummary } from '@pixelsky/protocol'
-import { filterTasks, sessionList, sessionStatus, taskProjects } from './tasks'
+import { filterTasks, projectGroups, sessionList, sessionStatus, taskProjects } from './tasks'
 
 const task = (
   id: string,
@@ -63,5 +63,31 @@ describe('任务搜索和筛选', () => {
     const failed = task('a', '', 'web', 1)
     expect(sessionStatus({ ...failed, record: { ...failed.record, lastOutcome: 'failed' } })?.tone).toBe('warn')
     expect(sessionStatus(task('a', '', 'web', 1))).toBeNull()
+  })
+
+  it('项目分组：有会话的按最近活动排，没会话的在后，项目已不在的归到最后的「其他」', () => {
+    const all = [
+      ...sessions,
+      task('w', '等我', 'web', 1, 'waiting'),
+      task('x', '孤儿', 'gone', 4),
+      task('y', '孤儿归档', 'gone', 2, 'idle', 'claude', 9),
+    ]
+    const groups = projectGroups(all, projects, () => 10)
+    expect(groups.map(g => g.project?.id ?? null)).toEqual(['app', 'web', 'empty', null])
+    // 等你处理的在前；归档的单独放
+    expect(groups[1].sessions.map(s => s.record.id)).toEqual(['w', 'a'])
+    expect(groups[1].archived.map(s => s.record.id)).toEqual(['d'])
+    expect(groups[3].sessions.map(s => s.record.id)).toEqual(['x'])
+    expect(groups[3].archived.map(s => s.record.id)).toEqual(['y'])
+  })
+
+  it('项目分组：每组按自己的上限截断；只有归档会话的项目排在没有活动的位置；没有孤儿时没有「其他」', () => {
+    const many = Array.from({ length: 4 }, (_, i) => task('t' + i, 't' + i, 'app', i + 1))
+    const groups = projectGroups([...many, sessions[3]], projects, id => (id === 'app' ? 2 : 10))
+    expect(groups.map(g => g.project?.id)).toEqual(['app', 'web', 'empty'])
+    expect(groups[0].sessions.map(s => s.record.id)).toEqual(['t3', 't2'])
+    expect(groups[0].more).toBe(2)
+    expect(groups[1].sessions).toEqual([])
+    expect(groups[1].archived).toHaveLength(1)
   })
 })

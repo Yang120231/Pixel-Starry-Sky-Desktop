@@ -1,4 +1,5 @@
-// 审批 / 提问卡片：从底部升起的面板，大按钮（docs/mobile-remote.md §8.3）。
+// 审批 / 提问卡片：顶替输入框位置的浮动圆角卡片，大圆按钮（docs/mobile-remote.md §8.3、§26）；
+// 逐个处理时「1 / 3」小圆点和「跳过」放在卡片顶上一行的右边（triage）。
 // 「总是允许」在手机上多问一次（§10 第 6 问按推荐）。提问：推荐项、「都按推荐」、自己填答案、密码类的题
 // 用密码框（§17 第 3 项，规则同桌面）；要填表单的请求手机上只能拒绝或回电脑处理。
 // 有键盘时 Ctrl / ⌘+Enter 允许、Ctrl / ⌘+Backspace 拒绝（§25；只在普通的允许 / 拒绝时，提问和「总是允许」确认不算）。
@@ -44,17 +45,44 @@ function alwaysQuestion(scope: string): string {
   }
 }
 
+/** 逐个处理的进度：小圆点（最多 10 个）+ 「2 / 5」；会话页没有待审批时的那条细条也用 */
+export function TriageProgress({ index, total }: { index: number; total: number }) {
+  return (
+    <>
+      {total <= 10 && (
+        <span className="flex shrink-0 gap-1" aria-hidden>
+          {Array.from({ length: total }, (_, i) => (
+            <i
+              key={i}
+              className={cn(
+                'size-1.5 rounded-full',
+                i < index - 1 ? 'bg-online' : i === index - 1 ? 'bg-notify' : 'bg-line-strong',
+              )}
+            />
+          ))}
+        </span>
+      )}
+      <span className="shrink-0">
+        {index} / {total}
+      </span>
+    </>
+  )
+}
+
 export function ApprovalCard({
   request,
   canAct,
   onAnswer,
   more = 0,
+  triage,
 }: {
   request: ApprovalRequest
   canAct: boolean
   onAnswer(decision: ApprovalDecision): Promise<void>
   /** 同时还有几项在等（AI 一次并行调用几个要审批的工具）：一项一项处理，这里写还剩几项 */
   more?: number
+  /** 逐个处理等你的会话时：第几个、一共几个、跳过 */
+  triage?: { index: number; total: number; onNext(): void } | null
 }) {
   const [busy, setBusy] = useState(false)
   const [confirmAlways, setConfirmAlways] = useState(false)
@@ -103,15 +131,14 @@ export function ApprovalCard({
   const Icon = ICONS[request.kind] ?? ShieldAlert
 
   return (
-    <div className="sheet-in flex max-h-[calc(var(--app-height,100dvh)*0.7)] flex-col rounded-t-3xl border-t border-line bg-surface shadow-popover">
-      <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-line-strong" />
-      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto px-4 pt-3 pb-4">
+    <div className="sheet-in mx-3 mb-3 flex max-h-[calc(var(--app-height,100dvh)*0.7)] flex-col rounded-[26px] border border-line bg-surface shadow-popover">
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto p-4">
         <div className="flex items-center gap-2.5">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-subtle text-notify">
-            <Icon size={19} />
+          <span className="flex size-9 shrink-0 items-center justify-center text-warn">
+            <Icon size={22} />
           </span>
-          <div className="min-w-0">
-            <div className="text-section font-semibold">{request.title}</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-prose font-semibold">{request.title}</div>
             <div className="text-meta text-fg-muted">
               {request.kind === 'question'
                 ? L('需要你回答', 'Needs your answer')
@@ -119,10 +146,22 @@ export function ApprovalCard({
               {more > 0 && <span data-approval-more> · {L(`后面还有 ${more} 项`, `${more} more`)}</span>}
             </div>
           </div>
+          {triage && (
+            <div data-triage className="flex shrink-0 items-center gap-2 self-start text-meta text-fg-muted">
+              <TriageProgress index={triage.index} total={triage.total} />
+              <button
+                type="button"
+                onClick={triage.onNext}
+                className="-my-2 min-h-11 pl-1 text-ui font-semibold text-accent-fg active:opacity-70"
+              >
+                {L('跳过', 'Skip')}
+              </button>
+            </div>
+          )}
         </div>
         {request.description && <p className="text-meta text-fg-secondary">{request.description}</p>}
         {request.wrapper && request.wrapper.extra.length > 0 && (
-          <p className="flex flex-wrap items-center gap-1.5 rounded-xl bg-warn/12 px-3 py-2 text-meta text-warn">
+          <p className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-warn/12 px-3 py-2 text-meta text-warn">
             <span>
               {(shell => L(`外层 ${shell} 还带了参数：`, `The outer ${shell} also has arguments:`))(
                 request.wrapper.shell === 'powershell' ? 'PowerShell' : request.wrapper.shell,
@@ -136,12 +175,12 @@ export function ApprovalCard({
           </p>
         )}
         {request.command && (
-          <pre className="max-h-40 overflow-auto rounded-xl bg-subtle px-3 py-2.5 font-mono text-label break-all whitespace-pre-wrap">
+          <pre className="max-h-40 overflow-auto rounded-2xl bg-subtle px-3.5 py-3 font-mono text-label [overflow-wrap:anywhere] whitespace-pre-wrap">
             {request.command}
           </pre>
         )}
         {request.changes?.map(c => (
-          <div key={c.path} className="overflow-hidden rounded-xl border border-line-subtle">
+          <div key={c.path} className="overflow-hidden rounded-2xl border border-line-subtle">
             <p className="truncate bg-subtle px-3 py-1.5 font-mono text-label text-fg-muted">{c.path}</p>
             <div className="max-h-48 overflow-auto">
               <DiffView diff={c.diff} />
@@ -149,7 +188,7 @@ export function ApprovalCard({
           </div>
         ))}
         {request.plan && (
-          <div className="max-h-64 overflow-auto rounded-xl bg-subtle px-3.5 py-2.5">
+          <div className="max-h-64 overflow-auto rounded-2xl bg-subtle px-3.5 py-2.5">
             <MarkdownText text={request.plan} />
           </div>
         )}
@@ -169,6 +208,7 @@ export function ApprovalCard({
               {recommended && (
                 <Button
                   variant="secondary"
+                  className="rounded-full!"
                   disabled={!canAct || busy}
                   onClick={() => void answer({ type: 'answer', answers: recommended })}
                 >
@@ -178,7 +218,7 @@ export function ApprovalCard({
               <div className="flex gap-2">
                 <Button
                   variant="secondary"
-                  className="flex-1"
+                  className="flex-1 rounded-full!"
                   disabled={!canAct || busy}
                   onClick={() => void answer({ type: 'deny' })}
                 >
@@ -186,7 +226,7 @@ export function ApprovalCard({
                 </Button>
                 <Button
                   variant="primary"
-                  className="flex-[2]"
+                  className="flex-[2] rounded-full!"
                   disabled={!canAct || busy || !answers}
                   onClick={() => answers && void answer({ type: 'answer', answers })}
                 >
@@ -197,28 +237,33 @@ export function ApprovalCard({
           </>
         ) : form ? (
           <div className="flex flex-col gap-2">
-            <p className="rounded-xl bg-subtle px-3.5 py-3 text-meta text-fg-secondary">
+            <p className="rounded-2xl bg-subtle px-3.5 py-3 text-meta text-fg-secondary">
               {L(
                 '这个请求要填一张表单，手机上还填不了，请到电脑上处理；也可以在这里拒绝。',
                 "This request needs a form that can't be filled in on the phone yet. Handle it on the computer, or deny it here.",
               )}
             </p>
             {request.canDeny !== false && (
-              <Button variant="danger" disabled={!canAct || busy} onClick={() => void answer({ type: 'deny' })}>
+              <Button
+                variant="danger"
+                className="rounded-full!"
+                disabled={!canAct || busy}
+                onClick={() => void answer({ type: 'deny' })}
+              >
                 {L('拒绝', 'Deny')}
               </Button>
             )}
           </div>
         ) : confirmAlways && scope ? (
-          <div className="flex flex-col gap-2 rounded-xl bg-subtle p-3">
+          <div className="flex flex-col gap-2 rounded-2xl bg-subtle p-3">
             <p className="text-ui">{alwaysQuestion(scope)}</p>
             <div className="flex gap-2">
-              <Button className="flex-1" onClick={() => setConfirmAlways(false)}>
+              <Button className="flex-1 rounded-full!" onClick={() => setConfirmAlways(false)}>
                 {L('取消', 'Cancel')}
               </Button>
               <Button
                 variant="primary"
-                className="flex-1"
+                className="flex-1 rounded-full!"
                 disabled={busy}
                 onClick={() => void answer({ type: 'allow_always', scope })}
               >
@@ -227,12 +272,12 @@ export function ApprovalCard({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-1 pt-1">
+          <div className="flex flex-col gap-1">
             <div className="flex gap-2">
               {request.canDeny !== false && (
                 <Button
-                  variant="danger"
-                  className="flex-1"
+                  variant="secondary"
+                  className="flex-1 rounded-full!"
                   disabled={!canAct || busy}
                   onClick={() => void answer({ type: 'deny' })}
                 >
@@ -242,7 +287,7 @@ export function ApprovalCard({
               {request.canAllow !== false && (
                 <Button
                   variant="primary"
-                  className="flex-[2]"
+                  className="flex-1 rounded-full!"
                   disabled={!canAct || busy}
                   onClick={() => void answer({ type: 'allow' })}
                 >
@@ -251,7 +296,13 @@ export function ApprovalCard({
               )}
             </div>
             {scope && (
-              <Button variant="ghost" size="sm" disabled={!canAct || busy} onClick={() => setConfirmAlways(true)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="min-h-11 self-center text-fg-muted!"
+                disabled={!canAct || busy}
+                onClick={() => setConfirmAlways(true)}
+              >
                 {L('总是允许…', 'Always allow…')}
               </Button>
             )}
@@ -303,7 +354,7 @@ function QuestionField({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        'flex min-h-12 items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors',
+        'flex min-h-11 items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors',
         on ? 'border-accent bg-accent-soft' : 'border-line bg-surface',
       )}
     >
@@ -362,7 +413,7 @@ function QuestionField({
             autoComplete="off"
             placeholder={L('输入内容（不会显示出来）', 'Enter text (hidden)')}
             onChange={e => onChange({ ...draft, text: e.target.value })}
-            className="min-h-12 rounded-xl border border-line bg-surface px-3.5 text-ui text-fg outline-none placeholder:text-fg-faint focus:border-accent"
+            className="min-h-11 rounded-xl border border-line bg-surface px-3.5 text-ui text-fg outline-none placeholder:text-fg-faint focus:border-accent"
           />
         ) : (
           <textarea
@@ -371,7 +422,7 @@ function QuestionField({
             rows={2}
             placeholder={L('写下你的回答', 'Write your answer')}
             onChange={e => onChange({ ...draft, text: e.target.value })}
-            className="field-sizing-content max-h-40 min-h-12 resize-none rounded-xl border border-line bg-surface px-3.5 py-2.5 text-ui text-fg outline-none placeholder:text-fg-faint focus:border-accent"
+            className="field-sizing-content max-h-40 min-h-11 resize-none rounded-xl border border-line bg-surface px-3.5 py-2.5 text-ui text-fg outline-none placeholder:text-fg-faint focus:border-accent"
           />
         ))}
     </fieldset>

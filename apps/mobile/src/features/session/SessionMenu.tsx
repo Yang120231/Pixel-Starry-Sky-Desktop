@@ -1,14 +1,27 @@
-// 会话页右上角（docs/mobile-remote.md §21.4、§17.3 第 15 项）：「+」在这个项目里新建对话；「⋯」里是重命名、置顶、归档，
-// 和这个项目的改动 / 文件 / Git（工具页由 App 打开，宽屏放右栏）。旧版电脑不认这些通道时显示它的报错。
+// 会话页右上角（docs/mobile-remote.md §21.4、§17.3 第 15 项、§26）：一颗浮动圆钮「⋯」，点开是底部面板——
+// 第一行四格 Git / 文件 / 产物 / 任务（这个项目的工具页由 App 打开，宽屏放右栏），下面是重命名、置顶、在这个项目里新建对话，
+// 最后是红字的归档。旧版电脑不认这些通道时显示它的报错。
 // 置顶、归档的错误由会话页显示在输入框上面；重命名的错误显示在重命名面板里（不然被面板挡住）。
 import { useState } from 'react'
-import { MoreHorizontal, Plus } from 'lucide-react'
+import {
+  Archive,
+  GitBranch,
+  ListChecks,
+  MoreHorizontal,
+  Package,
+  Pencil,
+  Pin,
+  PinOff,
+  Plus,
+  Folder,
+  type LucideIcon,
+} from 'lucide-react'
 import type { SessionRecord } from '@pixelsky/protocol'
 import type { DesktopLink } from '@/connection'
-import type { ToolId } from '@/data/tools'
+import { TOOL_NAMES, type ToolId } from '@/data/tools'
 import { L } from '@/i18n'
-import { Button, IconButton, Spinner } from '@/ui'
-import { ActionSheet, Sheet, type SheetAction } from '@/ui/sheet'
+import { Button, Spinner, cn } from '@/ui'
+import { Sheet } from '@/ui/sheet'
 
 export const menuError = (e: unknown): string => {
   const code = (e as Error).message
@@ -51,7 +64,7 @@ export function SessionMenu({
 }) {
   const [menu, setMenu] = useState(false)
   const [renaming, setRenaming] = useState(false)
-  if (!record) return <span className="w-11 shrink-0 min-[900px]:w-6" />
+  if (!record) return <span className="w-12 shrink-0" />
 
   // 成功返回 null，失败返回错误码（调用方决定显示在哪）
   const send = async (method: string, ...args: unknown[]): Promise<string | null> => {
@@ -100,44 +113,85 @@ export function SessionMenu({
     if (!code) onArchived?.()
     else if (code !== 'SESSION_RUNNING') onError(menuError(new Error(code)))
   }
-  const actions: SheetAction[] = [
-    { label: L('重命名', 'Rename'), disabled: !canAct, onSelect: () => setRenaming(true) },
+  const rows: { icon: LucideIcon; label: string; danger?: boolean; disabled?: boolean; onSelect(): void }[] = [
+    { icon: Pencil, label: L('重命名', 'Rename'), disabled: !canAct, onSelect: () => setRenaming(true) },
     {
+      icon: record.pinnedAt ? PinOff : Pin,
       label: record.pinnedAt ? L('取消置顶', 'Unpin') : L('置顶', 'Pin'),
       disabled: !canAct,
       onSelect: () => void call('engine:setSessionPinned', !record.pinnedAt),
     },
-    ...(onTool
+    ...(onNew
       ? [
           {
-            label: L('这个项目的改动', 'Changes in this project'),
-            onSelect: () => onTool('artifacts', record.projectId),
+            icon: Plus,
+            label: L('在这个项目里新建对话', 'New conversation in this project'),
+            disabled: !canAct,
+            onSelect: () => onNew(record.projectId),
           },
-          { label: L('文件', 'Files'), onSelect: () => onTool('files', record.projectId) },
-          { label: 'Git', onSelect: () => onTool('git', record.projectId) },
         ]
       : []),
-    { label: L('归档', 'Archive'), danger: true, disabled: !canAct, onSelect: () => void archive() },
+    { icon: Archive, label: L('归档', 'Archive'), danger: true, disabled: !canAct, onSelect: () => void archive() },
+  ]
+  const tools: [ToolId, LucideIcon][] = [
+    ['git', GitBranch],
+    ['files', Folder],
+    ['artifacts', Package],
+    ['tasks', ListChecks],
   ]
 
   return (
     <div className="flex shrink-0 items-center">
-      {onNew && (
-        <IconButton
-          label={L('在这个项目里新建对话', 'New conversation in this project')}
-          icon={Plus}
-          disabled={!canAct}
-          onClick={() => onNew(record.projectId)}
-          className="disabled:opacity-40"
-        />
-      )}
-      <IconButton label={L('更多', 'More')} icon={MoreHorizontal} onClick={() => setMenu(true)} />
+      <button
+        type="button"
+        aria-label={L('更多', 'More')}
+        onClick={() => setMenu(true)}
+        className="flex size-10 items-center justify-center rounded-full border border-line-subtle bg-surface text-fg shadow-sm active:bg-hover"
+      >
+        <MoreHorizontal size={20} strokeWidth={1.75} />
+      </button>
       {menu && (
-        <ActionSheet
-          title={record.title || L('会话', 'Conversation')}
-          actions={actions}
-          onClose={() => setMenu(false)}
-        />
+        <Sheet title={record.title || L('会话', 'Conversation')} onClose={() => setMenu(false)}>
+          {onTool && (
+            <div className="grid grid-cols-4 gap-2 px-4 pt-3 pb-2">
+              {tools.map(([id, Icon]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setMenu(false)
+                    onTool(id, record.projectId)
+                  }}
+                  className="flex min-h-18 flex-col items-center justify-center gap-1.5 rounded-2xl bg-subtle text-meta text-fg-secondary active:bg-hover"
+                >
+                  <Icon size={22} strokeWidth={1.75} />
+                  {TOOL_NAMES[id]}
+                </button>
+              ))}
+            </div>
+          )}
+          <div role="menu" className="pb-2">
+            {rows.map(r => (
+              <button
+                key={r.label}
+                type="button"
+                role="menuitem"
+                disabled={r.disabled}
+                onClick={() => {
+                  setMenu(false)
+                  r.onSelect()
+                }}
+                className={cn(
+                  'flex min-h-13 w-full items-center gap-3 px-5 text-left text-ui active:bg-hover disabled:opacity-40',
+                  r.danger ? 'text-danger' : 'text-fg',
+                )}
+              >
+                <r.icon size={20} strokeWidth={1.75} className={r.danger ? undefined : 'text-fg-secondary'} />
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </Sheet>
       )}
       {renaming && (
         <RenameSheet

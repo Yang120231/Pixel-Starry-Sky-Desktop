@@ -35,6 +35,9 @@ export interface GitFileChange {
   origPath: string | null
   code: GitCode
   submodule: boolean
+  /** 增删行数；null 是二进制，没有就不显示 */
+  insertions?: number | null
+  deletions?: number | null
 }
 
 export interface GitStatus {
@@ -81,6 +84,8 @@ export interface FileEntry {
   kind: 'directory' | 'file'
   /** Git 状态（M、A、?…） */
   status?: string
+  /** 字节数，只有文件、且电脑支持时才有 */
+  size?: number
 }
 
 export interface DirectoryListing {

@@ -89,8 +89,10 @@ export const PROJECT_TOOL_OPS = {
   'projectTools:openCopy': (c, id) => c.tools.copies.open(value(id, 200, true)),
   'projectTools:removeCopy': (c, id, force) => c.tools.copies.remove(value(id, 200, true), force === true),
   'projectTools:forgetCopy': (c, id) => c.tools.copies.forget(value(id, 200, true)),
-  'projectTools:gitStatus': (c, ref, opts) =>
-    c.tools.git.status(workspaceRef(ref), false, (opts as { recheck?: unknown } | undefined)?.recheck === true),
+  'projectTools:gitStatus': (c, ref, opts) => {
+    const o = opts as { recheck?: unknown; stats?: unknown } | undefined
+    return c.tools.git.status(workspaceRef(ref), false, o?.recheck === true, o?.stats === true)
+  },
   'projectTools:gitDiff': (c, ref, input) =>
     c.tools.git.diff(workspaceRef(ref), input as Parameters<GitTools['diff']>[1]),
   'projectTools:gitBranches': (c, ref) => c.tools.git.branches(workspaceRef(ref)),

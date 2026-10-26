@@ -1,11 +1,12 @@
-// 输入框上方的模式胶囊「每步问我 · Sonnet 4.5 · 中 ˅」：点开改权限模式、模型、强度（C2，docs/mobile-remote.md §21.5）。
+// 输入框卡片里「+」右边的两颗模式胶囊「每步问我」「Sonnet 4.5 · 中」：点哪颗都打开同一个面板，改权限模式、模型、强度（C2，docs/mobile-remote.md §21.5）。
+// 没有外层容器和边距，由输入框那一排摆放；地方不够时胶囊自己收窄、文字截断。
 // 改了马上发给电脑（engine:updateSession），电脑推回来的会话记录变了，胶囊跟着变。
 // 往更宽的权限切确认一次；完全放行手机上开不了，电脑上已经开着的只能往下降。只看档的手机只能看。
 // 能力和模型目录按「下一个引擎」算（运行中选了别的引擎还没生效时，设置算它的，和电脑网关一致）；
 // 用自定义接口的会话模型来自那个接口，不在引擎目录里，手机上只显示不让改。
-// 快速模式（§25）：引擎有 fast 才显示开关，打开确认一次（按更高的价格计费），开着时胶囊末尾「⚡快速」。
+// 快速模式（§25）：引擎有 fast 才显示开关，打开确认一次（按更高的价格计费），开着时模型胶囊末尾「⚡快速」。
 import { useState } from 'react'
-import { ChevronDown, Zap } from 'lucide-react'
+import { Zap } from 'lucide-react'
 import { ENGINES, type Effort, type PermissionMode, type SessionFlags, type SessionRecord } from '@pixelsky/protocol'
 import type { DesktopLink } from '@/connection'
 import { useCatalog } from '@/data/hooks'
@@ -22,6 +23,10 @@ import {
 import { L } from '@/i18n'
 import { cn } from '@/ui'
 import { ModeSheet } from '@/ui/ModeSheet'
+
+/** 胶囊：和输入框里的圆键同高；两颗都能收窄，文字在里面截断 */
+const pill =
+  'inline-flex h-9 min-w-0 items-center gap-1 rounded-full border border-line-subtle bg-surface px-3 text-meta text-fg active:bg-hover'
 
 type Patch = Partial<Pick<SessionRecord, 'permissionMode' | 'model' | 'effort' | 'thinkingSummaries' | 'fast'>>
 
@@ -65,7 +70,7 @@ export function ModeChip({
   const custom = !!record.provider
   const catalog = useCatalog(deviceId, engine, open && !custom)
   const chip = modeChip(record)
-  const text = [chip.permission, chip.model, chip.effort].filter(Boolean).join(' · ')
+  const modelText = [chip.model, chip.effort].filter(Boolean).join(' · ') || L('默认', 'Default')
   const caps = ENGINES[engine]?.caps
   const model = catalog.models?.find(m => m.id === record.model)
   const fast = fastStatus(flags)
@@ -86,29 +91,24 @@ export function ModeChip({
 
   return (
     <>
-      <div className="flex px-4 pb-1">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="inline-flex max-w-full items-center gap-0.5 rounded-full border border-line-subtle bg-surface py-0.5 pr-1.5 pl-2.5 text-label text-fg-muted active:bg-hover"
-        >
-          <span className="truncate">{text}</span>
-          {record.fast && caps?.fast && (
-            <span
-              data-fast-chip
-              className={cn(
-                'inline-flex shrink-0 items-center gap-0.5 font-medium',
-                fast.cooldown ? 'text-fg-faint line-through' : 'text-warn',
-              )}
-            >
-              <span className="font-normal text-fg-muted">&nbsp;·&nbsp;</span>
-              <Zap size={11} fill="currentColor" />
-              {L('快速', 'Fast')}
-            </span>
-          )}
-          <ChevronDown size={13} className="shrink-0" />
-        </button>
-      </div>
+      <button type="button" onClick={() => setOpen(true)} className={cn(pill, 'shrink')}>
+        <span className="truncate">{chip.permission}</span>
+      </button>
+      <button type="button" onClick={() => setOpen(true)} className={cn(pill, 'max-w-44 shrink-[2]')}>
+        <span className="truncate">{modelText}</span>
+        {record.fast && caps?.fast && (
+          <span
+            data-fast-chip
+            className={cn(
+              'inline-flex shrink-0 items-center gap-0.5 font-medium',
+              fast.cooldown ? 'text-fg-faint line-through' : 'text-warn',
+            )}
+          >
+            <Zap size={13} fill="currentColor" />
+            {L('快速', 'Fast')}
+          </span>
+        )}
+      </button>
       {open && (
         <ModeSheet
           title={L('这个会话的模式', 'Conversation mode')}
@@ -189,6 +189,7 @@ export function ModeChip({
               title: L('推理强度', 'Reasoning effort'),
               options: effortOptions(engine, model, record.effort),
               value: record.effort ?? '',
+              segmented: true,
               onPick: v => void apply({ effort: (v || null) as Effort | null }),
             },
           ]}

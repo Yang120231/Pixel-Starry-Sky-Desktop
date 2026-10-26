@@ -1,9 +1,10 @@
 // 改模式的面板（docs/mobile-remote.md §21.5）：几组单选（权限模式、模型、强度）加几个开关。
 // 只管画，选项和规则由调用方算好传进来（data/mode.ts）；窄屏从底部弹出，宽屏是右侧面板（Sheet）。
+// iOS 样子：分组小标题、整行可点的选项（选中的右边打勾）、行与行之间一条细线、开关在行右边；选项少的一组（强度）可以画成分段按钮。
 import { Check } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Sheet } from './sheet'
-import { Spinner, cn } from './index'
+import { Segmented, Spinner, cn } from './index'
 
 export interface ModeChoice {
   value: string
@@ -18,6 +19,8 @@ export interface ModeGroup {
   options: ModeChoice[]
   value: string
   onPick(value: string): void
+  /** 选项不多、没有说明时画成一排分段按钮（强度）；条件不满足仍是一行一项 */
+  segmented?: boolean
 }
 
 export interface ModeToggle {
@@ -68,52 +71,63 @@ export function ModeSheet({
       onClose={onClose}
       footer={
         (note || error) && (
-          <div className="flex flex-col gap-1 px-4 py-3 text-label">
+          <div className="flex flex-col gap-1 px-5 py-3 text-label">
             {error && <span className="text-danger">{error}</span>}
             {note && <span className="text-fg-muted">{note}</span>}
           </div>
         )
       }
     >
-      <div className="flex flex-col gap-5 py-3">
-        {groups.map(g => (
-          <section key={g.key} className="flex flex-col">
-            <h3 className="px-4 pb-1.5 text-meta font-medium text-fg-muted">{g.title}</h3>
-            <div className="mx-3 overflow-hidden rounded-xl border border-line-subtle bg-surface">
-              {g.options.map((o, i) => {
-                const selected = o.value === g.value
-                return (
-                  <button
-                    key={o.value || '_default'}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    disabled={o.disabled || (locked && !selected)}
-                    onClick={() => !selected && g.onPick(o.value)}
-                    className={cn(
-                      'flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left active:bg-hover disabled:active:bg-transparent',
-                      i > 0 && 'border-t border-line-subtle',
-                      (o.disabled || (locked && !selected)) && 'opacity-50',
-                    )}
-                  >
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className={cn('truncate text-ui', selected && 'font-medium')}>{o.label}</span>
-                      {o.hint && <span className="line-clamp-2 text-label text-fg-muted">{o.hint}</span>}
-                    </span>
-                    {selected && <Check size={18} className="shrink-0 text-accent-fg" />}
-                  </button>
-                )
-              })}
-            </div>
-          </section>
-        ))}
+      <div className="flex flex-col gap-5 px-5 pt-1 pb-3">
+        {groups.map(g => {
+          const seg = g.segmented && g.options.length <= 5 && !g.options.some(o => o.hint || o.disabled)
+          return (
+            <section key={g.key} className="flex flex-col">
+              <h3 className="pb-1.5 text-meta font-semibold text-fg-muted">{g.title}</h3>
+              {seg ? (
+                <div className={cn(locked && 'pointer-events-none opacity-50')}>
+                  <Segmented
+                    options={g.options.map(o => ({ value: o.value, label: o.label }))}
+                    value={g.value}
+                    onChange={v => !locked && v !== g.value && g.onPick(v)}
+                  />
+                </div>
+              ) : (
+                g.options.map((o, i) => {
+                  const selected = o.value === g.value
+                  return (
+                    <button
+                      key={o.value || '_default'}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      disabled={o.disabled || (locked && !selected)}
+                      onClick={() => !selected && g.onPick(o.value)}
+                      className={cn(
+                        'flex min-h-13 w-full items-center gap-3 py-2 text-left active:bg-hover disabled:active:bg-transparent',
+                        i > 0 && 'border-t border-line-subtle',
+                        (o.disabled || (locked && !selected)) && 'opacity-50',
+                      )}
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className={cn('truncate text-ui', selected && 'font-medium')}>{o.label}</span>
+                        {o.hint && <span className="line-clamp-2 text-label text-fg-muted">{o.hint}</span>}
+                      </span>
+                      {selected && <Check size={20} className="shrink-0 text-accent-fg" />}
+                    </button>
+                  )
+                })
+              )}
+            </section>
+          )
+        })}
         {toggles.length > 0 && (
-          <div className="mx-3 overflow-hidden rounded-xl border border-line-subtle bg-surface">
+          <section className="flex flex-col">
             {toggles.map((t, i) => (
               <label
                 key={t.key}
                 className={cn(
-                  'flex min-h-12 items-center gap-3 px-4 py-2',
+                  'flex min-h-13 items-center gap-3 py-2',
                   i > 0 && 'border-t border-line-subtle',
                   (locked || t.disabled) && 'opacity-50',
                 )}
@@ -131,11 +145,16 @@ export function ModeSheet({
                   checked={t.value}
                   disabled={locked || t.disabled}
                   onChange={e => t.onChange(e.target.checked)}
-                  className="size-5 shrink-0 accent-[var(--color-primary)]"
+                  className="peer sr-only"
+                />
+                {/* iOS 开关：滑块用伪元素画，选中时底色变绿、滑块右移；键盘聚焦时画一圈 */}
+                <span
+                  aria-hidden
+                  className="relative h-8 w-13 shrink-0 rounded-full bg-line-strong transition-colors after:absolute after:top-0.5 after:left-0.5 after:size-7 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:bg-success peer-checked:after:translate-x-5 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent"
                 />
               </label>
             ))}
-          </div>
+          </section>
         )}
       </div>
     </Sheet>

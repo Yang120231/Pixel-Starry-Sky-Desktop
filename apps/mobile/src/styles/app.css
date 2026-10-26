@@ -1,9 +1,12 @@
 @import 'tailwindcss';
 @import './tokens.css';
 
-/* 手机上字大一点（桌面端的字号七级乘以 1.15） */
+/* 手机上字稍大一点（桌面端的字号七级乘以 1.05；1.15 在手机上偏大，用户反馈）。
+   不让浏览器自己再放大字（安卓、iOS 横屏的字体自动放大会把排版撑乱） */
 :root {
-  --font-scale: 1.15;
+  --font-scale: 1.05;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* 手机上滚动条本来就是浮在上面的；电脑上看时也只留一条细的。放在 base 层，no-scrollbar 这类工具类才盖得过它 */

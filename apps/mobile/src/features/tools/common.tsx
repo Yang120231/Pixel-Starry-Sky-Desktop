@@ -1,9 +1,10 @@
-// 工具页的公共部分（docs/mobile-remote.md §18.4）：页头（返回 / 菜单 / 关闭、刷新）、加载和出错。
+// 工具页的公共部分（docs/mobile-remote.md §18.4、§26）：页头（居中的小标题 = 工具名，返回 / 菜单 / 关闭 / 刷新都是圆钮），
+// 内容区顶部的大标题（项目名或文件夹名）+ 一行浅色小字，加载和出错，文件行。
 import type { ReactNode } from 'react'
 import { RefreshCw, X } from 'lucide-react'
 import type { ProjectRecord } from '@pixelsky/protocol'
 import { L } from '@/i18n'
-import { Banner, IconButton, Screen, Spinner, cn } from '@/ui'
+import { Banner, IconButton, ROUND_BUTTON, Screen, Spinner, cn } from '@/ui'
 
 export interface ToolProps {
   deviceId: string
@@ -27,6 +28,8 @@ export function ToolFrame({
   tool,
   title,
   subtitle,
+  heading,
+  crumb,
   loading,
   onRefresh,
   actions,
@@ -37,6 +40,10 @@ export function ToolFrame({
   tool: ToolProps
   title: ReactNode
   subtitle?: ReactNode
+  /** 内容顶部的大标题（工具首页：项目名）；给了之后页头不再带副标题 */
+  heading?: ReactNode
+  /** 大标题下面一行浅色小字（Git 的分支、文件的路径） */
+  crumb?: ReactNode
   loading?: boolean
   onRefresh?: () => void
   actions?: ReactNode
@@ -48,7 +55,7 @@ export function ToolFrame({
   return (
     <Screen
       title={title}
-      subtitle={subtitle ?? tool.project.name}
+      subtitle={heading ? subtitle : (subtitle ?? tool.project.name)}
       onBack={top ? undefined : tool.onBack}
       leading={top ? tool.leading : undefined}
       scroll={scroll}
@@ -62,15 +69,24 @@ export function ToolFrame({
               aria-label={L('刷新', 'Refresh')}
               disabled={loading}
               onClick={onRefresh}
-              className="flex size-11 items-center justify-center rounded-full text-fg-secondary active:bg-hover"
+              className={cn(
+                'flex shrink-0 items-center justify-center rounded-full active:bg-hover disabled:opacity-100',
+                ROUND_BUTTON,
+              )}
             >
-              {loading ? <Spinner size={16} /> : <RefreshCw size={19} strokeWidth={1.75} />}
+              {loading ? <Spinner size={16} /> : <RefreshCw size={18} strokeWidth={1.75} />}
             </button>
           )}
-          {top && tool.onClose && <IconButton label={L('关闭', 'Close')} icon={X} onClick={tool.onClose} />}
+          {top && tool.onClose && <IconButton round label={L('关闭', 'Close')} icon={X} onClick={tool.onClose} />}
         </>
       }
     >
+      {heading && (
+        <div className="px-5 pt-1 pb-3">
+          <h1 className="truncate text-title font-bold">{heading}</h1>
+          {crumb && <div className="mt-1 flex min-w-0 items-center gap-1.5 text-meta text-fg-muted">{crumb}</div>}
+        </div>
+      )}
       {children}
     </Screen>
   )
@@ -93,7 +109,7 @@ export function splitPath(path: string): { name: string; dir: string } {
   return { name: clean.slice(i + 1), dir: i > 0 ? clean.slice(0, i) : '' }
 }
 
-/** 文件一行：名字、目录（小字）、右边的东西 */
+/** 文件一行（放在 Section 里）：名字、目录（小字）、右边的东西 */
 export function PathRow({
   path,
   icon,
@@ -111,12 +127,12 @@ export function PathRow({
 }) {
   const { name, dir } = splitPath(path)
   return (
-    <div className={cn('flex items-center', !first && 'border-t border-line-subtle')}>
+    <div className={cn('flex items-center', !first && 'border-t border-line')}>
       <button
         type="button"
         onClick={onClick}
         disabled={!onClick}
-        className="flex min-h-13 min-w-0 flex-1 items-center gap-2.5 py-2 pl-4 text-left active:bg-hover"
+        className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 py-2 pl-4 text-left active:bg-hover"
       >
         {icon}
         <span className="flex min-w-0 flex-1 flex-col">

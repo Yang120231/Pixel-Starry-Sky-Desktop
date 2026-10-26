@@ -1,4 +1,4 @@
-// 消息队列（docs/mobile-remote.md §17 第 2 项，规则同桌面 QueuedMessages）：输入框上面列出排着的消息，
+// 消息队列（docs/mobile-remote.md §17 第 2 项、§26，规则同桌面 QueuedMessages）：输入框上面浮着排着的消息，每条是浅灰圆角块（图标 + 状态 + 一行字），
 // 点一条弹出能做的事：插队 / 重试、引导、上移、下移、撤回（撤回的文字放回输入框）、关掉；
 // 断线自动重连中的那条：立即重连、停止（队列暂停时是继续重连、停止）。
 import { useState } from 'react'
@@ -146,7 +146,7 @@ export function QueuePanel({
   }
 
   return (
-    <section aria-label={L('消息队列', 'Message queue')} className="border-t border-line-subtle px-3 pt-2">
+    <section aria-label={L('消息队列', 'Message queue')} className="px-3 pt-2">
       <div className="flex min-h-8 items-center gap-1.5 px-1 text-meta text-fg-muted">
         {paused ? <Pause size={13} /> : <CornerDownRight size={13} />}
         <span>
@@ -188,41 +188,44 @@ export function QueuePanel({
             type="button"
             disabled={!canAct}
             onClick={() => setMenu(q)}
-            className="flex w-full flex-col gap-0.5 rounded-xl border border-line-subtle bg-surface px-3 py-2 text-left active:bg-hover disabled:opacity-100"
+            className="flex w-full items-start gap-2.5 rounded-2xl bg-subtle px-3.5 py-2.5 text-left active:bg-hover disabled:opacity-100"
           >
-            <span className="flex items-center gap-1.5 text-label">
-              {isPending(q) || busy === q.id ? (
-                <Spinner size={10} className="text-fg-faint" />
-              ) : (
-                <span className={cn('size-1.5 rounded-full', q.error ? 'bg-warn' : 'bg-fg-faint')} />
-              )}
-              <span className={q.error || isSendFailure(q) ? 'text-warn' : 'text-fg-muted'}>
-                {queueLabel(q, snapshot.queuePaused)}
+            <CornerDownRight size={16} className="mt-0.5 shrink-0 text-fg-faint" />
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex items-center gap-1.5 text-label">
+                {isPending(q) || busy === q.id ? (
+                  <Spinner size={10} className="text-fg-faint" />
+                ) : (
+                  <span className={cn('size-1.5 rounded-full', q.error ? 'bg-warn' : 'bg-fg-faint')} />
+                )}
+                <span className={q.error || isSendFailure(q) ? 'text-warn' : 'text-fg-muted'}>
+                  {queueLabel(q, snapshot.queuePaused)}
+                </span>
+                {!!q.attachments?.length && (
+                  <span className="flex items-center gap-0.5 text-fg-faint">
+                    <ImageIcon size={12} /> {q.attachments.length}
+                  </span>
+                )}
               </span>
-              {!!q.attachments?.length && (
-                <span className="flex items-center gap-0.5 text-fg-faint">
-                  <ImageIcon size={12} /> {q.attachments.length}
+              <span className="truncate text-list text-fg-secondary">
+                {q.text || L('（只有图片）', '(Images only)')}
+              </span>
+              {q.error && (
+                <span className="truncate text-label text-warn">
+                  {q.error.split('\n')[0]}
+                  {!!q.reconnected &&
+                    L(
+                      ` · 已自动重连 ${q.reconnected} 次`,
+                      ` · Auto-reconnected ${q.reconnected === 1 ? 'once' : `${q.reconnected} times`}`,
+                    )}
+                </span>
+              )}
+              {q.reconnect && isReconnecting(q) && (
+                <span className="truncate text-label text-fg-faint">
+                  {q.reconnect.reason || L('连接中断', 'Connection lost')}
                 </span>
               )}
             </span>
-            <span className="line-clamp-2 text-list text-fg-secondary">
-              {q.text || L('（只有图片）', '(Images only)')}
-            </span>
-            {q.error && (
-              <span className="truncate text-label text-warn">
-                {q.error.split('\n')[0]}
-                {!!q.reconnected &&
-                  L(
-                    ` · 已自动重连 ${q.reconnected} 次`,
-                    ` · Auto-reconnected ${q.reconnected === 1 ? 'once' : `${q.reconnected} times`}`,
-                  )}
-              </span>
-            )}
-            {q.reconnect && isReconnecting(q) && (
-              <span className="truncate text-label text-fg-faint">
-                {q.reconnect.reason || L('连接中断', 'Connection lost')}
-              </span>
-            )}
           </button>
         ))}
       </div>

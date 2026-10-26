@@ -1,7 +1,8 @@
 // 添加电脑：能扫码就扫，不能（没相机、微信里、局域网 http）或扫不了（二维码就在本机屏幕上）就粘贴配对链接。
 // 粘贴的文字交给 findOffer 找出链接；成功后和扫码一样进配对页。
+// iOS 样子（§26）：居中的标题和说明、虚线二维码框（能扫码时）、整行宽的胶囊键（扫二维码 / 连接 / 粘贴配对链接）。
 import { useState } from 'react'
-import { ClipboardPaste, Link2, ScanLine } from 'lucide-react'
+import { Camera, Link2, QrCode } from 'lucide-react'
 import { findOffer, type Offer } from '@/connection'
 import { Banner, Button, Screen, Section } from '@/ui'
 import { canScan } from './ScanScreen'
@@ -51,23 +52,32 @@ export function AddComputer({
   }
 
   return (
-    <Screen title={L('添加电脑', 'Add a computer')} onBack={onBack}>
-      <div className="mx-auto flex w-full max-w-lg flex-col gap-6 py-4">
+    <Screen title={L('添加电脑', 'Add a computer')} onBack={onBack} close>
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-5 py-2">
+        <div className="px-6 text-center">
+          <h2 className="text-section font-semibold">{L('连上你的电脑', 'Connect to your computer')}</h2>
+          <p className="mt-1.5 text-meta text-fg-muted">
+            {L(
+              '在电脑上打开 像素星空 › 设置 › 手机 › 添加手机，扫那里的二维码，或粘贴配对链接',
+              'On your computer open PixelSky › Settings › Phone › Add a phone, then scan the QR code there or paste the pairing link',
+            )}
+          </p>
+        </div>
         {scan && (
-          <div className="px-4">
-            <Button variant="primary" onClick={onScan} className="w-full">
-              <ScanLine size={18} /> {L('扫码', 'Scan QR code')}
+          <div className="flex flex-col items-center gap-4 px-4">
+            <div
+              aria-hidden
+              className="flex size-32 items-center justify-center rounded-[28px] border-2 border-dashed border-line-strong text-fg-faint"
+            >
+              <QrCode size={56} strokeWidth={1.2} />
+            </div>
+            <Button variant="primary" onClick={onScan} className="min-h-11! w-full rounded-full!">
+              <Camera size={18} /> {L('扫二维码', 'Scan QR code')}
             </Button>
-            <p className="mt-2 text-center text-meta text-fg-muted">
-              {L(
-                '用这台设备的相机扫电脑屏幕上的二维码',
-                'Use this device’s camera to scan the QR code on your computer screen',
-              )}
-            </p>
           </div>
         )}
 
-        <Section title={L('粘贴配对链接', 'Paste pairing link')}>
+        <Section title={L('配对链接', 'Pairing link')}>
           <textarea
             value={text}
             onChange={e => {
@@ -89,13 +99,18 @@ export function AddComputer({
             <Banner tone="danger">{error}</Banner>
           </div>
         )}
-        <div className="flex flex-col gap-3 px-4">
-          <Button variant={scan ? 'secondary' : 'primary'} disabled={!text.trim()} onClick={() => submit(text)}>
-            <Link2 size={18} /> {L('连接', 'Connect')}
+        <div className="flex flex-col gap-2.5 px-4">
+          <Button
+            variant={scan ? 'secondary' : 'primary'}
+            disabled={!text.trim()}
+            onClick={() => submit(text)}
+            className="min-h-11! rounded-full!"
+          >
+            {L('连接', 'Connect')}
           </Button>
           {canPaste && (
-            <Button variant="secondary" onClick={() => void paste()}>
-              <ClipboardPaste size={18} /> {L('从剪贴板粘贴', 'Paste from clipboard')}
+            <Button variant="secondary" onClick={() => void paste()} className="min-h-11! rounded-full!">
+              <Link2 size={18} /> {L('粘贴配对链接', 'Paste pairing link')}
             </Button>
           )}
         </div>

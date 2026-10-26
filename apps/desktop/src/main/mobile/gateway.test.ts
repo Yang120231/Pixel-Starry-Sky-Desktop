@@ -26,6 +26,7 @@ import {
   MobileGateway,
   PAIRING_TTL,
   PHONE_TEXT_LIMIT,
+  phoneAccount,
   phoneSessions,
   phoneSettings,
   sanitize,
@@ -421,6 +422,39 @@ describe('MobileGateway calls', () => {
     expect(t.calls.at(-1)).toEqual(['engine:openSession', ['s1'], 'mobile:p1'])
     await expect(p.call('image', 's1', 'u1', 2)).rejects.toThrow('MOBILE_NOT_FOUND')
     await expect(p.call('image', 's1', 'u1', -1)).rejects.toThrow('MOBILE_BAD_ARGUMENT')
+  })
+
+  const acct = { name: 'Ann', balance: 3.5, currency: 'USD', plan: null, updatedAt: 7 }
+  it('account: slim object, unsupported without local.account, allowed for a view-only phone', async () => {
+    const t = setup({ local: { defaultEngine: () => 'codex', search: async () => ({}) as never, account: () => acct } })
+    gateways.push(t.gateway)
+    const p = await paired(t)
+    t.devices[0].access = 'view'
+    expect(await p.call('account')).toEqual(acct)
+    const none = setup({ local: { defaultEngine: () => 'codex', search: async () => ({}) as never } })
+    gateways.push(none.gateway)
+    await expect((await paired(none)).call('account')).rejects.toThrow('MOBILE_UNSUPPORTED')
+    const out = setup({
+      local: { defaultEngine: () => 'codex', search: async () => ({}) as never, account: async () => null },
+    })
+    gateways.push(out.gateway)
+    expect(await (await paired(out)).call('account')).toBeNull()
+  })
+
+  it('phoneAccount keeps only name, balance, currency, plan name and updatedAt', () => {
+    const info = {
+      email: 'a@b.c',
+      name: 'Ann',
+      balance: 3.5,
+      currency: 'USD',
+      group: { name: 'g', billingSource: 'balance_only' },
+      plan: { name: 'Pro', expiresAt: null, daily: null, weekly: null, monthly: null },
+      rateLimits: [{ window: '5h', used: 1, limit: 2 }],
+      updatedAt: 7,
+    }
+    expect(phoneAccount(info)).toEqual({ name: 'Ann', balance: 3.5, currency: 'USD', plan: 'Pro', updatedAt: 7 })
+    expect(phoneAccount({ ...info, plan: null })?.plan).toBeNull()
+    expect(phoneAccount(null)).toBeNull()
   })
 
   it('without local queries or a shrinker: no default engine, no content search, big images refused', async () => {

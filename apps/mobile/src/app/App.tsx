@@ -1,6 +1,6 @@
 // 组装（docs/mobile-remote.md §18.3）：左边抽屉 + 主区。窄屏抽屉从左边拉出来（左上角按钮或从左边缘右滑），
 // 宽屏（≥ 900px）常驻左边；再宽（≥ 1280px）时在会话旁边打开的工具放在右边一栏。
-// 主区的页面：概览、会话、新建会话、工具、加项目、我的；配对、添加电脑和扫码是整页。打开 #pair=… 的链接时先进配对页。
+// 主区的页面：概览、会话、新建会话、工具、加项目、设置；配对、添加电脑和扫码是整页。打开 #pair=… 的链接时先进配对页。
 // 用浏览器历史做返回：手机上的返回手势 / 返回键能回到上一页（抽屉开着时先关抽屉）。
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { CheckCircle2, Plus, Smartphone } from 'lucide-react'
@@ -55,7 +55,7 @@ const TodoScreen = lazy(() =>
 
 /** 按需加载的页面还没下完时：占满主区的转圈 */
 const pageLoading = (
-  <div className="flex h-app min-w-0 flex-1 items-center justify-center bg-app text-fg-muted">
+  <div className="flex h-app min-w-0 flex-1 items-center justify-center bg-workbench text-fg-muted">
     <Spinner size={22} />
   </div>
 )
@@ -170,7 +170,7 @@ export function App() {
     setDrawer(false)
   }, [])
   const back = () => (history.state && history.state.page !== 'home' ? history.back() : replace({ page: 'home' }))
-  // 从抽屉打开的一级页面（概览、我的）互相切换时不进历史
+  // 从抽屉打开的一级页面（概览、设置）互相切换时不进历史
   const top = (page: 'home' | 'me') => (route.page === 'home' || route.page === 'me' ? replace({ page }) : go({ page }))
 
   // 换了电脑：回到概览，右边的工具关掉
@@ -366,7 +366,7 @@ export function App() {
             'On your computer, open PixelSky › Settings › Phone › Add a phone, then scan the QR code on screen or copy the pairing link and paste it here.',
           )}
           action={
-            <Button variant="primary" onClick={add} className="mt-2">
+            <Button variant="primary" onClick={add} className="mt-2 min-h-11! rounded-full!">
               <Plus size={18} /> {L('添加电脑', 'Add a computer')}
             </Button>
           }
@@ -432,7 +432,7 @@ export function App() {
       <Screen title={L('等你处理', 'Needs you')} leading={menu}>
         <div className="flex flex-col items-center gap-3 px-8 py-20 text-center text-fg-muted">
           <Spinner size={22} />
-          <div className="text-ui text-fg">
+          <div className="text-section font-semibold text-fg">
             {state && state !== 'ready' && state !== 'connecting'
               ? linkStateLabel(state)
               : L('正在连接电脑…', 'Connecting to your computer…')}
@@ -460,7 +460,11 @@ export function App() {
               : L('等你处理的都已经在电脑上处理了。', 'Everything that needed you was handled on your computer.')
           }
           action={
-            <Button onClick={() => replace({ page: 'home' })} className="mt-2">
+            <Button
+              variant="primary"
+              onClick={() => replace({ page: 'home' })}
+              className="mt-2 min-h-11! rounded-full!"
+            >
               {L('回到会话列表', 'Back to conversations')}
             </Button>
           }
@@ -516,6 +520,7 @@ export function App() {
 
   const nav = (
     <Drawer
+      key={active.deviceId}
       deviceId={active.deviceId}
       page={route.page === 'home' || route.page === 'me' || route.page === 'session' ? route.page : 'other'}
       openSession={openSession}
@@ -526,7 +531,9 @@ export function App() {
       onProject={id => choose(id)}
       onAddProject={() => go({ page: 'addProject' })}
       onHome={() => top('home')}
+      onArchived={() => replace({ page: 'home' })}
       onMe={() => top('me')}
+      onTriage={() => go({ page: 'triage' })}
       onAddComputer={add}
       onShortcuts={() => setKeysOpen(true)}
     />
@@ -610,16 +617,16 @@ function Session({
       onNew={onNew}
       onTool={onTool}
       onArchived={onArchived}
-      composer={(running, suggest) => (
+      composer={(running, mode) => (
         <Composer
           link={link}
           sessionId={sessionId}
           engine={s?.record.engine ?? 'claude'}
           canAct={canAct}
           running={running}
-          suggest={suggest}
           draft={draft}
           onDraft={setDraft}
+          mode={mode}
         />
       )}
     />

@@ -23,16 +23,13 @@ export function ActionSheet({ title, actions, onClose }: { title?: string; actio
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   return createPortal(
-    <div
-      className="fixed inset-x-0 top-0 z-40 flex h-app flex-col items-center justify-end bg-black/40"
-      onClick={onClose}
-    >
+    <div className="fixed inset-x-0 top-0 z-40 flex h-app flex-col items-center justify-end bg-scrim" onClick={onClose}>
       <div
         role="menu"
         className="sheet-in flex w-full max-w-lg flex-col gap-2 px-3 pb-[max(env(safe-area-inset-bottom),12px)]"
         onClick={e => e.stopPropagation()}
       >
-        <div className="overflow-hidden rounded-2xl bg-popover shadow-popover">
+        <div className="overflow-hidden rounded-[26px] bg-popover shadow-popover">
           {title && (
             <div className="border-b border-line-subtle px-4 py-3 text-center text-meta text-fg-muted">{title}</div>
           )}
@@ -59,7 +56,7 @@ export function ActionSheet({ title, actions, onClose }: { title?: string; actio
         <button
           type="button"
           onClick={onClose}
-          className="min-h-14 rounded-2xl bg-popover text-ui font-medium text-fg shadow-popover active:bg-hover"
+          className="min-h-14 rounded-[26px] bg-popover text-ui font-medium text-fg shadow-popover active:bg-hover"
         >
           {L('取消', 'Cancel')}
         </button>
@@ -89,17 +86,14 @@ export function ConfirmSheet({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   return createPortal(
-    <div
-      className="fixed inset-x-0 top-0 z-40 flex h-app flex-col items-center justify-end bg-black/40"
-      onClick={onClose}
-    >
+    <div className="fixed inset-x-0 top-0 z-40 flex h-app flex-col items-center justify-end bg-scrim" onClick={onClose}>
       <div
         role="dialog"
         aria-label={title}
         className="sheet-in flex w-full max-w-lg flex-col gap-2 px-3 pb-[max(env(safe-area-inset-bottom),12px)]"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex max-h-[calc(var(--app-height,100dvh)*0.7)] flex-col overflow-hidden rounded-2xl bg-popover shadow-popover">
+        <div className="flex max-h-[calc(var(--app-height,100dvh)*0.7)] flex-col overflow-hidden rounded-[26px] bg-popover shadow-popover">
           <div className="border-b border-line-subtle px-4 py-3 text-center text-ui font-medium">{title}</div>
           <div className="min-h-0 overflow-y-auto px-4 py-3 text-meta text-fg-secondary">{children}</div>
           <button
@@ -116,7 +110,7 @@ export function ConfirmSheet({
         <button
           type="button"
           onClick={onClose}
-          className="min-h-14 rounded-2xl bg-popover text-ui font-medium text-fg shadow-popover active:bg-hover"
+          className="min-h-14 rounded-[26px] bg-popover text-ui font-medium text-fg shadow-popover active:bg-hover"
         >
           {L('取消', 'Cancel')}
         </button>
@@ -127,7 +121,8 @@ export function ConfirmSheet({
 }
 
 /**
- * 通用面板：窄屏从底部弹出（最高为看得见高度的 85%，内容区自己滚动；整层跟着 --app-height，iPhone 键盘弹出时不被挡住），宽屏（WIDE）改成右侧 420px 的覆盖面板。
+ * 通用面板：窄屏是离屏幕左右下各 8px 的浮起圆角卡片（iOS 样子），顶上一条拖拽条，大标题加圆形关闭键；
+ * 最高为看得见高度的 85%，内容区自己滚动；整层跟着 --app-height，iPhone 键盘弹出时不被挡住。宽屏（WIDE）改成右侧 420px 的覆盖面板。
  * Esc、点遮罩、右上角关闭都会调 onClose；children 放内容，footer 固定在底部。
  */
 export function Sheet({
@@ -175,7 +170,10 @@ export function Sheet({
   }, [onClose])
   return createPortal(
     <div
-      className={cn('fixed inset-x-0 top-0 z-40 flex h-app bg-black/40', wide ? 'justify-end' : 'flex-col justify-end')}
+      className={cn(
+        'fixed inset-x-0 top-0 z-40 flex h-app bg-scrim',
+        wide ? 'justify-end' : 'flex-col items-center justify-end px-2 pb-[max(env(safe-area-inset-bottom),8px)]',
+      )}
       onClick={onClose}
     >
       <div
@@ -188,19 +186,25 @@ export function Sheet({
           'flex min-h-0 flex-col bg-popover shadow-popover outline-none',
           wide
             ? 'panel-in h-full w-[420px] max-w-full border-l border-line-subtle'
-            : 'sheet-in max-h-[85%] w-full rounded-t-2xl pb-[env(safe-area-inset-bottom)]',
+            : 'sheet-in max-h-[85%] w-full max-w-lg overflow-hidden rounded-[30px]',
         )}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center gap-2 border-b border-line-subtle py-1 pr-1 pl-4">
-          <div id={titleId} className="min-w-0 flex-1 truncate text-ui font-medium">
+        {!wide && <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-line-strong" />}
+        <div
+          className={cn(
+            'flex shrink-0 items-center gap-2 pr-2 pl-5',
+            wide ? 'border-b border-line-subtle py-1' : 'pt-1',
+          )}
+        >
+          <div id={titleId} className="min-w-0 flex-1 truncate text-section font-semibold">
             {title}
           </div>
           <button
             type="button"
             aria-label={L('关闭', 'Close')}
             onClick={onClose}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full text-fg-secondary active:bg-hover"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-subtle text-fg-secondary active:bg-hover"
           >
             <X size={20} strokeWidth={1.75} />
           </button>

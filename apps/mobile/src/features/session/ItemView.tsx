@@ -1,11 +1,11 @@
-// 对话流（docs/mobile-remote.md §21.12）：按 protocol 的 foldTurns 折出来的条目逐条显示。
-// 你的消息右对齐气泡；回复是左侧白卡 + Markdown；思考「思考了 N 秒 ›」点开看原文；
-// 一段过程收成一行「做了 N 步 · 改了 3 个文件 +40 −12 ›」，点开是底部面板（ProcessSheet）。
+// 对话流（docs/mobile-remote.md §21.12、§26）：按 protocol 的 foldTurns 折出来的条目逐条显示。
+// 你的消息是右侧灰色大圆角气泡；回复就是正文（Markdown，不加卡片）；思考「思考了 N 秒 ›」点开看原文；
+// 一段过程收成一个细边框胶囊「图标 + 一行说明 ··· N 步 · 11.9s ›」，点开是底部面板（ProcessSheet）；待办、改动文件同样是细边框圆角块。
 // 图片点开再向电脑取；回复可以复制；最近一轮出错时错误下面有「重试」（§17）。
-import { memo, useState, type ReactNode } from 'react'
+import { memo, useEffect, useState, type ReactNode } from 'react'
 import { Check, ChevronRight, CircleAlert, FileText, ListTodo, RotateCcw, X } from 'lucide-react'
 import type { Item, TurnEntry } from '@pixelsky/protocol'
-import { latestTodo, processLine, stepCount, thinkingLabel } from '@/data/turns'
+import { latestTodo, processLine, stepCount, stepTitle, thinkingLabel } from '@/data/turns'
 import { L } from '@/i18n'
 import { Button, Dot, Spinner, Typing, cn } from '@/ui'
 import { CopyButton } from '@/ui/code'
@@ -105,11 +105,18 @@ function EntryViewInner({ entry, last, waiting, truncated, onDetail, actions }: 
   }
 }
 
-/** 运行中、最后一条还是你的消息：回复还没开始 */
+/** 运行中、最后一条还是你的消息：回复还没开始；秒数从这一行出现起算（不用电脑的时间，免得两边的钟对不上） */
 export function ThinkingRow() {
+  const [sec, setSec] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setSec(n => n + 1), 1000)
+    return () => clearInterval(timer)
+  }, [])
   return (
-    <div className="flex items-center gap-2 text-meta text-fg-muted">
-      {L('正在思考', 'Thinking')} <Typing />
+    <div className="flex items-center gap-2.5 text-ui text-fg-muted">
+      <Spinner size={16} />
+      {L('正在请求模型…', 'Requesting the model…')}
+      <span className="text-meta text-fg-faint">{sec}s</span>
     </div>
   )
 }
@@ -124,10 +131,10 @@ function UserBubble({
   actions: TurnActions
 }) {
   return (
-    <div className="flex flex-col items-end pl-10">
+    <div className="flex flex-col items-end">
       {item.mode === 'guidance' && <span className="mb-0.5 pr-1 text-label text-fg-faint">{L('补充', 'Steer')}</span>}
       {(item.text || (!item.files?.length && !item.attachments?.length)) && (
-        <div className="rounded-2xl rounded-br-md bg-bubble-user px-3.5 py-2.5 text-prose break-words whitespace-pre-wrap text-bubble-user-fg">
+        <div className="max-w-[84%] rounded-[20px] bg-selected px-4 py-2.5 text-prose break-words whitespace-pre-wrap text-fg">
           {item.text}
         </div>
       )}
@@ -147,7 +154,7 @@ function UserBubble({
   )
 }
 
-/** 回复：左侧白卡 + Markdown；说完了才有小复制图标（被截断的先「查看完整」再复制，免得复制不全） */
+/** 回复：Markdown 正文，不加卡片；说完了才有小复制图标（被截断的先「查看完整」再复制，免得复制不全） */
 function AssistantCard({
   item,
   more,
@@ -162,7 +169,7 @@ function AssistantCard({
   const running = item.status === 'running'
   if (!item.text.trim() && !running) return null
   return (
-    <div className="group max-w-full self-start rounded-2xl rounded-bl-md border border-line-subtle bg-card-assistant px-3.5 py-3">
+    <div className="group max-w-full self-start">
       <MarkdownText text={item.text} />
       {running && (
         <div className={item.text ? 'mt-1.5' : undefined}>
@@ -171,7 +178,7 @@ function AssistantCard({
       )}
       {more}
       {copy && !running && item.text && !truncated && (
-        <CopyButton text={item.text} label="" className="hover-reveal mt-0.5 -mb-1 -ml-2" />
+        <CopyButton text={item.text} label="" className="hover-reveal mt-0.5 -mb-1 -ml-2 text-fg-faint!" />
       )}
     </div>
   )
@@ -207,7 +214,7 @@ function NoticeBar({ item, actions }: { item: Extract<Item, { kind: 'notice' }>;
   return (
     <div
       className={cn(
-        'flex max-w-full items-start gap-2 self-center rounded-xl bg-subtle px-3 py-2.5 text-meta',
+        'flex max-w-full items-start gap-2 self-center rounded-2xl bg-subtle px-3 py-2.5 text-meta',
         item.level === 'error' ? 'text-danger' : 'text-warn',
       )}
     >
@@ -226,7 +233,7 @@ function NoticeBar({ item, actions }: { item: Extract<Item, { kind: 'notice' }>;
   )
 }
 
-/** 一段过程：一行摘要（点开 ProcessSheet）、有待办时多一行进度；运行中把正在输出的回复照常显示在下面 */
+/** 一段过程：一个胶囊摘要（点开 ProcessSheet）、有待办时多一行进度；运行中把正在输出的回复照常显示在下面 */
 function Process({
   entry,
   waiting,
@@ -256,42 +263,49 @@ function Process({
     : undefined
   const reply = tail?.kind === 'assistant' ? tail : null
   const line = processLine(items)
+  const lastStep = items.findLast(i => i.kind === 'command' || i.kind === 'tool')
+  // 运行中 / 等审批：左边说正在干什么，右边是步数；做完：左边已经有「做了 N 步」，右边只放用时
+  const right =
+    running || waiting
+      ? steps
+        ? L(`${steps} 步`, steps === 1 ? '1 step' : `${steps} steps`)
+        : ''
+      : entry.durationMs
+        ? `${(entry.durationMs / 1000).toFixed(1)}s`
+        : ''
   return (
-    <div className="flex flex-col items-start">
+    <div className="flex flex-col gap-2">
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex min-h-9 max-w-full items-center gap-2 rounded-full py-1 pr-2 text-meta text-fg-muted"
+        className="flex min-h-10 w-full items-center gap-2.5 rounded-2xl border border-line-card px-3.5 text-left text-meta text-fg-secondary active:bg-hover"
       >
         {waiting ? (
           <Dot tone="danger" />
         ) : running ? (
-          <Spinner size={12} className="text-fg-faint" />
+          <Spinner size={14} className="text-fg-faint" />
         ) : (
-          <Check size={14} className="text-fg-faint" />
+          <Check size={16} className="shrink-0 text-fg-faint" />
         )}
-        <span className="min-w-0 truncate">
+        <span className="min-w-0 flex-1 truncate">
           {waiting ? (
-            L(
-              `等你允许${steps ? ` · ${steps} 步` : ''}`,
-              `Waiting for your approval${steps ? (steps === 1 ? ' · 1 step' : ` · ${steps} steps`) : ''}`,
-            )
+            L('等你允许', 'Waiting for your approval')
           ) : running ? (
-            L(
-              `正在执行${steps ? ` · ${steps} 步` : ''}`,
-              `Running${steps ? (steps === 1 ? ' · 1 step' : ` · ${steps} steps`) : ''}`,
-            )
+            (lastStep && stepTitle(lastStep)) || L('正在执行', 'Running')
           ) : line ? (
             <LineText line={line} />
           ) : (
             L('过程', 'Process')
           )}
         </span>
-        <ChevronRight size={14} className="shrink-0" />
+        <span className="flex shrink-0 items-center gap-0.5 text-fg-faint">
+          {right}
+          <ChevronRight size={16} />
+        </span>
       </button>
       {todo && <PlanRow items={items} onOpen={() => setOpen(true)} />}
       {reply && (
-        <div className="mt-2 flex w-full flex-col">
+        <div className="flex w-full flex-col">
           <AssistantCard item={reply} more={more(reply.id)} truncated={false} copy={false} />
         </div>
       )}
@@ -319,14 +333,14 @@ function PlanRow({ items, onOpen }: { items: Item[]; onOpen?: () => void }) {
       <button
         type="button"
         onClick={onOpen ?? (() => setOpen(true))}
-        className="flex min-h-8 max-w-full items-center gap-1.5 self-start text-meta text-fg-muted"
+        className="flex min-h-10 w-full items-center gap-2 rounded-2xl border border-line-card px-3.5 text-left text-meta text-fg-secondary active:bg-hover"
       >
-        <ListTodo size={14} className="shrink-0" />
+        <ListTodo size={16} className="shrink-0 text-fg-faint" />
         <span className="shrink-0">
           {L('计划', 'Plan')} {todo.at}/{todo.total}
         </span>
         {todo.current && <span className="truncate text-fg-faint">· {todo.current}</span>}
-        <ChevronRight size={14} className="shrink-0" />
+        <ChevronRight size={16} className="ml-auto shrink-0 text-fg-faint" />
       </button>
       {open && (
         <Sheet title={`${L('计划', 'Plan')} ${todo.at}/${todo.total}`} onClose={() => setOpen(false)}>

@@ -1,7 +1,7 @@
 // 手机端的通用小组件。只用设计变量（styles/tokens.css），不导入 features / data / connection。
 // packages/ui 抽出后，和桌面端相同的部分改用那里的。
 import { useSyncExternalStore, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react'
-import { ChevronLeft, ChevronRight, Menu, type LucideIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Menu, X, type LucideIcon } from 'lucide-react'
 import { L } from '@/i18n'
 
 export const cn = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(' ')
@@ -37,23 +37,28 @@ export function Button({
   )
 }
 
+/** round：顶栏的浮动圆钮（白底细边框、40px，§26）；其余是没有底的 44px 图标键 */
+export const ROUND_BUTTON = 'size-10 border border-line-subtle bg-surface text-fg shadow-sm disabled:opacity-40'
+
 export function IconButton({
   label,
   icon: Icon,
+  round,
   className,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: LucideIcon }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: LucideIcon; round?: boolean }) {
   return (
     <button
       type="button"
       aria-label={label}
       {...rest}
       className={cn(
-        'flex size-11 items-center justify-center rounded-full text-fg-secondary active:bg-hover',
+        'flex shrink-0 items-center justify-center rounded-full active:bg-hover',
+        round ? ROUND_BUTTON : 'size-11 text-fg-secondary',
         className,
       )}
     >
-      <Icon size={22} strokeWidth={1.75} />
+      <Icon size={round ? 20 : 22} strokeWidth={1.75} />
     </button>
   )
 }
@@ -100,68 +105,82 @@ export function MenuButton({ badge, onClick }: { badge?: number; onClick(): void
 }
 
 /**
- * 一页：顶栏（可选返回或菜单按钮、操作）+ 内容 + 可选底栏；顶部和底部留出刘海 / 手势条的安全区。
+ * 一页（iOS 样子，§26）：顶栏（返回或菜单圆钮、居中的标题、操作）+ 内容 + 可选底栏；顶部和底部留出刘海 / 手势条的安全区。
+ * 整页 bg-workbench；顶栏实底盖住刘海区，返回键和 leading 里的按钮都是带边框的浮动圆钮（ROUND_BUTTON），底边一小段渐隐。
  * large：一级页面用大标题（标题在内容区顶部，跟着滚动）。scroll=false 时内容自己处理滚动（会话页）。
  * leading：没有返回按钮时放在左上角的（抽屉按钮）。
+ * floating（会话页）：标题 + 副标题竖排居中，副标题可以带状态点（不再单行截断）。
  */
 export function Screen({
   title,
   subtitle,
   onBack,
+  close,
   leading,
   actions,
   children,
   footer,
   large,
   scroll = true,
-  centered,
-  footerBg = 'bg-panel',
+  floating,
+  footerBg = 'bg-workbench',
 }: {
   title: ReactNode
   subtitle?: ReactNode
   onBack?: () => void
+  /** 返回键画成 ×：整页弹出、关掉就回去的流程（添加电脑、扫码、配对） */
+  close?: boolean
   leading?: ReactNode
   actions?: ReactNode
   children: ReactNode
   footer?: ReactNode
   large?: boolean
   scroll?: boolean
-  /** 顶栏中间竖排放 title（头像 + 标题）和 subtitle（状态行），居中；会话页用 */
-  centered?: boolean
-  /** 底栏背景类，默认 bg-panel；聊天页传 'bg-chat'，和滚动区同色，底下的渐隐遮罩才接得上 */
+  /** 会话页：subtitle 自己排版（可以带状态点），不再是单行截断 */
+  floating?: boolean
+  /** 底栏背景类，默认和整页一样的 bg-workbench */
   footerBg?: string
 }) {
   return (
-    <div className="flex h-app min-w-0 flex-1 flex-col bg-app text-fg">
-      <header
-        className={cn(
-          'flex shrink-0 items-center gap-1 bg-app/95 px-1 pt-[env(safe-area-inset-top)] backdrop-blur',
-          !large && 'border-b border-line-subtle',
-        )}
-      >
+    <div className="flex h-app min-w-0 flex-1 flex-col bg-workbench text-fg">
+      <header className="relative z-10 flex shrink-0 items-center gap-2.5 bg-workbench px-3.5 pt-[max(env(safe-area-inset-top),8px)] pb-1.5">
         {onBack ? (
-          <IconButton label={L('返回', 'Back')} icon={ChevronLeft} onClick={onBack} />
+          <IconButton
+            round
+            label={close ? L('关闭', 'Close') : L('返回', 'Back')}
+            icon={close ? X : ChevronLeft}
+            onClick={onBack}
+          />
         ) : (
-          (leading ?? <span className="w-3" />)
-        )}
-        {!onBack && leading && <span className="hidden w-3 min-[900px]:block" />}
-        {centered && !large ? (
-          <div className="flex min-w-0 flex-1 flex-col items-center py-1.5 text-center">
-            <div className="flex max-w-full flex-col items-center gap-0.5 text-ui font-semibold">{title}</div>
-            {subtitle && <div className="max-w-full truncate text-label text-fg-muted">{subtitle}</div>}
-          </div>
-        ) : (
-          <div className="min-w-0 flex-1 py-2">
-            {!large && <div className="truncate text-section font-semibold">{title}</div>}
-            {!large && subtitle && <div className="truncate text-meta text-fg-muted">{subtitle}</div>}
+          // contents：不多一层盒子；shortcut: 用子选择器给 MenuButton 套圆钮样子，MenuButton 多了用法再改成 prop
+          <div className="contents [&>button]:size-10 [&>button]:border [&>button]:border-line-subtle [&>button]:bg-surface [&>button]:text-fg [&>button]:shadow-sm">
+            {leading ?? <span className="w-10 shrink-0" />}
           </div>
         )}
-        {actions}
+        {/* 宽屏抽屉常驻、菜单键藏起来：占一个圆钮的位置，标题还在中间 */}
+        {!onBack && leading && <span className="hidden w-10 shrink-0 min-[900px]:block" />}
+        <div className="flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center text-center">
+          {!large && <div className="max-w-full truncate text-ui font-semibold">{title}</div>}
+          {!large &&
+            subtitle &&
+            (floating ? (
+              <div className="flex max-w-full items-center justify-center gap-1.5 text-meta text-fg-muted">
+                {subtitle}
+              </div>
+            ) : (
+              <div className="max-w-full truncate text-meta text-fg-muted">{subtitle}</div>
+            ))}
+        </div>
+        {actions ?? <span className="w-10 shrink-0" />}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-full h-3.5 bg-linear-to-b from-workbench to-transparent"
+        />
       </header>
       <main className={cn('min-h-0 flex-1', scroll ? 'overflow-y-auto' : 'flex flex-col overflow-hidden')}>
         {large && (
-          <div className="px-4 pt-1 pb-3">
-            <h1 className="text-title">{title}</h1>
+          <div className="px-5 pt-1 pb-3">
+            <h1 className="text-title font-bold">{title}</h1>
             {subtitle && <div className="mt-1 text-meta text-fg-muted">{subtitle}</div>}
           </div>
         )}
@@ -253,7 +272,7 @@ export function Section({
           {trailing}
         </div>
       )}
-      <div className="overflow-hidden rounded-2xl border border-line-subtle bg-surface">{children}</div>
+      <div className="overflow-hidden rounded-2xl bg-subtle">{children}</div>
     </section>
   )
 }
@@ -287,10 +306,7 @@ export function Row({
       {chevron && <ChevronRight size={18} className="shrink-0 text-fg-faint" />}
     </>
   )
-  const base = cn(
-    'flex min-h-14 w-full items-center gap-3 px-4 py-3 [&+&]:border-t [&+&]:border-line-subtle',
-    className,
-  )
+  const base = cn('flex min-h-12 w-full items-center gap-3 px-4 py-2.5 [&+&]:border-t [&+&]:border-line', className)
   return onClick ? (
     <button type="button" onClick={onClick} className={cn(base, 'active:bg-hover')}>
       {body}
@@ -300,7 +316,7 @@ export function Row({
   )
 }
 
-/** 顶部提示条：连接状态、错误 */
+/** 提示条：连接状态、错误。圆角 2xl；warn 是暖色淡底（图标橙色），其余保持浅灰底 */
 export function Banner({
   tone = 'muted',
   icon,
@@ -316,17 +332,17 @@ export function Banner({
   return (
     <div
       className={cn(
-        'mx-4 mb-3 flex items-center gap-3 rounded-xl px-3.5 py-3 text-meta',
+        'mx-4 mb-3 flex items-center gap-3 rounded-2xl px-3.5 py-3 text-meta',
         tone === 'danger'
           ? 'bg-subtle text-danger'
           : tone === 'warn'
-            ? 'bg-subtle text-warn'
+            ? 'bg-warn/12 text-fg'
             : tone === 'ok'
               ? 'bg-accent-soft text-accent-fg'
               : 'bg-subtle text-fg-secondary',
       )}
     >
-      {icon && <span className="shrink-0">{icon}</span>}
+      {icon && <span className={cn('shrink-0', tone === 'warn' && 'text-warn')}>{icon}</span>}
       <div className="min-w-0 flex-1">{children}</div>
       {action}
     </div>
@@ -377,7 +393,7 @@ export function Segmented<T extends string>({
           aria-checked={o.value === value}
           onClick={() => onChange(o.value)}
           className={cn(
-            'min-h-10 flex-1 rounded-lg text-ui',
+            'min-h-9 flex-1 rounded-lg text-ui',
             o.value === value ? 'bg-surface font-medium text-fg shadow-sm' : 'text-fg-muted',
           )}
         >

@@ -1,9 +1,10 @@
 // 添加到主屏幕的步骤页（docs/mobile-remote.md §20）：浏览器不能直接弹安装框时（iPhone、微信里、没触发安装事件的安卓），
 // 按当前浏览器写几步手动操作；也把「添加之后能怎样、不能怎样」说清楚。
+// iOS 样子（§26）：二级页（圆返回键），步骤是分组列表，每行左边一个序号圆章；复制网址是圆角胶囊键。
 import { useState } from 'react'
 import { Copy } from 'lucide-react'
 import { detectInstallEnv, type InstallEnv } from '@/platform/installEnv'
-import { Button, Screen, Section } from '@/ui'
+import { Button, Row, Screen, Section } from '@/ui'
 import { L } from '@/i18n'
 
 const installSteps = (): Record<InstallEnv, { title: string; steps: string[]; copy?: boolean }> => ({
@@ -98,17 +99,23 @@ export function AddToHome({ onBack }: { onBack(): void }) {
 
   return (
     <Screen title={L('添加到主屏幕', 'Add to Home Screen')} onBack={onBack}>
-      <div className="mx-auto flex w-full max-w-lg flex-col gap-6 py-4">
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-5 py-2">
         <Section title={title}>
-          <ol className="flex list-decimal flex-col gap-2 py-3.5 pr-4 pl-9 text-prose text-fg">
-            {steps.map(s => (
-              <li key={s}>{s}</li>
-            ))}
-          </ol>
+          {steps.map((s, i) => (
+            <Row
+              key={s}
+              icon={
+                <span className="flex size-6 items-center justify-center rounded-full bg-surface text-meta font-semibold text-fg">
+                  {i + 1}
+                </span>
+              }
+              title={s}
+            />
+          ))}
         </Section>
         {copy && (
           <div className="px-4">
-            <Button variant="secondary" onClick={() => void copyUrl()} className="w-full">
+            <Button variant="secondary" onClick={() => void copyUrl()} className="w-full min-h-11! rounded-full!">
               <Copy size={18} /> {copied ? L('已复制', 'Copied') : L('复制网址', 'Copy URL')}
             </Button>
           </div>
@@ -129,8 +136,8 @@ export function AddToHome({ onBack }: { onBack(): void }) {
           </p>
           <p className="text-fg-secondary">
             {L(
-              '添加后可以在「我的」里打开「锁屏提醒」：网页切到后台会被浏览器暂停，有任务等你处理、完成或出错时靠它提醒。',
-              'After adding it, turn on “Lock-screen alerts” in Me: the browser pauses the page in the background, so alerts for tasks that need you, finish or fail come through there.',
+              '添加后可以在「设置」里打开「锁屏提醒」：网页切到后台会被浏览器暂停，有任务等你处理、完成或出错时靠它提醒。',
+              'After adding it, turn on “Lock-screen alerts” in Settings: the browser pauses the page in the background, so alerts for tasks that need you, finish or fail come through there.',
             )}
           </p>
         </div>

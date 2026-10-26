@@ -50,6 +50,8 @@ export interface FileEntry {
   kind: 'directory' | 'file'
   status?: string
   linked?: boolean
+  /** 文件字节数（list 请求了 sizes 才有；目录没有，读不出来也没有） */
+  size?: number
 }
 export interface DirectoryListing {
   entries: FileEntry[]

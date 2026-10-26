@@ -1,7 +1,8 @@
-// Git（docs/mobile-remote.md §18.4）：分支和改动的文件、点开看改动；暂存 / 取消暂存、提交、推送（做之前确认）。
+// Git（docs/mobile-remote.md §18.4、§26）：大标题是项目名，下面一行分支 · ↑↓；改动的文件按「已暂存 / 没暂存…」分组，
+// 每行一个着色的状态角标 + 等宽路径，点开看改动；底部一张提交卡片（说明、全部暂存、提交）；暂存 / 取消暂存、提交、推送（做之前确认）。
 // 放弃改动、强制推送、删分支、改写历史都不在手机上做（§18.7）。
 import { useState } from 'react'
-import { ArrowDown, ArrowUp, GitBranch, Minus, Plus, Upload } from 'lucide-react'
+import { GitBranch, Minus, Plus, Upload } from 'lucide-react'
 import {
   callTool,
   gitCodeText,
@@ -18,7 +19,7 @@ import {
 import { L } from '@/i18n'
 import { Banner, Button, DiffView, Empty, Section, Spinner, cn } from '@/ui'
 import { ConfirmSheet } from '@/ui/sheet'
-import { Loading, PathRow, ToolFrame, type ToolProps } from './common'
+import { Loading, ToolFrame, type ToolProps } from './common'
 
 interface DiffTarget {
   area: GitArea
@@ -29,7 +30,7 @@ interface DiffTarget {
 const areas = (): readonly { area: GitArea; title: string }[] => [
   { area: 'conflicted', title: L('冲突', 'Conflicts') },
   { area: 'staged', title: L('已暂存', 'Staged') },
-  { area: 'unstaged', title: L('改动', 'Changes') },
+  { area: 'unstaged', title: L('没暂存', 'Unstaged') },
   { area: 'untracked', title: L('未跟踪', 'Untracked') },
 ]
 
@@ -65,9 +66,22 @@ function useGitAction(tool: ToolProps, onStatus: (s: GitStatus) => void) {
   return { busy, error, done, run }
 }
 
+/** 写操作返回的状态不带增删行数：同一区里没变的文件沿用上一份的，换了区的等随后的刷新补上 */
+function keepCounts(next: GitStatus, prev: GitStatus | null): GitStatus {
+  if (!prev) return next
+  const carry = (area: 'staged' | 'unstaged') => {
+    const old = new Map(prev[area].map(f => [f.path, f]))
+    return next[area].map(f => {
+      const o = old.get(f.path)
+      return o && typeof o.insertions === 'number' ? { ...f, insertions: o.insertions, deletions: o.deletions } : f
+    })
+  }
+  return { ...next, staged: carry('staged'), unstaged: carry('unstaged') }
+}
+
 function StatusPage({ tool }: { tool: ToolProps }) {
   const status = useToolData<GitStatus>(tool.deviceId, 'projectTools:gitStatus', [{ projectId: tool.project.id }], true)
-  const action = useGitAction(tool, status.set)
+  const action = useGitAction(tool, next => status.set(keepCounts(next, status.data)))
   const [message, setMessage] = useState('')
   const [pushAfter, setPushAfter] = useState(false)
   const [confirm, setConfirm] = useState<'commit' | 'push' | null>(null)
@@ -76,6 +90,8 @@ function StatusPage({ tool }: { tool: ToolProps }) {
   const remote = s ? (s.upstream ?? (s.remotes.includes('origin') ? 'origin' : s.remotes[0])) : undefined
   const canPush = !!s && !s.detached && !s.initial && !!s.remotes.length && (s.ahead > 0 || !s.upstream)
   const disabled = !tool.canAct || !!action.busy
+  // 「全部暂存」：没暂存的和未跟踪的一起（冲突的要先在电脑上解决）
+  const unstagedPaths = s ? [...s.unstaged, ...s.untracked].map(f => f.path) : []
 
   const commit = async () => {
     const ok = await action.run(
@@ -91,51 +107,83 @@ function StatusPage({ tool }: { tool: ToolProps }) {
     <ToolFrame
       tool={tool}
       title="Git"
+      heading={tool.project.name}
+      crumb={
+        s?.repo && (
+          <span className="flex min-w-0 items-center gap-1.5">
+            <GitBranch size={14} className="shrink-0" />
+            <span className="truncate">
+              <span className="font-mono">
+                {s.detached ? L('分离 HEAD', 'Detached HEAD') : (s.branch ?? L('（没有分支）', '(no branch)'))}
+              </span>
+              {s.upstream && ` → ${s.upstream}`}
+              {s.ahead > 0 && ` · ↑${s.ahead}`}
+              {s.behind > 0 && ` ↓${s.behind}`}
+              {s.initial
+                ? ` · ${L('还没有提交', 'No commits yet')}`
+                : !s.upstream && ` · ${L('没有上游分支', 'No upstream branch')}`}
+            </span>
+          </span>
+        )
+      }
       loading={status.loading}
       onRefresh={status.reload}
       footer={
         s?.repo &&
-        tool.canAct && (
-          <div className="flex flex-col gap-2 border-t border-line-subtle px-3 pt-2.5 pb-2">
+        tool.canAct &&
+        (count > 0 || canPush) && (
+          <div className="flex flex-col gap-2 px-4 pt-1 pb-2">
             {count > 0 && (
-              <>
+              <div className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-3">
                 <textarea
                   value={message}
                   onChange={e => setMessage(e.target.value)}
                   rows={2}
                   placeholder={L('提交说明', 'Commit message')}
-                  className="field-sizing-content max-h-32 min-h-11 w-full resize-none rounded-xl border border-line-composer bg-surface px-3 py-2.5 text-prose outline-none focus:border-line-composer-focus"
+                  className="field-sizing-content max-h-32 min-h-11 w-full resize-none bg-transparent text-prose outline-none"
                 />
-                <div className="flex items-center gap-2">
-                  <label className="flex min-h-10 flex-1 items-center gap-2 text-meta text-fg-secondary">
-                    <input
-                      type="checkbox"
-                      checked={pushAfter}
-                      disabled={!s.remotes.length || s.detached}
-                      onChange={e => setPushAfter(e.target.checked)}
-                      className="size-4 accent-[var(--color-primary)]"
-                    />
-                    {L('提交后推送', 'Push after commit')}
-                  </label>
+                <label className="flex min-h-9 items-center gap-2 text-meta text-fg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={pushAfter}
+                    disabled={!s.remotes.length || s.detached}
+                    onChange={e => setPushAfter(e.target.checked)}
+                    className="size-4 accent-[var(--color-primary)]"
+                  />
+                  {L('提交后推送', 'Push after commit')}
+                </label>
+                <div className="flex gap-2">
+                  {unstagedPaths.length > 0 && (
+                    <Button
+                      className="rounded-full! min-h-11! px-4!"
+                      disabled={disabled}
+                      onClick={() => void action.run('stage', 'projectTools:gitStage', unstagedPaths)}
+                    >
+                      {action.busy === 'stage' && <Spinner size={13} />}
+                      {L('全部暂存', 'Stage all')}
+                    </Button>
+                  )}
                   <Button
                     variant="primary"
-                    size="sm"
+                    className="min-w-0 flex-1 rounded-full! min-h-11! px-4!"
                     disabled={disabled || !message.trim() || !!s.conflicted.length}
                     onClick={() => setConfirm('commit')}
                   >
                     {action.busy === 'commit' && <Spinner size={13} />}
-                    {s.staged.length
-                      ? L(
-                          `提交 ${s.staged.length} 个文件`,
-                          `Commit ${s.staged.length} ${s.staged.length === 1 ? 'file' : 'files'}`,
-                        )
-                      : L(`提交全部改动（${count}）`, `Commit all changes (${count})`)}
+                    <span className="truncate">
+                      {s.staged.length
+                        ? L(
+                            `提交 ${s.staged.length} 个文件`,
+                            `Commit ${s.staged.length} ${s.staged.length === 1 ? 'file' : 'files'}`,
+                          )
+                        : L(`提交全部改动（${count}）`, `Commit all changes (${count})`)}
+                    </span>
                   </Button>
                 </div>
-              </>
+              </div>
             )}
             {canPush && (
-              <Button disabled={disabled} onClick={() => setConfirm('push')} className="w-full">
+              <Button disabled={disabled} onClick={() => setConfirm('push')} className="w-full rounded-full! min-h-11!">
                 {action.busy === 'push' ? <Spinner size={15} /> : <Upload size={17} />}
                 {s.upstream
                   ? L(`推送 ${s.ahead} 个提交`, `Push ${s.ahead} ${s.ahead === 1 ? 'commit' : 'commits'}`)
@@ -161,7 +209,7 @@ function StatusPage({ tool }: { tool: ToolProps }) {
           body={L('这个项目还没有用 Git 管理。', 'This project isn’t managed with Git yet.')}
         />
       ) : (
-        <div className="flex flex-col gap-5 pt-1 pb-6">
+        <div className="flex flex-col gap-4 pt-1 pb-6">
           {status.error && <Banner tone="danger">{status.error}</Banner>}
           {action.error && (
             <Banner tone="danger">
@@ -169,39 +217,6 @@ function StatusPage({ tool }: { tool: ToolProps }) {
             </Banner>
           )}
           {action.done && <Banner>{action.done}</Banner>}
-          <Section>
-            <div className="flex min-h-14 items-center gap-3 px-4 py-3">
-              <GitBranch size={20} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate font-mono text-ui">
-                  {s.detached ? L('分离 HEAD', 'Detached HEAD') : (s.branch ?? L('（没有分支）', '(no branch)'))}
-                </span>
-                <span className="truncate text-meta text-fg-muted">
-                  {s.initial
-                    ? L('还没有提交', 'No commits yet')
-                    : s.upstream
-                      ? L(`跟踪 ${s.upstream}`, `Tracking ${s.upstream}`)
-                      : L('没有上游分支', 'No upstream branch')}
-                </span>
-              </span>
-              {(s.ahead > 0 || s.behind > 0) && (
-                <span className="flex shrink-0 items-center gap-2 font-mono text-meta text-fg-secondary">
-                  {s.ahead > 0 && (
-                    <span className="flex items-center">
-                      <ArrowUp size={13} />
-                      {s.ahead}
-                    </span>
-                  )}
-                  {s.behind > 0 && (
-                    <span className="flex items-center">
-                      <ArrowDown size={13} />
-                      {s.behind}
-                    </span>
-                  )}
-                </span>
-              )}
-            </div>
-          </Section>
           {s.operation && (
             <Banner tone="warn">
               {L(
@@ -383,43 +398,56 @@ function FileRow({
   onStage(): void
 }) {
   const staged = area === 'staged'
+  const badge = file.code === '?' ? 'U' : file.code
   return (
-    <PathRow
-      path={file.path}
-      first={first}
-      onClick={file.submodule ? undefined : onOpen}
-      icon={
+    <div className={cn('flex items-center', !first && 'border-t border-line')}>
+      <button
+        type="button"
+        onClick={file.submodule ? undefined : onOpen}
+        disabled={file.submodule}
+        className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 py-2 pl-4 text-left active:bg-hover"
+      >
+        {/* 状态角标：低透明度底色 + 同色字（改 = 暖色，新增 = 绿，删除 / 冲突 = 红，其余 = 灰） */}
         <span
           className={cn(
             'flex size-6 shrink-0 items-center justify-center rounded-md font-mono text-label font-semibold',
-            file.code === 'D'
-              ? 'bg-subtle text-danger'
-              : file.code === 'U'
-                ? 'bg-subtle text-warn'
-                : 'bg-subtle text-success',
+            file.code === 'D' || file.code === 'U'
+              ? 'bg-danger/15 text-danger'
+              : file.code === 'A' || file.code === '?'
+                ? 'bg-success/15 text-success'
+                : file.code === 'M'
+                  ? 'bg-warn/15 text-warn'
+                  : 'bg-hover text-fg-muted',
           )}
           title={gitCodeText()[file.code]}
         >
-          {file.code === '?' ? 'U' : file.code}
+          {badge}
         </span>
-      }
-      badge={file.origPath ? <span className="truncate text-label text-fg-faint">← {file.origPath}</span> : null}
-      trailing={
-        canAct && (
-          <button
-            type="button"
-            aria-label={
-              staged ? L(`取消暂存 ${file.path}`, `Unstage ${file.path}`) : L(`暂存 ${file.path}`, `Stage ${file.path}`)
-            }
-            disabled={busy}
-            onClick={onStage}
-            className="flex size-10 items-center justify-center rounded-full text-fg-muted active:bg-hover disabled:opacity-40"
-          >
-            {staged ? <Minus size={18} /> : <Plus size={18} />}
-          </button>
-        )
-      }
-    />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate font-mono text-meta text-fg">{file.path}</span>
+          {file.origPath && <span className="truncate font-mono text-label text-fg-faint">← {file.origPath}</span>}
+          {typeof file.insertions === 'number' && (
+            <span className="flex gap-2 font-mono text-label">
+              <span className="text-success">+{file.insertions}</span>
+              <span className="text-danger">−{file.deletions ?? 0}</span>
+            </span>
+          )}
+        </span>
+      </button>
+      {canAct && (
+        <button
+          type="button"
+          aria-label={
+            staged ? L(`取消暂存 ${file.path}`, `Unstage ${file.path}`) : L(`暂存 ${file.path}`, `Stage ${file.path}`)
+          }
+          disabled={busy}
+          onClick={onStage}
+          className="mr-1 flex size-10 shrink-0 items-center justify-center rounded-full text-fg-muted active:bg-hover disabled:opacity-40"
+        >
+          {staged ? <Minus size={18} /> : <Plus size={18} />}
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -445,9 +473,9 @@ function DiffPage({ tool, target }: { tool: ToolProps; target: DiffTarget }) {
       footer={
         tool.canAct &&
         target.area !== 'conflicted' && (
-          <div className="border-t border-line-subtle p-3">
+          <div className="px-4 pt-1 pb-2">
             <Button
-              className="w-full"
+              className="w-full rounded-full! min-h-11!"
               disabled={!!action.busy}
               onClick={() =>
                 void action.run('stage', staged ? 'projectTools:gitUnstage' : 'projectTools:gitStage', [target.path])

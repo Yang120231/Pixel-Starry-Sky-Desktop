@@ -471,7 +471,8 @@ export class WorkspaceFiles {
     }
   }
 
-  async list(ref: WorkspaceRef, path: string): Promise<DirectoryListing> {
+  /** `sizes`（手机）给每个文件带上字节数；符号链接是指向的文件的大小，读不出来就不带 */
+  async list(ref: WorkspaceRef, path: string, sizes = false): Promise<DirectoryListing> {
     const at = locateFolder(this.target(ref), path)
     const dir = await workspacePath(at.root, at.rel, 'directory')
     const all = (await readdir(dir, { withFileTypes: true })).filter(e => e.name !== '.git')
@@ -483,14 +484,27 @@ export class WorkspaceFiles {
       all.slice(0, PAGE_LIMIT).map(async e => {
         const next = (path ? path.replaceAll('\\', '/') + '/' : '') + e.name
         let kind: 'directory' | 'file' = e.isDirectory() ? 'directory' : 'file'
+        let size: number | undefined
         if (e.isSymbolicLink()) {
           try {
-            if ((await stat(join(dir, e.name))).isDirectory()) kind = 'directory'
+            const info = await stat(join(dir, e.name))
+            if (info.isDirectory()) kind = 'directory'
+            else size = info.size
           } catch {
             /* 展示失效链接，打开时说明 */
           }
+        } else if (sizes && kind === 'file')
+          size = await lstat(join(dir, e.name)).then(
+            info => info.size,
+            () => undefined,
+          )
+        return {
+          name: e.name,
+          path: next,
+          kind,
+          linked: e.isSymbolicLink(),
+          ...(sizes && size !== undefined && { size }),
         }
-        return { name: e.name, path: next, kind, linked: e.isSymbolicLink() }
       }),
     )
     return { entries, truncated: all.length > PAGE_LIMIT }

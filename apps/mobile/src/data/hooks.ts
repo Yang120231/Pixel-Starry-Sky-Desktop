@@ -162,6 +162,36 @@ export function useDefaultEngine(deviceId: string | undefined): EngineId | null 
   return engine
 }
 
+/** 电脑登录的账号（网关的 account，抽屉底部显示）；open 为 true 时取，旧电脑、没登录、取不到都是 null */
+export function useDesktopAccount(deviceId: string | undefined, open = true): DesktopAccount | null {
+  const state = useLinkState(deviceId)
+  const link = deviceId ? connections.link(deviceId) : undefined
+  const [account, setAccount] = useState<DesktopAccount | null>(null)
+  useEffect(() => {
+    // 换电脑、断线时先清掉，免得 B 的卡片下面还显示 A 的账号
+    setAccount(null)
+    if (!open || state !== 'ready' || !link) return
+    let alive = true
+    link.call<DesktopAccount | null>('account').then(
+      r => alive && setAccount(r ?? null),
+      () => alive && setAccount(null),
+    )
+    return () => {
+      alive = false
+    }
+  }, [open, state, link])
+  return account
+}
+
+/** 网关 account 的回复（只有名字、余额、套餐名，没有邮箱） */
+export interface DesktopAccount {
+  name: string
+  balance: number | null
+  currency: string
+  plan: string | null
+  updatedAt: number
+}
+
 export interface ContentSearch {
   results: SearchResult[]
   truncated: boolean

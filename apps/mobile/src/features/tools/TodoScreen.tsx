@@ -1,7 +1,8 @@
-// 任务（docs/mobile-remote.md §18.4，同电脑的任务面板）：这个项目的待办（我的）和 AI 的计划。
+// 任务（docs/mobile-remote.md §18.4、§26，同电脑的任务面板）：这个项目的待办（我的）和 AI 的计划。
+// 大标题是项目名，按状态分成灰色圆角分组；每行左边的状态圈点一下完成 / 重新打开，点正文打开菜单。
 // 手机上能加待办、改状态（开始做 / 完成 / 重新打开）、交给 AI（在项目里新建会话，输入框里放好任务内容）。
 import { useState } from 'react'
-import { Check, Circle, CircleDot, Flag, ListChecks, Plus } from 'lucide-react'
+import { Check, ChevronRight, Circle, CircleDot, Flag, ListChecks, Plus } from 'lucide-react'
 import type { TodoStep } from '@pixelsky/protocol'
 import { ago } from '@/data/tasks'
 import { callTool, toolError, useToolData, type ManualTask, type TaskState, type TaskStatus } from '@/data/tools'
@@ -73,12 +74,13 @@ export function TodoScreen(tool: ToolProps) {
     <ToolFrame
       tool={tool}
       title={L('任务', 'Tasks')}
+      heading={tool.project.name}
       loading={state.loading}
       onRefresh={state.reload}
       footer={
         tool.canAct && (
           <form
-            className="flex items-center gap-2 border-t border-line-subtle px-3 py-2.5"
+            className="flex items-center gap-2 px-4 pt-1 pb-2"
             onSubmit={e => {
               e.preventDefault()
               void add()
@@ -90,7 +92,7 @@ export function TodoScreen(tool: ToolProps) {
               maxLength={200}
               enterKeyHint="done"
               placeholder={L('添加待办…', 'Add a to-do…')}
-              className="min-h-11 min-w-0 flex-1 rounded-xl border border-line-composer bg-surface px-3 text-prose outline-none focus:border-line-composer-focus"
+              className="min-h-11 min-w-0 flex-1 rounded-full border border-line-composer bg-surface px-4 text-prose outline-none focus:border-line-composer-focus"
             />
             <button
               type="submit"
@@ -110,7 +112,7 @@ export function TodoScreen(tool: ToolProps) {
       {!data ? (
         <Loading error={state.error} />
       ) : (
-        <div className="flex flex-col gap-5 pt-1 pb-6">
+        <div className="flex flex-col gap-4 pb-6">
           {(error ?? state.error) && <Banner tone="danger">{error ?? state.error}</Banner>}
           {!data.tasks.length && !data.plans.length && (
             <Empty
@@ -149,7 +151,7 @@ export function TodoScreen(tool: ToolProps) {
                   <button
                     type="button"
                     onClick={() => setDoneLimit(n => n + DONE_STEP)}
-                    className="flex min-h-12 w-full items-center justify-center border-t border-line-subtle text-meta text-accent-fg active:bg-hover"
+                    className="flex min-h-12 w-full items-center justify-center border-t border-line text-meta text-accent-fg active:bg-hover"
                   >
                     {L(
                       `显示更多（还有 ${list.length - shown.length} 条）`,
@@ -203,7 +205,7 @@ function TaskRow({
 }) {
   const done = task.status === 'completed'
   return (
-    <div className={cn('flex items-start', !first && 'border-t border-line-subtle')}>
+    <div className={cn('flex items-start', !first && 'border-t border-line')}>
       <button
         type="button"
         role="checkbox"
@@ -231,17 +233,20 @@ function TaskRow({
         type="button"
         disabled={!canAct}
         onClick={onMenu}
-        className="flex min-h-12 min-w-0 flex-1 flex-col justify-center gap-0.5 py-2.5 pr-4 text-left active:bg-hover disabled:active:bg-transparent"
+        className="flex min-h-12 min-w-0 flex-1 items-center gap-2 py-2.5 pr-4 text-left active:bg-hover disabled:active:bg-transparent"
       >
-        <span className={cn('text-ui', done && 'text-fg-muted line-through')}>
-          {task.priority === 'high' && <Flag size={13} className="mr-1 inline text-danger" />}
-          {task.title}
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className={cn('text-ui', done && 'text-fg-muted line-through')}>
+            {task.priority === 'high' && <Flag size={13} className="mr-1 inline text-danger" />}
+            {task.title}
+          </span>
+          {task.note && <span className="line-clamp-2 text-meta text-fg-muted">{task.note}</span>}
+          <span className="text-label text-fg-faint">
+            {task.due ? L(`截止 ${task.due} · `, `Due ${task.due} · `) : ''}
+            {ago(done ? (task.completedAt ?? task.updatedAt) : task.updatedAt)}
+          </span>
         </span>
-        {task.note && <span className="line-clamp-2 text-meta text-fg-muted">{task.note}</span>}
-        <span className="text-label text-fg-faint">
-          {task.due ? L(`截止 ${task.due} · `, `Due ${task.due} · `) : ''}
-          {ago(done ? (task.completedAt ?? task.updatedAt) : task.updatedAt)}
-        </span>
+        {canAct && <ChevronRight size={16} className="shrink-0 text-fg-faint" />}
       </button>
     </div>
   )

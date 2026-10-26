@@ -1,15 +1,15 @@
-// 首页 = 会话列表（C3，docs/mobile-remote.md §21.3）：「等你处理」置顶，其余置顶的在前、再按时间排。
-// 每行是引擎头像（角上状态点）、标题、时间、项目名和最后一句回复（ui/SessionRow）。
+// 首页 = 会话列表（C3，docs/mobile-remote.md §21.3、§26）：大标题页，左上圆形菜单键、右上圆形新建键；「等你处理」置顶，其余置顶的在前、再按时间排。
+// 分组是 fg-muted 小标题 + 平铺的行，行和抽屉里的一样（ui/SessionRow：标题 + 时间，状态点 + 引擎 · 项目 · 状态或最后一句回复，细线分隔）。
 // 搜索（标题在手机上筛，对话内容问电脑）、按项目筛、显示更多（§17 第 6 项）；左上角的菜单按钮由 App 传进来。
 import { useState, type ReactNode } from 'react'
-import { CloudOff, Inbox, Laptop, MonitorSmartphone, Plus, SearchX, ShieldOff, WifiOff } from 'lucide-react'
+import { CloudOff, Inbox, Laptop, MonitorSmartphone, Plus, SearchX, ShieldOff, SquarePen, WifiOff } from 'lucide-react'
 import type { SessionSummary } from '@pixelsky/protocol'
 import type { Pairing } from '@/connection'
 import { useContentSearch, useDesktop } from '@/data/hooks'
 import { RECENT_STEP, ago, filterTasks, sessionList, sessionStatus, taskProjects, taskTitle } from '@/data/tasks'
 import { L } from '@/i18n'
 import { linkStateLabel } from '@/i18n/labels'
-import { Button, Dot, Empty, IconButton, Screen, Section, Spinner } from '@/ui'
+import { Button, Dot, Empty, IconButton, Screen, Spinner } from '@/ui'
 import { Chips, ContentResults, SearchField } from '@/ui/search'
 import { SessionRow } from '@/ui/SessionRow'
 import { ConnectionBanner, ReconnectButton, replacedBody, replacedTitle } from './Reconnect'
@@ -60,11 +60,11 @@ export function TaskList({
       }
       actions={
         <IconButton
+          round
           label={L('新建会话', 'New conversation')}
-          icon={Plus}
+          icon={SquarePen}
           disabled={!canAct}
           onClick={onNew}
-          className="disabled:opacity-40"
         />
       }
     >
@@ -84,8 +84,8 @@ export function TaskList({
           icon={ShieldOff}
           title={L('已被电脑移除', 'Removed by the computer')}
           body={L(
-            '到「我的」里删掉这台电脑，再在电脑上重新扫码配对。',
-            'Remove this computer under “Me”, then scan the QR code on the computer again to pair.',
+            '到「设置」里删掉这台电脑，再在电脑上重新扫码配对。',
+            'Remove this computer in Settings, then scan the QR code on the computer again to pair.',
           )}
         />
       ) : state === 'incompatible' && !loaded ? (
@@ -102,8 +102,8 @@ export function TaskList({
           icon={ShieldOff}
           title={L('电脑上找不到配对', 'Pairing not found on the computer')}
           body={L(
-            '电脑可能已移除这部手机，或重装过。会自动再试；也可以到「我的」里删掉这台电脑后重新扫码。',
-            'The computer may have removed this phone or been reinstalled. Retrying automatically. You can also remove this computer under “Me” and scan the QR code again.',
+            '电脑可能已移除这部手机，或重装过。会自动再试；也可以到「设置」里删掉这台电脑后重新扫码。',
+            'The computer may have removed this phone or been reinstalled. Retrying automatically. You can also remove this computer in Settings and scan the QR code again.',
           )}
         />
       ) : state === 'desktop_offline' && !loaded ? (
@@ -129,7 +129,7 @@ export function TaskList({
           <Spinner /> {L('正在连接电脑…', 'Connecting to the computer…')}
         </div>
       ) : (
-        <div className="flex flex-col gap-5 pb-6">
+        <div className="flex flex-col gap-3 pb-6">
           <ConnectionBanner
             deviceId={pairing.deviceId}
             kept={L(
@@ -146,7 +146,7 @@ export function TaskList({
                 'Give your computer a task from your phone. Results and changes show up here.',
               )}
               action={
-                <Button variant="primary" disabled={!canAct} onClick={onNew} className="mt-2">
+                <Button variant="primary" disabled={!canAct} onClick={onNew} className="mt-2 min-h-11! rounded-full!">
                   <Plus size={18} /> {L('新建会话', 'New conversation')}
                 </Button>
               }
@@ -172,7 +172,7 @@ export function TaskList({
               </div>
               <Group
                 title={L('等你处理', 'Needs you')}
-                tone="danger"
+                tone="warn"
                 list={list.waiting}
                 project={showProject ? projectName : undefined}
                 onOpen={onOpen}
@@ -193,7 +193,7 @@ export function TaskList({
                     <button
                       type="button"
                       onClick={() => setRecentLimit(n => n + RECENT_STEP)}
-                      className="flex min-h-12 w-full items-center justify-center border-t border-line-subtle text-meta text-accent-fg active:bg-hover"
+                      className="flex min-h-11 w-full items-center px-5 text-left text-meta text-accent-fg active:bg-hover"
                     >
                       {L(`显示更多（还有 ${list.more} 个）`, `Show more (${list.more} more)`)}
                     </button>
@@ -240,7 +240,7 @@ function Group({
   more,
 }: {
   title?: string
-  tone?: 'danger'
+  tone?: 'warn'
   list: SessionSummary[]
   project?(s: SessionSummary): string
   onOpen(id: string): void
@@ -248,18 +248,15 @@ function Group({
 }) {
   if (!list.length) return null
   return (
-    <Section
-      title={
-        title && (
-          <>
-            {tone && <Dot tone={tone} />}
-            {title}
-            <span className="text-fg-faint">{list.length}</span>
-          </>
-        )
-      }
-    >
-      {list.map((s, i) => (
+    <section>
+      {title && (
+        <h2 className="flex items-center gap-1.5 px-5 pb-1 text-meta font-medium text-fg-muted">
+          {tone && <Dot tone={tone} />}
+          {title}
+          <span className="text-fg-faint">{list.length}</span>
+        </h2>
+      )}
+      {list.map(s => (
         <SessionRow
           key={s.record.id}
           engine={s.record.engine}
@@ -269,11 +266,10 @@ function Group({
           preview={s.record.lastReply}
           status={sessionStatus(s)}
           pinned={!!s.record.pinnedAt && s.state !== 'waiting'}
-          divider={i > 0}
           onClick={() => onOpen(s.record.id)}
         />
       ))}
       {more}
-    </Section>
+    </section>
   )
 }

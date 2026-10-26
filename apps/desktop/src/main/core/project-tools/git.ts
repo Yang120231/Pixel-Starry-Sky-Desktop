@@ -26,6 +26,7 @@ import type {
   GitPullMode,
   GitRefs,
   GitResult,
+  GitFileChange,
   GitStatus,
 } from '../../../shared/types/project-tools'
 import { workspaceEntry } from '../workspace-files'
@@ -40,6 +41,7 @@ import {
   parseCommitFiles,
   parseLog,
   parseLogNumstat,
+  parseNumstat,
   parseStatusV2,
 } from './git-parse'
 import type { TrashFile } from './trash'
@@ -48,6 +50,8 @@ import { collectCommitContext } from './commit-context'
 export const DIFF_LIMIT = 2 * 1024 * 1024
 const OUTPUT_LIMIT = 16 * 1024 * 1024
 const MAX_PATHS = 5000
+/** 暂存 + 更改的文件超过这么多就不数增删行数 */
+const STATS_MAX = 1000
 export const GIT_TIMEOUTS = { read: 15_000, diff: 10_000, stage: 30_000, commit: 300_000, remote: 90_000 }
 /** 同一仓库的状态查询：从那一轮开始算，这段时间内到的请求共用同一份结果（写操作完成后作废） */
 const STATUS_REUSE_MS = 500
@@ -300,6 +304,8 @@ export class GitTools {
   private resolving = new Map<string, Promise<Repo | 'missing' | null>>()
   private metas = new Map<string, RepoMeta>()
   private statuses = new Map<string, StatusEntry>()
+  /** 带增删行数的那份状态，按共享状态对象缓存：状态被复用期间手机轮询不会再起 git diff */
+  private statsCache = new WeakMap<GitStatus, Promise<GitStatus>>()
   constructor(
     private host: ToolsHost,
     private changed: () => void,
@@ -419,16 +425,42 @@ export class GitTools {
 
   /**
    * 工作区的 Git 状态。同一仓库同时到的请求共用一轮 git status，结果再复用 0.5 秒；写操作完成后作废。
-   * `fresh` 要求读一轮在此之后才开始的（写操作前后、需要准确判断的地方用）；`recheck` 还要重新确认仓库根（手动刷新）。
+   * `fresh` 要求读一轮在此之后才开始的（写操作前后、需要准确判断的地方用）；`recheck` 还要重新确认仓库根（手动刷新）；
+   * `stats`（手机）给暂存 / 更改的行带上增删行数，多跑两次 git diff --numstat，失败就不带。
    */
-  async status(ref: WorkspaceRef, fresh = false, recheck = false): Promise<GitStatus> {
+  async status(ref: WorkspaceRef, fresh = false, recheck = false, stats = false): Promise<GitStatus> {
     const repo = await this.repo(ref, recheck)
     if (recheck) fresh = true
     if (repo === 'missing') return { ...EMPTY_STATUS, missing: true }
     if (!repo) return EMPTY_STATUS
-    const status = await this.sharedStatus(repo, fresh)
+    let status = await this.sharedStatus(repo, fresh)
+    if (stats) {
+      const shared = status
+      let job = this.statsCache.get(shared)
+      if (!job) this.statsCache.set(shared, (job = this.withStats(repo, shared)))
+      status = await job
+    }
     // 会话是否在运行不用 git 查，每次按当前的取
     return { ...status, busySessions: this.busy(repo) }
+  }
+
+  private async withStats(repo: Repo, status: GitStatus): Promise<GitStatus> {
+    if (status.staged.length + status.unstaged.length > STATS_MAX) return status
+    const numstat = async (flags: string[]): Promise<ReturnType<typeof parseNumstat> | null> => {
+      const run = await runGit(
+        repo.root,
+        ['diff', '--numstat', '-z', '--no-ext-diff', '--no-textconv', '--ignore-submodules', ...flags],
+        { timeout: this.timeout('diff') },
+      ).catch(() => null)
+      return run && run.code === 0 && !run.timedOut ? parseNumstat(text(run.stdout)) : null
+    }
+    const [staged, unstaged] = await Promise.all([numstat(['-M', '--cached']), numstat(['--no-renames'])])
+    const attach = (rows: GitFileChange[], found: ReturnType<typeof parseNumstat> | null): GitFileChange[] =>
+      rows.map(row => {
+        const counts = row.submodule ? undefined : found?.get(row.path)
+        return counts ? { ...row, insertions: counts[0], deletions: counts[1] } : row
+      })
+    return { ...status, staged: attach(status.staged, staged), unstaged: attach(status.unstaged, unstaged) }
   }
 
   private sharedStatus(repo: Repo, fresh: boolean): Promise<GitStatus> {

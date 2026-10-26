@@ -1,4 +1,4 @@
-// 对话页里「过程」和「改动」用到的小件：一步（Step）、改动卡片、待办卡片、消息里的图片。
+// 对话页里「过程」和「改动」用到的小件：一步（Step，图标 + 一行 + 右边小字）、改动卡片、待办卡片（都是细边框圆角块）、消息里的图片。
 // ItemView（聊天流）和 ProcessSheet（点开「做了 N 步」）共用。
 import { useState, type ReactNode } from 'react'
 import { Brain, Check, ChevronRight, FileDiff, ListTodo, SquareTerminal, Wrench } from 'lucide-react'
@@ -106,17 +106,17 @@ export function Step({ item, more, actions }: { item: Item; more: ReactNode; act
     ) : null
   const isRunning = 'status' in item && item.status === 'running'
   return (
-    <div className="overflow-hidden rounded-xl bg-surface">
+    <div className="overflow-hidden rounded-2xl">
       <button
         type="button"
         onClick={() => body && setOpen(o => !o)}
-        className="flex min-h-10 w-full items-center gap-2 px-3 py-2 text-left"
+        className="flex min-h-12 w-full items-center gap-3 px-1 py-2 text-left"
       >
         <span className={cn('shrink-0', failed(item) ? 'text-danger' : 'text-fg-muted')}>{stepIcon(item)}</span>
         <span className={cn('min-w-0 flex-1 truncate text-list', failed(item) ? 'text-danger' : 'text-fg-secondary')}>
           {stepTitle(item)}
         </span>
-        {isRunning && <Spinner size={11} className="text-fg-faint" />}
+        {isRunning && <Spinner size={14} className="text-fg-faint" />}
         {item.kind === 'command' && !!item.exitCode && (
           <span className="text-label text-danger">
             {L('退出码', 'Exit code')} {item.exitCode}
@@ -127,7 +127,7 @@ export function Step({ item, more, actions }: { item: Item; more: ReactNode; act
         )}
       </button>
       {open && (
-        <div className="border-t border-line-subtle">
+        <div className="rounded-2xl bg-subtle">
           {body}
           {more && <div className="px-3 pb-2">{more}</div>}
         </div>
@@ -148,7 +148,7 @@ export function Pre({ text }: { text: string }) {
 /** 待办：一张卡片，每步一行 */
 export function TodoCard({ item }: { item: Extract<Item, { kind: 'todo' }> }) {
   return (
-    <div className="rounded-2xl border border-line-subtle bg-surface px-3.5 py-3">
+    <div className="rounded-2xl border border-line-card px-3.5 py-3">
       <div className="mb-2 flex items-center gap-1.5 text-meta font-medium text-fg-muted">
         <ListTodo size={15} /> {L('计划', 'Plan')} · {item.steps.filter(s => s.status === 'completed').length}/
         {item.steps.length}
@@ -192,7 +192,7 @@ export function Changes({ item, more }: { item: Extract<Item, { kind: 'file_chan
   const added = item.changes.reduce((n, c) => n + c.added, 0)
   const removed = item.changes.reduce((n, c) => n + c.removed, 0)
   return (
-    <div className="overflow-hidden rounded-2xl border border-line-subtle bg-surface">
+    <div className="overflow-hidden rounded-2xl border border-line-card">
       <div className="flex items-center gap-2 px-3.5 pt-3 pb-1 text-meta text-fg-muted">
         <FileDiff size={15} />
         {L(

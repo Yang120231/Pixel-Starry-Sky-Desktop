@@ -1,6 +1,6 @@
 // 被别的设备顶掉（中转关闭码 4010，docs/cloud-admin-seats-plan.md §3）：不自动重连，由用户点「重新连接」。
-// 断线横幅（docs/mobile-remote.md §25）：会话列表和会话页上面一条，分几种说清楚——电脑不在线 / 网络断开在重连（第几次、几秒后，
-// 可以立即重试）/ 被顶掉；断开时页面内容和草稿都留着。重新连上后绿条闪一下。
+// 断线横幅（docs/mobile-remote.md §25、§26）：会话列表和会话页上面一条圆角暖色条，分几种说清楚——电脑不在线 / 网络断开在重连
+// （第几次、几秒后，右边「立即重试」是强调色文字钮）/ 被顶掉；断开时页面内容和草稿都留着。重新连上后绿条闪一下。
 import { useEffect, useRef, useState } from 'react'
 import { CloudOff, MonitorSmartphone, WifiOff } from 'lucide-react'
 import { connections } from '@/connection'
@@ -21,6 +21,19 @@ export function ReconnectButton({ deviceId, size = 'md' }: { deviceId: string; s
     <Button variant="primary" size={size} onClick={() => connections.reconnect(deviceId)}>
       {L('重新连接', 'Reconnect')}
     </Button>
+  )
+}
+
+/** 横幅右边的强调色文字钮（「立即重试」「重新连接」） */
+function BannerAction({ onClick, children }: { onClick(): void; children: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-h-11 shrink-0 px-1 font-semibold text-accent-fg active:opacity-70"
+    >
+      {children}
+    </button>
   )
 }
 
@@ -68,7 +81,9 @@ export function ConnectionBanner({ deviceId, kept }: { deviceId: string; kept?: 
       <Banner
         tone="warn"
         icon={<MonitorSmartphone size={18} />}
-        action={<ReconnectButton deviceId={deviceId} size="sm" />}
+        action={
+          <BannerAction onClick={() => connections.reconnect(deviceId)}>{L('重新连接', 'Reconnect')}</BannerAction>
+        }
       >
         {L(
           `${replacedTitle()}：这个账号在别的设备上连上了，这里断开了。`,
@@ -83,9 +98,7 @@ export function ConnectionBanner({ deviceId, kept }: { deviceId: string; kept?: 
         tone="warn"
         icon={<WifiOff size={18} />}
         action={
-          <Button size="sm" onClick={() => connections.retryNow(deviceId)}>
-            {L('立即重试', 'Retry now')}
-          </Button>
+          <BannerAction onClick={() => connections.retryNow(deviceId)}>{L('立即重试', 'Retry now')}</BannerAction>
         }
       >
         {L('网络断开了，正在重连', 'Network lost. Reconnecting')}

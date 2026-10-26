@@ -162,6 +162,41 @@ describe('Git 面板：状态与差异', () => {
   })
 })
 
+describe('Git 面板：增删行数（手机）', () => {
+  it('stats：暂存、更改各自的行数，改名取新路径，二进制是 null，未跟踪不带；默认不带也不起 diff；同一份状态只数一次', async () => {
+    await init()
+    await writeFile(join(project, 'a.txt'), 'one\ntwo\n')
+    await writeFile(join(project, 'old.txt'), 'rename me\n')
+    await writeFile(join(project, 'bin.dat'), Buffer.from([0, 1, 2]))
+    await commitAll('base')
+    await writeFile(join(project, 'a.txt'), 'one\nTWO\n')
+    await git(project, ['add', 'a.txt'])
+    await writeFile(join(project, 'a.txt'), 'one\nTWO\nthree\nfour\n')
+    await git(project, ['mv', 'old.txt', 'new.txt'])
+    await writeFile(join(project, 'bin.dat'), Buffer.from([0, 9]))
+    await writeFile(join(project, 'fresh.txt'), 'x\n')
+    const g = tools({ statusReuseMs: 500 })
+    vi.mocked(spawn).mockClear()
+    const plain = await g.status(ref)
+    expect(spawned('--numstat')).toBe(0)
+    expect(plain.staged.every(f => !('insertions' in f))).toBe(true)
+    const s = await g.status(ref, false, false, true)
+    const counts = (rows: GitStatus['staged']) => rows.map(f => [f.path, f.insertions, f.deletions])
+    expect(counts(s.staged)).toEqual([
+      ['a.txt', 1, 1],
+      ['new.txt', 0, 0],
+    ])
+    expect(counts(s.unstaged).sort()).toEqual([
+      ['a.txt', 2, 0],
+      ['bin.dat', null, null],
+    ])
+    expect(s.untracked[0]).not.toHaveProperty('insertions')
+    expect(spawned('--numstat')).toBe(2)
+    await g.status(ref, false, false, true)
+    expect(spawned('--numstat')).toBe(2)
+  })
+})
+
 describe('Git 图片版本', { timeout: 30_000 }, () => {
   // PNG 文件头加几个字节：格式按内容认
   const png = (...rest: number[]) => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...rest])

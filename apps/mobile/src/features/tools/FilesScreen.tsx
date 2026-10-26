@@ -1,9 +1,10 @@
-// 文件（docs/mobile-remote.md §18.4）：浏览项目目录，打开看文件（只读，代码高亮、图片）。
+// 文件（docs/mobile-remote.md §18.4、§26）：浏览项目目录，打开看文件（只读，代码高亮、图片）。
+// 目录页：大标题是文件夹名（根目录是项目名），下面一行可点的路径；分组列表里文件夹在前（强调色图标 + 箭头），文件在后（浅色图标 + 等宽名）。
 // 路径都相对项目目录，越界由电脑按项目目录校验（和电脑上的文件面板同一套）。
 import { ChevronRight, File, FileImage, Folder, FolderOpen } from 'lucide-react'
 import { fileSize, useToolData, type DirectoryListing, type FileDocument } from '@/data/tools'
 import { L } from '@/i18n'
-import { Banner, Empty, Section, cn } from '@/ui'
+import { Banner, Empty, Row, Section } from '@/ui'
 import { CopyButton, FileText, langOf } from '@/ui/code'
 import { Loading, splitPath, ToolFrame, type ToolProps } from './common'
 
@@ -22,64 +23,67 @@ function DirectoryPage({ tool, path }: { tool: ToolProps; path: string }) {
   return (
     <ToolFrame
       tool={tool}
-      title={path ? splitPath(path).name : L('文件', 'Files')}
+      title={L('文件', 'Files')}
+      heading={path ? splitPath(path).name : tool.project.name}
+      crumb={
+        parts.length > 0 && (
+          <nav aria-label={L('路径', 'Path')} className="flex min-w-0 flex-wrap items-center gap-0.5">
+            <button type="button" onClick={() => tool.onSub('d:')} className="rounded px-1 py-0.5 active:bg-hover">
+              {tool.project.name}
+            </button>
+            {parts.map((p, i) => (
+              <span key={i} className="flex items-center gap-0.5">
+                <ChevronRight size={13} className="text-fg-faint" />
+                <button
+                  type="button"
+                  disabled={i === parts.length - 1}
+                  onClick={() => tool.onSub('d:' + parts.slice(0, i + 1).join('/'))}
+                  className="rounded px-1 py-0.5 active:bg-hover disabled:text-fg-secondary"
+                >
+                  {p}
+                </button>
+              </span>
+            ))}
+          </nav>
+        )
+      }
       loading={list.loading}
       onRefresh={list.reload}
     >
-      {parts.length > 0 && (
-        <nav
-          aria-label={L('路径', 'Path')}
-          className="flex flex-wrap items-center gap-0.5 px-4 pt-2 pb-3 text-meta text-fg-muted"
-        >
-          <button type="button" onClick={() => tool.onSub('d:')} className="rounded px-1 py-0.5 active:bg-hover">
-            {tool.project.name}
-          </button>
-          {parts.map((p, i) => (
-            <span key={i} className="flex items-center gap-0.5">
-              <ChevronRight size={13} className="text-fg-faint" />
-              <button
-                type="button"
-                disabled={i === parts.length - 1}
-                onClick={() => tool.onSub('d:' + parts.slice(0, i + 1).join('/'))}
-                className="rounded px-1 py-0.5 active:bg-hover disabled:text-fg"
-              >
-                {p}
-              </button>
-            </span>
-          ))}
-        </nav>
-      )}
       {!list.data ? (
         <Loading error={list.error} />
       ) : !list.data.entries.length ? (
         <Empty icon={FolderOpen} title={L('空文件夹', 'Empty folder')} />
       ) : (
-        <div className="flex flex-col gap-3 pt-1 pb-6">
+        <div className="flex flex-col gap-3 pb-6">
           {list.error && <Banner tone="danger">{list.error}</Banner>}
           <Section>
-            {list.data.entries.map((e, i) => {
-              const Icon = e.kind === 'directory' ? Folder : IMAGE.test(e.name) ? FileImage : File
-              return (
-                <button
-                  key={e.path}
-                  type="button"
-                  onClick={() => tool.onSub((e.kind === 'directory' ? 'd:' : 'f:') + e.path)}
-                  className={cn(
-                    'flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left active:bg-hover',
-                    i > 0 && 'border-t border-line-subtle',
-                  )}
-                >
-                  <Icon
-                    size={19}
-                    strokeWidth={1.75}
-                    className={cn('shrink-0', e.kind === 'directory' ? 'text-accent-fg' : 'text-fg-muted')}
+            {/* 文件夹在前、文件在后；同类保持电脑给的顺序（sort 是稳定的） */}
+            {[...list.data.entries]
+              .sort((a, b) => Number(b.kind === 'directory') - Number(a.kind === 'directory'))
+              .map(e => {
+                const dirEntry = e.kind === 'directory'
+                const Icon = dirEntry ? Folder : IMAGE.test(e.name) ? FileImage : File
+                return (
+                  <Row
+                    key={e.path}
+                    onClick={() => tool.onSub((dirEntry ? 'd:' : 'f:') + e.path)}
+                    icon={
+                      <Icon size={20} strokeWidth={1.75} className={dirEntry ? 'text-accent-fg' : 'text-fg-faint'} />
+                    }
+                    title={<span className={dirEntry ? 'block truncate' : 'block truncate font-mono'}>{e.name}</span>}
+                    trailing={
+                      (e.status || typeof e.size === 'number') && (
+                        <span className="flex shrink-0 items-center gap-2 font-mono text-label">
+                          {typeof e.size === 'number' && <span className="text-fg-faint">{fileSize(e.size)}</span>}
+                          {e.status && <span className="text-warn">{e.status}</span>}
+                        </span>
+                      )
+                    }
+                    chevron={dirEntry}
                   />
-                  <span className="min-w-0 flex-1 truncate text-ui">{e.name}</span>
-                  {e.status && <span className="shrink-0 font-mono text-label text-warn">{e.status}</span>}
-                  {e.kind === 'directory' && <ChevronRight size={16} className="shrink-0 text-fg-faint" />}
-                </button>
-              )
-            })}
+                )
+              })}
           </Section>
           {list.data.truncated && (
             <p className="px-5 text-label text-fg-faint">

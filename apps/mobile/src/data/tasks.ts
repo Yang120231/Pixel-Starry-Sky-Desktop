@@ -103,3 +103,37 @@ export function taskProjects(sessions: readonly SessionSummary[], projects: read
   }
   return projects.filter(p => latest.has(p.id)).sort((a, b) => latest.get(b.id)! - latest.get(a.id)!)
 }
+
+/** 抽屉「项目」页的一组：一个项目和它的会话（project 为 null 是电脑上已经没有这个项目的「其他」） */
+export interface ProjectGroup {
+  project: ProjectRecord | null
+  /** 没归档的会话：等你处理的在前，其余置顶的在前再按时间；已按 limit 截断 */
+  sessions: SessionSummary[]
+  /** sessions 截掉了几条 */
+  more: number
+  archived: SessionSummary[]
+}
+
+/**
+ * 抽屉「项目」页的分组：有会话的项目按最近一次活动排在前，没有会话的项目（可以在里面新建）排在后面，
+ * 项目已不在的会话归到最后的「其他」。limitOf 给每组（「其他」的 id 是空串）一次列几条。
+ */
+export function projectGroups(
+  sessions: readonly SessionSummary[],
+  projects: readonly ProjectRecord[],
+  limitOf: (projectId: string) => number,
+): ProjectGroup[] {
+  const known = new Set(projects.map(p => p.id))
+  const build = (project: ProjectRecord | null) => {
+    const mine = sessions.filter(s => (project ? s.record.projectId === project.id : !known.has(s.record.projectId)))
+    const list = sessionList(mine, limitOf(project?.id ?? ''))
+    const latest = Math.max(0, ...mine.filter(s => !s.record.archivedAt).map(s => s.record.updatedAt))
+    const archived = mine.filter(s => s.record.archivedAt).sort((a, b) => b.record.updatedAt - a.record.updatedAt)
+    return { group: { project, sessions: [...list.waiting, ...list.rest], more: list.more, archived }, latest }
+  }
+  const built = projects.map(build)
+  const active = built.filter(b => b.latest > 0).sort((a, b) => b.latest - a.latest)
+  const idle = built.filter(b => b.latest === 0)
+  const other = build(null).group
+  return [...active, ...idle].map(b => b.group).concat(other.sessions.length || other.archived.length ? [other] : [])
+}

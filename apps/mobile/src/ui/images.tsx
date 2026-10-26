@@ -1,7 +1,7 @@
-// 图片（docs/mobile-remote.md §17 第 1 项）：加图片按钮（拍照 / 相册）、待发图片的缩略图、消息里的图片格子、全屏看图。
+// 图片（docs/mobile-remote.md §17 第 1 项）：加图片按钮（输入框卡片里的圆形「+」，拍照 / 相册）、待发图片的缩略图、消息里的图片格子、全屏看图。
 // 只管显示；压缩、取图、缓存在 data/images.ts。
 import { useRef, useState } from 'react'
-import { ImageIcon, ImagePlus, X } from 'lucide-react'
+import { ImageIcon, Plus, X } from 'lucide-react'
 import { ActionSheet } from './sheet'
 import { Spinner, cn } from './index'
 import { L } from '@/i18n'
@@ -23,9 +23,9 @@ export function AttachButton({ onFiles, disabled }: { onFiles(files: File[]): vo
         aria-label={L('添加图片', 'Add image')}
         disabled={disabled}
         onClick={() => setMenu(true)}
-        className="mb-0.5 flex size-9 shrink-0 items-center justify-center rounded-full text-fg-muted active:bg-hover disabled:opacity-40"
+        className="flex size-9 shrink-0 items-center justify-center rounded-full border border-line-subtle bg-surface text-fg-secondary active:bg-hover disabled:opacity-40"
       >
-        <ImagePlus size={20} strokeWidth={1.75} />
+        <Plus size={19} strokeWidth={1.75} />
       </button>
       <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={e => picked(e.target)} />
       <input ref={album} type="file" accept="image/*" multiple hidden onChange={e => picked(e.target)} />
@@ -43,7 +43,7 @@ export function AttachButton({ onFiles, disabled }: { onFiles(files: File[]): vo
   )
 }
 
-/** 待发的图片：一排缩略图，每张右上角可以删；正在压缩时最后一格转圈 */
+/** 待发的图片（在输入框卡片里、输入框上面）：一排缩略图，每张右上角可以删；正在压缩时最后一格转圈 */
 export function AttachmentStrip({
   images,
   busy,
@@ -55,7 +55,7 @@ export function AttachmentStrip({
 }) {
   if (!images.length && !busy) return null
   return (
-    <div className="flex gap-2 overflow-x-auto px-1 pt-1 pb-2">
+    <div className="flex gap-2 overflow-x-auto pt-2 pr-2 pb-2">
       {images.map(i => (
         <div key={i.id} className="relative size-16 shrink-0">
           <img src={i.src} alt="" className="size-16 rounded-xl border border-line-subtle object-cover" />

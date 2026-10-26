@@ -1,4 +1,5 @@
-// 点开「做了 N 步」的面板：按原顺序列出这一段过程的每一步（命令、工具、改动、思考、待办、中间的话）。
+// 点开「做了 N 步」的面板（底部大圆角面板）：按原顺序列出这一段过程的每一步（命令、工具、改动、思考、待办、中间的话），
+// 步骤是「图标 + 一行 + 右边小字」的行，正在跑的那步是转圈。
 // 子智能体名下的步骤缩进并标出名字；命令和工具再点开看输出，被截断的有「查看完整」。
 import type { ReactNode } from 'react'
 import type { Item } from '@pixelsky/protocol'
@@ -23,7 +24,7 @@ export function ProcessSheet({
   const rows = items.filter(i => i.kind !== 'notice' || i.level !== 'info')
   return (
     <Sheet title={title} onClose={onClose}>
-      <div className="flex flex-col gap-2 px-4 py-3">
+      <div className="flex flex-col gap-1 px-4 py-3">
         {rows.length === 0 && (
           <p className="py-6 text-center text-meta text-fg-muted">{L('没有可看的步骤', 'No steps to show')}</p>
         )}

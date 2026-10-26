@@ -1,11 +1,12 @@
-// 加项目（docs/mobile-remote.md §18.3）：在手机上翻电脑上的文件夹，选一个加成项目。只在这台电脑上，
+// 加项目（docs/mobile-remote.md §18.3、§26）：在手机上翻电脑上的文件夹，选一个加成项目。只在这台电脑上，
 // 不经 SSH 机器；只有「可操作」的手机能用。从最近那个项目的上一级开始，也可以直接输入路径。
+// 文件夹列表是灰色圆角分组（强调色文件夹图标 + 箭头），底部一个药丸主按钮「加为项目」。
 import { useState } from 'react'
-import { ChevronRight, CornerLeftUp, Folder, FolderPlus } from 'lucide-react'
+import { CornerLeftUp, Folder, FolderPlus } from 'lucide-react'
 import type { ProjectRecord } from '@pixelsky/protocol'
 import { callTool, toolError, useToolData, type DirectoryChoices } from '@/data/tools'
 import { L } from '@/i18n'
-import { Banner, Button, Empty, Screen, Section, Spinner, cn } from '@/ui'
+import { Banner, Button, Empty, Row, Screen, Section, Spinner } from '@/ui'
 import { SearchField } from '@/ui/search'
 
 /** 路径的最后一段 */
@@ -62,8 +63,13 @@ export function AddProject({
       subtitle={L('选电脑上的一个文件夹', 'Choose a folder on your computer')}
       onBack={onBack}
       footer={
-        <div className="border-t border-line-subtle p-3">
-          <Button variant="primary" className="w-full" disabled={!dir || busy || !!already} onClick={() => void add()}>
+        <div className="px-4 pt-1 pb-2">
+          <Button
+            variant="primary"
+            className="w-full rounded-full! min-h-11!"
+            disabled={!dir || busy || !!already}
+            onClick={() => void add()}
+          >
             {busy ? <Spinner size={16} /> : <FolderPlus size={18} />}
             {already
               ? L(`「${already.name}」已经是项目`, `“${already.name}” is already a project`)
@@ -93,9 +99,9 @@ export function AddProject({
             enterKeyHint="go"
             spellCheck={false}
             autoCapitalize="off"
-            className="min-h-11 min-w-0 flex-1 rounded-xl border border-line-subtle bg-surface px-3 font-mono text-meta outline-none focus:border-line-composer-focus"
+            className="min-h-11 min-w-0 flex-1 rounded-full border border-line-subtle bg-surface px-4 font-mono text-meta outline-none focus:border-line-composer-focus"
           />
-          <Button size="sm" type="submit" disabled={!typed.trim()}>
+          <Button size="sm" type="submit" className="rounded-full! min-h-11! px-4!" disabled={!typed.trim()}>
             {L('前往', 'Go')}
           </Button>
         </form>
@@ -116,39 +122,33 @@ export function AddProject({
             )}
             <Section>
               {dir.parent && (
-                <button
-                  type="button"
+                <Row
                   onClick={() => {
                     setPath(dir.parent)
                     setFilter('')
                   }}
-                  className="flex min-h-12 w-full items-center gap-3 px-4 text-left text-ui text-fg-secondary active:bg-hover"
-                >
-                  <CornerLeftUp size={18} className="shrink-0" /> {L('上一级', 'Up one level')}
-                </button>
+                  icon={<CornerLeftUp size={18} />}
+                  title={<span className="text-fg-secondary">{L('上一级', 'Up one level')}</span>}
+                />
               )}
-              {shown?.map((name, i) => {
+              {shown?.map(name => {
                 const project = existing.find(p => same(p.path, child(name)))
                 return (
-                  <button
+                  <Row
                     key={name}
-                    type="button"
                     onClick={() => {
                       setPath(child(name))
                       setFilter('')
                     }}
-                    className={cn(
-                      'flex min-h-12 w-full items-center gap-3 px-4 text-left active:bg-hover',
-                      (i > 0 || dir.parent) && 'border-t border-line-subtle',
-                    )}
-                  >
-                    <Folder size={18} strokeWidth={1.75} className="shrink-0 text-accent-fg" />
-                    <span className="min-w-0 flex-1 truncate text-ui">{name}</span>
-                    {project && (
-                      <span className="shrink-0 text-label text-fg-faint">{L('已是项目', 'Already a project')}</span>
-                    )}
-                    <ChevronRight size={16} className="shrink-0 text-fg-faint" />
-                  </button>
+                    icon={<Folder size={20} strokeWidth={1.75} className="text-accent-fg" />}
+                    title={<span className="block truncate">{name}</span>}
+                    trailing={
+                      project && (
+                        <span className="shrink-0 text-label text-fg-faint">{L('已是项目', 'Already a project')}</span>
+                      )
+                    }
+                    chevron
+                  />
                 )
               })}
               {!dir.directories.length && <Empty icon={Folder} title={L('没有子文件夹', 'No subfolders')} />}

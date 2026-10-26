@@ -3,7 +3,7 @@
 // - 握手：只和已配对的手机做 Noise KK，之后一部手机一条加密通道 + 一个 RpcCore；
 // - 调用：只放行契约里标了 mobile 的通道，「只看」的手机不能调 act 的；参数先清洗（不能放宽权限、改线路）；
 // - 事件：和窗口看到的同一份；会话事件只推给打开着这个会话的手机，会话列表合并节流。
-// - 网关自己的几个调用（不在契约里）：hello、unwatch、defaults、search、image（docs/mobile-remote.md §17）；
+// - 网关自己的几个调用（不在契约里）：hello、unwatch、defaults、account、search、image（docs/mobile-remote.md §17）；
 //   工具（Git / 文件 / 产物 / 任务）和加项目也由网关放行（PHONE_TOOLS、directories、addProject，§18.4）。
 import {
   EFFORTS,
@@ -48,6 +48,7 @@ import {
 import type { EngineCall } from '../app/context'
 import type { DirectoryChoices } from '../core/directories'
 import { slimForPhone } from '../core/engine/tail'
+import type { AccountInfo } from '../../shared/types/account'
 import type { MobilePairing } from '../../shared/types/mobile'
 import type { GitDiff } from '../../shared/types/project-tools'
 import type { FileDocument } from '../../shared/types/workspace'
@@ -125,6 +126,24 @@ export interface LocalQueries {
   directories?(path: string | null): Promise<DirectoryChoices>
   /** 把这台电脑上的一个目录加成项目 */
   addProject?(path: string): ProjectRecord | Promise<ProjectRecord>
+  /** 电脑登录的平台账号（抽屉底部的头像、余额）；没登录为 null */
+  account?(): Promise<PhoneAccount | null> | PhoneAccount | null
+}
+
+/** 手机能看到的账号信息：只有名字、余额、套餐名，不带邮箱、分组、限流、额度 */
+export type PhoneAccount = {
+  name: string
+  balance: number | null
+  currency: string
+  plan: string | null
+  updatedAt: number
+}
+
+/** 给手机的账号信息：只挑名字、余额、套餐名，邮箱、分组、限流、额度都不带 */
+export function phoneAccount(info: AccountInfo | null): PhoneAccount | null {
+  if (!info) return null
+  const { name, balance, currency, plan, updatedAt } = info
+  return { name, balance, currency, plan: plan?.name ?? null, updatedAt }
 }
 
 /** 手机搜索对话内容的结果 */
@@ -235,9 +254,11 @@ interface PhoneTool {
  * 写操作只有暂存、取消暂存、提交、推送（不强推）、新建 / 改任务；放弃改动、删分支、改写历史都不放行（§18.7）。
  */
 export const PHONE_TOOLS: Readonly<Record<string, PhoneTool>> = {
-  'files:list': { access: 'view', args: a => [workspaceArg(a[0]), relativePath(a[1])] },
+  // 第三个参数 false：目录不存在照常报错；第四个 true：文件带大小（旧电脑不认，手机就不显示）
+  'files:list': { access: 'view', args: a => [workspaceArg(a[0]), relativePath(a[1]), false, true] },
   'files:read': { access: 'view', args: a => [workspaceArg(a[0]), relativePath(a[1])] },
-  'projectTools:gitStatus': { access: 'view', args: a => [workspaceArg(a[0])] },
+  // stats：每个文件带增删行数（旧电脑不认，手机就不显示）
+  'projectTools:gitStatus': { access: 'view', args: a => [workspaceArg(a[0]), { stats: true }] },
   'projectTools:gitDiff': {
     access: 'view',
     args: a => {
@@ -662,6 +683,10 @@ export class MobileGateway {
       return null
     }
     if (method === 'defaults') return { engine: this.d.local?.defaultEngine() ?? null }
+    if (method === 'account') {
+      if (!this.d.local?.account) throw new Error('MOBILE_UNSUPPORTED')
+      return (await this.d.local.account()) ?? null
+    }
     if (method === 'search') return this.search(peer, args)
     if (method === 'image') return this.image(peer, args)
     if (method === 'directories' || method === 'addProject') return this.project(device.access, method, args)

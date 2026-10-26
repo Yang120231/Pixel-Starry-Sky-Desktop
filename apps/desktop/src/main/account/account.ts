@@ -585,6 +585,16 @@ export async function platformBalance(): Promise<number | null> {
   return state.status === 'signed-in' ? state.account.balance : null
 }
 
+/** 当前登录的账号数据（手机网关取名字、余额）；没登录为 null */
+export function accountSnapshot(): AccountInfo | null {
+  return state.status === 'signed-in' ? state.account : null
+}
+
+/** 距上次拉取超过 minMs 才去云端刷新一次（和焦点 / 定时刷新共用在途的请求）；失败保留旧数据 */
+export async function refreshAccountIfStale(minMs = FOCUS_MIN_INTERVAL_MS): Promise<void> {
+  if (state.status === 'signed-in' && Date.now() - lastFetchAt >= minMs) await fetchAccount().catch(() => undefined)
+}
+
 /** 登录会话代数：每次退出 / 重新登录都会变；软件内付款据此丢掉上一次登录里记下的订单 */
 export function accountEpoch(): number {
   return epoch

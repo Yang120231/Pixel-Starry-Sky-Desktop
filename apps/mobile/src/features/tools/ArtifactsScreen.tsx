@@ -1,5 +1,6 @@
-// 产物（docs/mobile-remote.md §18.4，同电脑的产物面板）：这个项目最近 AI 改过的文件（按轮）和交给你的文件。
+// 产物（docs/mobile-remote.md §18.4、§26，同电脑的产物面板）：这个项目最近 AI 改过的文件（按轮）和交给你的文件。
 // 点文件看那次改动（交给你的文件也是：看写它的那次改动），点一轮的标题打开那个会话。
+// 大标题是项目名；「交给你的」和每一轮都是一组灰色圆角分组列表。
 import { useState } from 'react'
 import { ChevronRight, FileDiff, Package } from 'lucide-react'
 import type { ArtifactResponse, Item } from '@pixelsky/protocol'
@@ -46,7 +47,13 @@ function ListPage({ tool }: { tool: ToolProps }) {
   const r = list.data
   const turns = r?.turns.filter(t => t.files.length) ?? []
   return (
-    <ToolFrame tool={tool} title={L('产物', 'Artifacts')} loading={list.loading} onRefresh={list.reload}>
+    <ToolFrame
+      tool={tool}
+      title={L('产物', 'Artifacts')}
+      heading={tool.project.name}
+      loading={list.loading}
+      onRefresh={list.reload}
+    >
       <div className="px-4 pt-1 pb-4">
         <Segmented<Days> options={dayOptions()} value={days} onChange={setDays} />
       </div>
@@ -95,7 +102,7 @@ function ListPage({ tool }: { tool: ToolProps }) {
               <button
                 type="button"
                 onClick={() => tool.onOpenSession(t.sessionId)}
-                className="flex w-full items-start gap-2 border-b border-line-subtle px-4 py-3 text-left active:bg-hover"
+                className="flex min-h-12 w-full items-start gap-2 border-b border-line px-4 py-3 text-left active:bg-hover"
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="line-clamp-2 text-ui">{t.prompt || t.title}</span>

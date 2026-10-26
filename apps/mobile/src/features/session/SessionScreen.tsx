@@ -1,22 +1,24 @@
-// 会话页（AI 聊天样子，docs/mobile-remote.md §21.12）：顶栏是引擎头像 + 标题 + 状态；对话按 foldTurns 折好的条目显示（向上加载更早的）、
-// 两轮相隔久了插时间；审批 / 提问卡片替换输入框；停止键在输入框里；回到最新。输入框由 App 传进来（features 之间不互相导入）。
+// 会话页（AI 聊天样子，docs/mobile-remote.md §21.12、§26）：顶栏是浮动圆钮 ☰ 和 ⋯ 夹着标题 +「状态 · 引擎 · 项目」（空闲时不写状态），
+// 背景整页 bg-workbench；对话按 foldTurns 折好的条目显示（向上加载更早的）、两轮相隔久了插时间；
+// 审批 / 提问卡片替换输入框（逐个处理时进度和「跳过」在卡片顶上）；停止键在输入框里；回到最新。输入框由 App 传进来（features 之间不互相导入）。
 // 输入框上面是消息队列和模式胶囊（点开改模式）；点图片全屏看；最近一轮出错可以「重试」（§17）。
-// 右上角「+」「⋯」见 SessionMenu；这一轮答完、手里没在写的时候，输入框上面给几句快捷回复（App 传给输入框的 suggest）。
+// 右上角「⋯」见 SessionMenu。
 // 从「等你处理」的通知点进来（§25）：审批已经在电脑上处理掉时说一声；逐个处理时顶上一条「等你处理 2 / 3」，答完自动去下一个。
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, Square } from 'lucide-react'
-import { foldTurns, type ApprovalDecision } from '@pixelsky/protocol'
+import { ENGINES, foldTurns, type ApprovalDecision } from '@pixelsky/protocol'
 import type { Pairing } from '@/connection'
 import { useDesktop, useSession } from '@/data/hooks'
+import { contextLabel, contextUsage } from '@/data/context'
 import { attemptFor, sendKey, type SendAttempt } from '@/data/retry'
 import { toolError, type ToolId } from '@/data/tools'
 import { retryMessage, retryNoticeId, timeDividers } from '@/data/turns'
 import { L } from '@/i18n'
-import { Banner, Screen, Spinner, cn } from '@/ui'
-import { EngineAvatar } from '@/ui/EngineAvatar'
+import { Banner, Dot, Screen, Spinner, cn } from '@/ui'
+import { ContextRing } from '@/ui/ContextRing'
 import { ImageViewer } from '@/ui/images'
 import { ConnectionBanner } from '../tasks/Reconnect'
-import { ApprovalCard } from './ApprovalCard'
+import { ApprovalCard, TriageProgress } from './ApprovalCard'
 import { EntryView, ThinkingRow, type TurnActions } from './ItemView'
 import { ModeChip } from './ModeChip'
 import { QueuePanel } from './QueuePanel'
@@ -42,8 +44,9 @@ export function SessionScreen({
   notify?: boolean
   /** 逐个处理等你的会话：第几个、一共几个、去下一个 */
   triage?: { index: number; total: number; onNext(): void } | null
-  /** 输入框；running 是会话页算好的「正在跑」（含启动中），停止键 / 占位字都跟它走；suggest：这一轮答完了，可以给快捷回复 */
-  composer(running: boolean, suggest: boolean): ReactNode
+  /** 输入框；running 是会话页算好的「正在跑」（含启动中），停止键 / 占位字都跟它走；
+   *  mode：模式胶囊（权限、模型），放在输入框里那一排按钮中间 */
+  composer(running: boolean, mode: ReactNode): ReactNode
   /** 队列里撤回的消息：文字放回输入框 */
   onRecall(text: string): void
   /** 右上角「+」：在这个项目里新建对话 */
@@ -61,19 +64,21 @@ export function SessionScreen({
   const running = snapshot ? !!snapshot.turnId : summary?.state === 'running' || summary?.state === 'starting'
   const canAct = state === 'ready' && link?.hello?.access === 'act'
   const pending = snapshot?.pending[0]
+  const usage = contextUsage(snapshot?.context)
   const items = snapshot?.items
   const entries = useMemo(() => foldTurns(items ?? [], running), [items, running])
   const dividers = useMemo(() => timeDividers(items ?? []), [items])
   const record = snapshot?.record ?? summary?.record
   const project = projects.find(p => p.id === record?.projectId)?.name
   const engine = record?.engine ?? 'claude'
+  // 空闲（等你回复）时不写状态，只剩「引擎 · 项目」
   const status = pending
     ? { text: L('等你允许', 'Waiting for your approval'), tone: 'danger' as const }
     : running
       ? { text: L('正在回复…', 'Replying…'), tone: 'online' as const }
       : record?.lastOutcome === 'failed'
         ? { text: L('出错了', 'Error'), tone: 'warn' as const }
-        : { text: L('等你回复', 'Your turn'), tone: 'muted' as const }
+        : null
 
   // 新内容到了、而且本来就在底部时，跟着滚到底；不在底部时显示「回到最新」
   const scroller = useRef<HTMLDivElement>(null)
@@ -165,22 +170,19 @@ export function SessionScreen({
     (id: string) => load(L('查看完整内容失败', "Couldn't load the full content"), () => detail(id)),
     [load, detail],
   )
-  // 快捷回复：答完了（最后一条不是你的）、没在跑、没排队、没有「重试」
-  const suggest =
-    canAct && !!snapshot && !running && !pending && !retryId && !snapshot.queue.length && !!last && last.kind !== 'user'
 
   return (
     <Screen
       scroll={false}
-      centered
-      footerBg="bg-chat"
-      title={
+      floating
+      footerBg="bg-workbench"
+      title={record?.title || L('会话', 'Conversation')}
+      subtitle={
         <>
-          <EngineAvatar engine={engine} size={36} status={{ tone: status.tone, pulse: running && !pending }} />
-          <span className="max-w-full truncate">{record?.title || L('会话', 'Conversation')}</span>
+          {status && <Dot tone={status.tone} pulse={running && !pending} />}
+          <span className="truncate">{[status?.text, ENGINES[engine]?.name, project].filter(Boolean).join(' · ')}</span>
         </>
       }
-      subtitle={`${status.text}${project ? ` · ${project}` : ''}`}
       leading={leading}
       actions={
         <SessionMenu
@@ -203,29 +205,18 @@ export function SessionScreen({
           {handledElsewhere && (
             <Banner>{L('这个请求已经在电脑上处理了', 'This request was already handled on the computer')}</Banner>
           )}
-          {triage && (
+          {/* 逐个处理：有待审批时进度和「跳过」在审批卡顶上；没有待审批（答完了、已在电脑上处理）时留这一条细条 */}
+          {triage && !pending && (
             <div
               data-triage
-              className="mx-4 mb-2 flex items-center gap-2.5 rounded-xl bg-notify/10 px-3 py-1.5 text-meta text-fg-secondary"
+              className="mx-4 mb-2 flex items-center gap-2.5 rounded-2xl bg-notify/10 px-3.5 py-1.5 text-meta text-fg-secondary"
             >
-              {triage.total <= 10 && (
-                <span className="flex shrink-0 gap-1" aria-hidden>
-                  {Array.from({ length: triage.total }, (_, i) => (
-                    <i
-                      key={i}
-                      className={cn(
-                        'size-1.5 rounded-full',
-                        i < triage.index - 1 ? 'bg-online' : i === triage.index - 1 ? 'bg-notify' : 'bg-line-strong',
-                      )}
-                    />
-                  ))}
-                </span>
-              )}
-              <span className="min-w-0 flex-1">
-                {L('等你处理', 'Needs you')} {triage.index} / {triage.total}
+              <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                <span className="shrink-0">{L('等你处理', 'Needs you')}</span>
+                <TriageProgress index={triage.index} total={triage.total} />
               </span>
-              <button type="button" onClick={triage.onNext} className="min-h-9 px-1 text-fg-muted underline">
-                {pending ? L('跳过', 'Skip') : L('下一个', 'Next')}
+              <button type="button" onClick={triage.onNext} className="min-h-11 px-1 font-semibold text-accent-fg">
+                {L('下一个', 'Next')}
               </button>
             </div>
           )}
@@ -237,6 +228,7 @@ export function SessionScreen({
                 canAct={canAct}
                 onAnswer={answer}
                 more={(snapshot?.pending.length ?? 1) - 1}
+                triage={triage}
               />
               {/* 等审批时输入框不显示，停止键放在审批卡下面，不然这一轮没法从手机打断 */}
               {running && canAct && (
@@ -244,7 +236,7 @@ export function SessionScreen({
                   type="button"
                   aria-label={L('停止', 'Stop')}
                   onClick={() => void link?.call('engine:interrupt', sessionId).catch(() => undefined)}
-                  className="mx-auto mb-3 flex min-h-11 items-center justify-center gap-1.5 rounded-full px-4 text-meta text-fg-secondary active:bg-hover"
+                  className="mx-auto mb-2 flex min-h-11 items-center justify-center gap-1.5 rounded-full px-4 text-meta text-fg-muted active:bg-hover"
                 >
                   <Square size={14} /> {L('停止', 'Stop')}
                 </button>
@@ -255,23 +247,28 @@ export function SessionScreen({
               {snapshot && (
                 <QueuePanel link={link} sessionId={sessionId} snapshot={snapshot} canAct={canAct} onRecall={onRecall} />
               )}
-              {snapshot && (
-                <ModeChip
-                  deviceId={pairing.deviceId}
-                  link={link}
-                  sessionId={sessionId}
-                  record={snapshot.record}
-                  flags={snapshot.flags ?? null}
-                  canAct={canAct}
-                />
+              {composer(
+                running,
+                snapshot && (
+                  <>
+                    <ModeChip
+                      deviceId={pairing.deviceId}
+                      link={link}
+                      sessionId={sessionId}
+                      record={snapshot.record}
+                      flags={snapshot.flags ?? null}
+                      canAct={canAct}
+                    />
+                    {usage && <ContextRing percent={usage.percent} label={contextLabel(usage)} />}
+                  </>
+                ),
               )}
-              {composer(running, suggest)}
             </>
           )}
         </div>
       }
     >
-      <div className="relative min-h-0 flex-1 bg-chat">
+      <div className="relative min-h-0 flex-1 bg-workbench">
         <div ref={scroller} className="h-full overflow-y-auto overscroll-contain">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 pt-3 pb-6">
             <ConnectionBanner
@@ -322,7 +319,11 @@ export function SessionScreen({
             {running && !pending && items?.at(-1)?.kind === 'user' && <ThinkingRow />}
           </div>
         </div>
-        <div className="chat-fade" />
+        {/* chat-fade 默认渐隐到聊天底色（bg-chat），会话页的底是 bg-workbench */}
+        <div
+          className="chat-fade"
+          style={{ background: 'linear-gradient(to bottom, transparent, var(--bg-workbench))' }}
+        />
         <button
           type="button"
           aria-label={L('回到最新', 'Jump to latest')}

@@ -8,11 +8,11 @@ export interface FileOpContext {
 
 export const FILE_OPS = {
   'files:target': (c, ref) => c.files.target(ref),
-  // 第三个参数 true：目录不存在时返回 null（listExisting）
-  'files:list': (c, ref, path, missing) =>
+  // 第三个参数 true：目录不存在时返回 null（listExisting）；第四个参数 true：文件带上大小（手机）
+  'files:list': (c, ref, path, missing, sizes) =>
     missing === true
       ? c.files.listExisting(workspaceRef(ref), path as string)
-      : c.files.list(workspaceRef(ref), path as string),
+      : c.files.list(workspaceRef(ref), path as string, sizes === true),
   'files:search': (c, ref, name) => c.files.search(workspaceRef(ref), name as string),
   'files:status': (c, ref) => c.files.status(workspaceRef(ref)),
   'files:read': (c, ref, path) => c.files.read(workspaceRef(ref), path as string),

@@ -1,22 +1,79 @@
-// 我的：配对过的电脑（切换、在手机上删掉）、锁屏提醒、主题、语言（§25）、关于
-import type { ReactNode } from 'react'
-import { Check, Laptop, Plus, ShieldCheck, SquarePlus, Trash2 } from 'lucide-react'
+// 设置（抽屉底部的齿轮进来）：iOS 分组列表（§26）——电脑（切换、添加）、通用（外观、语言、锁屏提醒、添加到主屏幕）、
+// 安全（指纹、在手机上删掉）、页脚。外观和语言各一行：右边显示当前值，点开底部面板选。
+import { useState, type ReactNode } from 'react'
+import { Check, Globe, Laptop, Moon, Plus, ShieldCheck, SquarePlus, Trash2 } from 'lucide-react'
 import { connections, phoneFingerprint } from '@/connection'
 import { useConnections } from '@/data/hooks'
 import { L, langPreference, setLangPreference, type LangPreference } from '@/i18n'
 import { linkStateLabel } from '@/i18n/labels'
 import { promptInstall, useInstallEntry } from '@/platform/pwa'
-import { Dot, Row, Screen, Section, Segmented } from '@/ui'
+import { Dot, Row, Screen, Section, cn } from '@/ui'
+import { Sheet } from '@/ui/sheet'
 import { PushRow } from './PushRow'
 import { themeOptions, useThemePreference } from './theme'
+
+const langOptions = (): { value: LangPreference; label: string }[] => [
+  { value: 'system', label: L('跟随系统', 'System') },
+  { value: 'zh', label: '中文' },
+  { value: 'en', label: 'English' },
+]
+
+/** 单选面板：一行一项，选中的右边打勾；点一项就选中并关掉 */
+function PickSheet<T extends string>({
+  title,
+  options,
+  value,
+  note,
+  onPick,
+  onClose,
+}: {
+  title: string
+  options: readonly { value: T; label: string }[]
+  value: T
+  note?: ReactNode
+  onPick(value: T): void
+  onClose(): void
+}) {
+  return (
+    <Sheet title={title} onClose={onClose}>
+      <div role="radiogroup" aria-label={title} className="flex flex-col px-5 pb-3">
+        {options.map((o, i) => (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={o.value === value}
+            onClick={() => {
+              onPick(o.value)
+              onClose()
+            }}
+            className={cn(
+              'flex min-h-12 w-full items-center gap-3 py-2 text-left text-ui active:bg-hover',
+              i > 0 && 'border-t border-line-subtle',
+              o.value === value && 'font-medium',
+            )}
+          >
+            <span className="flex-1">{o.label}</span>
+            {o.value === value && <Check size={20} className="shrink-0 text-accent-fg" />}
+          </button>
+        ))}
+        {note && <p className="pt-2 text-label text-fg-faint">{note}</p>}
+      </div>
+    </Sheet>
+  )
+}
 
 export function MeScreen({ menu, onAdd, onInstall }: { menu: ReactNode; onAdd: () => void; onInstall: () => void }) {
   const { list, active } = useConnections()
   const [theme, setTheme] = useThemePreference()
   const install = useInstallEntry()
+  const [picker, setPicker] = useState<'theme' | 'lang' | null>(null)
+  const themes = themeOptions()
+  const langs = langOptions()
+  const lang = langPreference()
   return (
-    <Screen large title={L('我的', 'Me')} leading={menu}>
-      <div className="flex flex-col gap-6 pb-8">
+    <Screen large title={L('设置', 'Settings')} leading={menu}>
+      <div className="flex flex-col gap-5 pb-8">
         <Section title={L('电脑', 'Computers')}>
           {list.map(p => {
             const state = connections.state(p.deviceId)
@@ -45,19 +102,30 @@ export function MeScreen({ menu, onAdd, onInstall }: { menu: ReactNode; onAdd: (
             )
           })}
           <Row
-            icon={<Plus size={22} strokeWidth={1.5} />}
-            title={L('添加电脑', 'Add a computer')}
-            subtitle={L(
-              '扫码，或粘贴电脑上复制的配对链接',
-              'Scan the QR code, or paste the pairing link copied on the computer',
-            )}
+            icon={<Plus size={22} strokeWidth={1.5} className="text-accent-fg" />}
+            title={<span className="text-accent-fg">{L('添加电脑', 'Add a computer')}</span>}
             onClick={onAdd}
-            chevron
           />
         </Section>
 
-        {install > 0 && (
-          <Section>
+        <Section title={L('通用', 'General')}>
+          <Row
+            icon={<Moon size={22} strokeWidth={1.5} />}
+            title={L('外观', 'Appearance')}
+            trailing={<span className="text-meta text-fg-muted">{themes.find(o => o.value === theme)?.label}</span>}
+            onClick={() => setPicker('theme')}
+            chevron
+          />
+          <Row
+            icon={<Globe size={22} strokeWidth={1.5} />}
+            title={L('语言', 'Language')}
+            trailing={<span className="text-meta text-fg-muted">{langs.find(o => o.value === lang)?.label}</span>}
+            onClick={() => setPicker('lang')}
+            chevron
+          />
+          {list.length > 0 && <PushRow onInstall={onInstall} />}
+          {/* 0 也表示在 App 里 / 已从主屏幕打开，不是「已添加」，所以整行不显示 */}
+          {install > 0 && (
             <Row
               icon={<SquarePlus size={22} strokeWidth={1.5} />}
               title={L('添加到主屏幕', 'Add to Home Screen')}
@@ -68,10 +136,8 @@ export function MeScreen({ menu, onAdd, onInstall }: { menu: ReactNode; onAdd: (
               onClick={() => (install === 2 ? void promptInstall() : onInstall())}
               chevron={install === 1}
             />
-          </Section>
-        )}
-
-        {list.length > 0 && <PushRow onInstall={onInstall} />}
+          )}
+        </Section>
 
         {active && (
           <Section title={L('安全', 'Security')}>
@@ -105,30 +171,6 @@ export function MeScreen({ menu, onAdd, onInstall }: { menu: ReactNode; onAdd: (
           </Section>
         )}
 
-        <div className="px-4">
-          <div className="px-1 pb-2 text-meta font-medium text-fg-muted">{L('主题', 'Theme')}</div>
-          <Segmented options={themeOptions()} value={theme} onChange={setTheme} />
-        </div>
-
-        <div className="px-4">
-          <div className="px-1 pb-2 text-meta font-medium text-fg-muted">{L('语言', 'Language')}</div>
-          <Segmented<LangPreference>
-            options={[
-              { value: 'system', label: L('跟随系统', 'System') },
-              { value: 'zh', label: '中文' },
-              { value: 'en', label: 'English' },
-            ]}
-            value={langPreference()}
-            onChange={setLangPreference}
-          />
-          <p className="px-1 pt-2 text-label text-fg-faint">
-            {L(
-              'AI 的回复、文件内容和电脑上的提示原文不翻译。',
-              'AI replies, file contents and messages from the computer are not translated.',
-            )}
-          </p>
-        </div>
-
         <p className="px-5 text-center text-label text-fg-faint">
           {L(
             '像素星空 · 手机版（网页）。内容在手机和电脑之间端到端加密。',
@@ -136,6 +178,29 @@ export function MeScreen({ menu, onAdd, onInstall }: { menu: ReactNode; onAdd: (
           )}
         </p>
       </div>
+
+      {picker === 'theme' && (
+        <PickSheet
+          title={L('外观', 'Appearance')}
+          options={themes}
+          value={theme}
+          onPick={setTheme}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {picker === 'lang' && (
+        <PickSheet
+          title={L('语言', 'Language')}
+          options={langs}
+          value={lang}
+          onPick={setLangPreference}
+          note={L(
+            'AI 的回复、文件内容和电脑上的提示原文不翻译。',
+            'AI replies, file contents and messages from the computer are not translated.',
+          )}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </Screen>
   )
 }

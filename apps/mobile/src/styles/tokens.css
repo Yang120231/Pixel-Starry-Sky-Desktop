@@ -243,6 +243,7 @@
   --color-sidebar: var(--bg-sidebar);
   --color-rail: var(--bg-rail);
   --color-surface: var(--bg-surface);
+  --color-workbench: var(--bg-workbench);
   --color-popover: var(--bg-popover);
   --color-subtle: var(--bg-subtle);
   --color-hover: var(--bg-hover);
