@@ -30,6 +30,7 @@ import { engineEnv, systemProxyEnv } from '../env'
 import { globalNpm, npmForInstall, npmInstallGlobal, withPath, type NodeRuntime } from '../npm'
 import { outputTail, run, runInteractive, runStream, startupReason } from '../exec'
 import { engineBase } from '../registry'
+import { Rerun } from '../rerun'
 import {
   ClaudeUserRules,
   claudeAccountEnv,
@@ -153,7 +154,7 @@ export const PLATFORM_MAX_RETRIES = 3
 
 export class ClaudeAdapter implements EngineAdapter {
   private cached: ClaudeDiscovery | null = null
-  private detecting: Promise<ClaudeDiscovery> | null = null
+  private readonly detection = new Rerun(() => this.detect().then(d => (this.cached = d)))
   private catalogCache: { at: number; value: EngineCatalog } | null = null
   private probing: Promise<EngineCatalog> | null = null
   private probingForce = false
@@ -288,14 +289,8 @@ export class ClaudeAdapter implements EngineAdapter {
     if (this.cached && !force) return Promise.resolve(this.cached)
     // 重新检测时命令或参数可能变了，输出风格列表也要重新握手
     if (force) this.dropCatalog()
-    if (!this.detecting) {
-      this.detecting = this.detect()
-        .then(d => (this.cached = d))
-        .finally(() => {
-          this.detecting = null
-        })
-    }
-    return this.detecting
+    // 强制检测碰上在跑的那次：那次的环境可能是换号前的，跑完再检测一次
+    return this.detection.run(force)
   }
 
   private async detect(): Promise<ClaudeDiscovery> {
@@ -703,7 +698,7 @@ export class ClaudeAdapter implements EngineAdapter {
 
   private async probe(force: boolean): Promise<{ value: EngineCatalog; failed: boolean }> {
     // 检测正在进行时（追加了参数会握手）等它做完，它的握手结果就是这里要的
-    const d = await (this.detecting ?? this.discover(false))
+    const d = await (this.detection.pending() ?? this.discover(false))
     if (!force && this.catalogCache && Date.now() - this.catalogCache.at < CATALOG_TTL)
       return { value: this.catalogCache.value, failed: false }
     const usable = !!d.launcher && (d.info.status === 'ready' || d.info.status === 'unauthenticated')

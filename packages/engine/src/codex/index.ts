@@ -43,6 +43,7 @@ import { CODEX_NPM_PACKAGE, installCodexWithNpm, updateCodexWithNpm } from './up
 import { array } from './process'
 import { codexViewedImage } from './images'
 import { accountEnv, forgetCodexAccount, prepareAccountHome } from './accounts'
+import { Rerun } from '../rerun'
 
 export interface CodexAdapterOptions {
   /** 用户在设置里替换的命令（绝对路径或 PATH 上的命令名，docs/ui/engine-launch.md） */
@@ -62,7 +63,7 @@ export interface CodexAdapterOptions {
 
 export class CodexAdapter implements EngineAdapter {
   private cached: { info: EngineInfo; launcher: Launcher | null } | null = null
-  private detecting: Promise<EngineInfo> | null = null
+  private readonly detection = new Rerun(() => this.detect())
   private catalogCache: EngineCatalog | null = null
   /** Codex 带着 Default 模式提问开关起不来过：之后的会话不再带（重新检测时清掉，升级后可能就认得了） */
   private askRejected = false
@@ -242,11 +243,8 @@ export class CodexAdapter implements EngineAdapter {
   }
   async info(force = false): Promise<EngineInfo> {
     if (this.cached && !force) return this.cached.info
-    if (this.detecting) return this.detecting
-    this.detecting = this.detect().finally(() => {
-      this.detecting = null
-    })
-    return this.detecting
+    // 强制检测碰上在跑的那次：那次的环境可能是换号前的，跑完再检测一次
+    return this.detection.run(force)
   }
   private async detect(): Promise<EngineInfo> {
     this.askRejected = false
