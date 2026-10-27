@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
 import { DiffStat, cn } from '@/ui'
 import { FileTree } from '@/features/files/FileTree'
-import { useSession } from '@/features/engine'
 import { isDemo } from '@/data'
 import { demo } from '@/data/demo'
 import { useCodingSessionId, useCodingWorkspace } from '../../workspace'
@@ -13,37 +12,12 @@ import { PanelHeader } from '../../shell/PanelHeader'
 import { Section } from '../../shell/Section'
 import { demoStatuses, kindTone, sortTurnFiles } from './filesModel'
 
-/** 刷新键：会话从运行中变成别的状态、窗口重新获得焦点时加 1 */
-function useRefreshKey(sessionId: string | null, visible: boolean): number {
-  const [key, setKey] = useState(0)
-  const state = useSession(sessionId)?.state
-  const previous = useRef(state)
-  useEffect(() => {
-    if (previous.current === 'running' && state !== 'running') setKey(k => k + 1)
-    previous.current = state
-  }, [state])
-  // 切回窗口时刷新，但 10 秒内只刷一次：每次 Alt-Tab 都整棵重读、跑好几条 git（docs/perf-audit-2026-10-18.md B5）
-  const lastFocus = useRef(0)
-  useEffect(() => {
-    if (!visible) return
-    const onFocus = (): void => {
-      if (Date.now() - lastFocus.current < 10_000) return
-      lastFocus.current = Date.now()
-      setKey(k => k + 1)
-    }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [visible])
-  return key
-}
-
 /** 左栏「文件」：AI 这一轮改的 + 项目文件树 */
 export function FilesView({ visible }: { visible: boolean }) {
   useI18n()
   const ws = useCodingWorkspace()
   const sessionId = useCodingSessionId()
   const turn = useTurnChanges(sessionId)
-  const refreshKey = useRefreshKey(sessionId, visible)
   const files = useMemo(() => (turn ? sortTurnFiles(turn.files) : []), [turn])
   const statuses = useMemo(() => (isDemo ? demoStatuses(demo().git.status) : undefined), [])
   const ref = ws.ref
@@ -91,7 +65,8 @@ export function FilesView({ visible }: { visible: boolean }) {
                 requested={ref}
                 scoped
                 heading={false}
-                refreshKey={refreshKey}
+                visible={visible}
+                sessionId={sessionId}
                 statusColors="vscode"
                 statuses={statuses}
               />

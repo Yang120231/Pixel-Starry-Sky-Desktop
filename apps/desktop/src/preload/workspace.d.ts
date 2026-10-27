@@ -2,6 +2,7 @@ import type {
   WorkspaceRef,
   WorkspaceTarget,
   DirectoryListing,
+  TreeChange,
   FileDocument,
   FileStageRequest,
   FileStageResult,
@@ -38,6 +39,8 @@ export interface FilesBridge {
   copyPath(ref: WorkspaceRef, path?: string): Promise<void>
   onBeforeClose(cb: () => void): () => void
   finishClose(): Promise<void>
+  /** 订阅本机项目目录的变化（docs/ui/file-tree-auto-refresh.md §2 B），返回退订；远端机器、Linux、网络路径不会推 */
+  watch(ref: WorkspaceRef, onChange: (change: TreeChange) => void): () => void
 }
 export interface EditorBridge {
   state(force?: boolean): Promise<EditorState>

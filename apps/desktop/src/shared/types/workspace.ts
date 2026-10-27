@@ -57,6 +57,17 @@ export interface DirectoryListing {
   entries: FileEntry[]
   truncated: boolean
 }
+/** 本机文件树监听推来的变化（docs/ui/file-tree-auto-refresh.md §2 B）；路径是树里的写法（附加文件夹带「::N/」） */
+export interface TreeChange {
+  /** 新增 / 删除 / 改名的条目：它所在的文件夹要重读 */
+  added: string[]
+  /** 内容改了的条目：只影响 Git 状态 */
+  changed: string[]
+  /** .git 里的分支 / 暂存变了 */
+  git: boolean
+  /** 太多或说不清哪里变了：整棵重读 */
+  overflow: boolean
+}
 /** 项目文件内容搜索的一条命中（docs/ui/files-search-terminal-pins.md §2） */
 export interface GrepMatch {
   /** 相对项目，用 / 分隔 */

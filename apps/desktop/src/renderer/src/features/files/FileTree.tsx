@@ -51,6 +51,7 @@ import { REVEAL_FOLDER_EVENT, takeFolderReveal } from './treeReveal'
 import { FileIcon } from './icons/FileIcon'
 import { forgetExpandedIn, nameIndent, noteIndent, rememberExpanded, rememberedExpanded, rowIndent } from './treeLayout'
 import { isHidingIgnored, isIgnoredPath, setHideIgnored, splitStatuses, useHideIgnoredMap } from './ignored'
+import { useTreeRefresh, useTreeWatch } from './treeRefresh'
 const pathKey = (path: string): string => {
   const p = path.replaceAll('\\', '/').replace(/\/$/, '')
   return window.pixelsky?.platform === 'win32' ? p.toLowerCase() : p
@@ -80,6 +81,8 @@ interface IgnoredInfo {
 }
 const NO_PATHS: ReadonlySet<string> = new Set()
 const TreeIgnored = createContext<IgnoredInfo>({ ignored: NO_PATHS, hide: false, exempt: NO_PATHS })
+/** 本机目录监听要求重读的文件夹：路径 → 次数，放进 Directory 读目录的依赖（treeRefresh.ts useTreeWatch） */
+const DirTicks = createContext<ReadonlyMap<string, number>>(new Map())
 const hiddenByIgnore = (info: IgnoredInfo, path: string): boolean =>
   info.hide && isIgnoredPath(path, info.ignored) && !info.exempt.has(path)
 /** 状态字母的颜色：M 黄、A 和 ? 绿、D 和 ! 红 */
@@ -308,7 +311,8 @@ export function FileTree({
   compact = false,
   scoped = false,
   heading = true,
-  refreshKey = 0,
+  visible = true,
+  sessionId,
   statusColors = 'default',
   statuses: externalStatuses,
 }: {
@@ -317,8 +321,10 @@ export function FileTree({
   scoped?: boolean
   /** 顶上写不写「文件」：右侧「文件」标签页里标签已经写了，不再重复（docs/ui/workbench-ux-3.md §2.3） */
   heading?: boolean
-  /** 外部触发刷新：和内部的 revision 一起放进读目录和读状态的依赖里 */
-  refreshKey?: number
+  /** 看得见才自动刷新、才监听目录；从隐藏变成看得见时刷新一次（docs/ui/file-tree-auto-refresh.md） */
+  visible?: boolean
+  /** 跟着哪个会话的「一轮结束」「AI 改完文件」刷新；不传时用 requested 里的会话 */
+  sessionId?: string | null
   statusColors?: FileTreeStatusColors
   /** 外部传入的状态表（路径到状态字母）；传了就不再自己去读（演示模式不读状态） */
   statuses?: Record<string, string>
@@ -397,7 +403,7 @@ export function FileTree({
   const lastMove = useRef<{ ref: WorkspaceRef; from: string; to: string } | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const refresh = (): void => setRevision(n => n + 1)
-  const rev = revision + refreshKey
+  const rev = revision + useTreeRefresh(sessionId ?? requested?.sessionId, visible)
   const startEdit = (next: EditState | null): void => {
     setOpError('')
     if (next) lastMove.current = null
@@ -777,6 +783,7 @@ export function FileTree({
                     }
                     query={query}
                     revision={rev}
+                    watching={visible}
                     collapsed={collapsed}
                     externalStatuses={externalStatuses}
                     rootPath={project.path}
@@ -870,7 +877,8 @@ function ProjectRoot({
   refTarget,
   autoOpen,
   query,
-  revision,
+  revision: baseRevision,
+  watching,
   collapsed,
   externalStatuses,
   rootPath,
@@ -882,6 +890,8 @@ function ProjectRoot({
   autoOpen: boolean
   query: string
   revision: number
+  /** 树看得见：展开时订阅本机目录监听 */
+  watching: boolean
   collapsed: number
   externalStatuses?: Record<string, string>
   /** 根目录路径：「隐藏被忽略的文件」按它记，.gitignore 保存时按它认是不是这棵树 */
@@ -898,6 +908,9 @@ function ProjectRoot({
     hasExternal = !!externalStatuses
   // 'I' 是被忽略（变暗），不是改动：拆开后改动照旧上色，也不会让文件夹冒出「•」
   const { changes: statuses, ignored } = useMemo(() => splitStatuses(allStatuses), [allStatuses])
+  const folderKey = folders?.map(f => f.path).join('\n') ?? ''
+  const watch = useTreeWatch(refTarget, expanded && watching && !isDemo, ignored, folderKey)
+  const revision = baseRevision + watch.rev
   const hide = isHidingIgnored(useHideIgnoredMap(), rootPath)
   // 定位到被隐藏的文件时，目标和它的上级暂时露出来（变暗显示）；切换隐藏开关时清掉
   const [exempt, setExempt] = useState<ReadonlySet<string>>(NO_PATHS)
@@ -977,16 +990,23 @@ function ProjectRoot({
     return () => {
       cancelled = true
     }
-  }, [expanded, revision, statusTick, hasExternal, refTarget.projectId, refTarget.sessionId])
+  }, [expanded, revision, statusTick, watch.statusTick, hasExternal, refTarget.projectId, refTarget.sessionId])
+  // 换了过滤词才清空结果、转圈；只是刷新（自动刷新、目录监听）时留着旧结果，搜完再换，列表不闪、不丢滚动位置
+  const searched = useRef('')
   useEffect(() => {
     let cancelled = false
-    setError('')
-    setResults(null)
+    const key = expanded ? refKey(refTarget) + '\n' + query : ''
+    const fresh = searched.current !== key
+    searched.current = key
+    if (fresh) {
+      setError('')
+      setResults(null)
+    }
     if (!query.trim() || !expanded) {
       setSearching(false)
       return
     }
-    setSearching(true)
+    if (fresh) setSearching(true)
     const timer = setTimeout(() => {
       const result = isDemo
         ? Promise.resolve({
@@ -999,6 +1019,7 @@ function ProjectRoot({
       void result.then(
         r => {
           if (!cancelled) {
+            setError('')
             setResults(r)
             setSearching(false)
           }
@@ -1015,7 +1036,7 @@ function ProjectRoot({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [query, expanded, revision, refTarget.projectId, refTarget.sessionId])
+  }, [query, expanded, revision, watch.ticks, refTarget.projectId, refTarget.sessionId])
   return (
     <section className="border-t border-line-layout">
       <button
@@ -1042,56 +1063,60 @@ function ProjectRoot({
         <span className="truncate font-medium">{name}</span>
       </button>
       <TreeIgnored.Provider value={ignoredInfo}>
-        {expanded &&
-          (query.trim() ? (
-            <div className="px-2 pb-1">
-              {searching && (
-                <p className="flex items-center gap-2 px-2 py-2 text-meta text-fg-muted">
-                  <Spinner size={12} />
-                  {tr('files.FileTree.filtering')}
-                </p>
-              )}
-              {error && (
-                <p role="status" className="px-2 py-2 text-meta text-danger">
-                  {translateMessage(error)}
-                </p>
-              )}
-              {results?.entries
-                .filter(e => !hiddenByIgnore(ignoredInfo, e.path))
-                .map(e => (
-                  <FileRow
-                    key={e.path}
-                    entry={e}
+        <DirTicks.Provider value={watch.ticks}>
+          {expanded &&
+            (query.trim() ? (
+              <div className="px-2 pb-1">
+                {searching && (
+                  <p className="flex items-center gap-2 px-2 py-2 text-meta text-fg-muted">
+                    <Spinner size={12} />
+                    {tr('files.FileTree.filtering')}
+                  </p>
+                )}
+                {error && (
+                  <p role="status" className="px-2 py-2 text-meta text-danger">
+                    {translateMessage(error)}
+                  </p>
+                )}
+                {results?.entries
+                  .filter(e => !hiddenByIgnore(ignoredInfo, e.path))
+                  .map(e => (
+                    <FileRow
+                      key={e.path}
+                      entry={e}
+                      refTarget={refTarget}
+                      depth={0}
+                      revision={revision}
+                      statuses={statuses}
+                      showPath
+                    />
+                  ))}
+                {results && !results.entries.length && (
+                  <p className="px-2 py-2 text-meta text-fg-muted">{tr('files.FileTree.noMatchingFiles')}</p>
+                )}
+                {results?.truncated && (
+                  <p className="px-2 py-2 text-label text-fg-muted">
+                    {tr('files.FileTree.showingPartialResultsNarrow')}
+                  </p>
+                )}
+                <p className="px-2 py-1 text-label text-fg-faint">{tr('files.FileTree.filterByNameSkips')}</p>
+              </div>
+            ) : (
+              <>
+                <Directory refTarget={refTarget} path="" depth={0} revision={revision} statuses={statuses} />
+                {folders?.map((folder, i) => (
+                  <ExtraFolder
+                    key={folder.path}
+                    folder={folder}
+                    path={`::${i + 1}`}
                     refTarget={refTarget}
-                    depth={0}
                     revision={revision}
                     statuses={statuses}
-                    showPath
                   />
                 ))}
-              {results && !results.entries.length && (
-                <p className="px-2 py-2 text-meta text-fg-muted">{tr('files.FileTree.noMatchingFiles')}</p>
-              )}
-              {results?.truncated && (
-                <p className="px-2 py-2 text-label text-fg-muted">{tr('files.FileTree.showingPartialResultsNarrow')}</p>
-              )}
-              <p className="px-2 py-1 text-label text-fg-faint">{tr('files.FileTree.filterByNameSkips')}</p>
-            </div>
-          ) : (
-            <>
-              <Directory refTarget={refTarget} path="" depth={0} revision={revision} statuses={statuses} />
-              {folders?.map((folder, i) => (
-                <ExtraFolder
-                  key={folder.path}
-                  folder={folder}
-                  path={`::${i + 1}`}
-                  refTarget={refTarget}
-                  revision={revision}
-                  statuses={statuses}
-                />
-              ))}
-            </>
-          ))}
+              </>
+            ))}
+        </DirTicks.Provider>
       </TreeIgnored.Provider>
       {menu && (
         <ActionMenu
@@ -1200,6 +1225,7 @@ function Directory({
   // 里面的行不卸载，展开的子文件夹和滚动位置都不动
   const loaded = useRef('')
   const loadKey = refKey(refTarget) + '\n' + path
+  const tick = useContext(DirTicks).get(path) ?? 0
   useEffect(() => {
     let cancelled = false
     if (loaded.current !== loadKey) {
@@ -1219,7 +1245,7 @@ function Directory({
     return () => {
       cancelled = true
     }
-  }, [path, revision, refTarget.projectId, refTarget.sessionId])
+  }, [path, revision, tick, refTarget.projectId, refTarget.sessionId])
   if (error)
     return (
       <p

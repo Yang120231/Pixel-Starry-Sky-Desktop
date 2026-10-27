@@ -646,6 +646,8 @@ export const IPC_CONTRACT = {
   'feedback:reply': { kind: 'invoke', route: 'local', trust: 'sender' },
   'feedback:state': { kind: 'invoke', route: 'local', trust: 'sender' },
   'files:beforeClose': { kind: 'push', route: 'push', trust: 'none' },
+  // 文件树目录监听（docs/ui/file-tree-auto-refresh.md §2 B）：只在本机，变化只推给订阅了的窗口
+  'files:changed': { kind: 'push', route: 'push', trust: 'none' },
   'files:copyPath': { kind: 'invoke', route: 'selected', special: 'copyPath', trust: 'sender' },
   'files:create': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:create', trust: 'sender' },
   'files:finishClose': { kind: 'invoke', route: 'hostOnly', trust: 'sender' },
@@ -668,6 +670,7 @@ export const IPC_CONTRACT = {
     remote: 'files:target',
     trust: 'sender',
   },
+  'files:watch': { kind: 'invoke', route: 'local', trust: 'sender' },
   // 本机日志（docs/ui/logging.md §4.7）：只在本机，不跟随选中的机器
   'log:entry': { kind: 'push', route: 'push', trust: 'none' },
   'log:export': { kind: 'invoke', route: 'local', trust: 'window' },

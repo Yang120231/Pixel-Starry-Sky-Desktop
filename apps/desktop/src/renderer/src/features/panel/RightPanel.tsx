@@ -186,6 +186,7 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
                 key={JSON.stringify(activeFile?.ref ?? parsed.ref)}
                 requested={activeFile?.ref ?? parsed.ref}
                 scoped
+                visible={visible}
               />
             }
             onMoveToChat={() => moveFile(layout.active!)}
@@ -200,6 +201,7 @@ export function RightPanel({ maximized = false, visible = true }: { maximized?: 
             requested={requested ?? workspace.ref}
             scoped
             heading={false}
+            visible={visible && layout.active === 'files'}
           />
         </div>
         <TerminalPanel embedded visible={visible && layout.active === 'terminal'} />

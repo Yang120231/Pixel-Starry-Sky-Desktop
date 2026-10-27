@@ -256,6 +256,17 @@ const update: UpdateBridge = {
   },
 }
 
+// 文件树目录监听：一个 files:changed 监听按订阅编号分发
+let treeWatchId = 0
+const treeWatchers = new Map<number, (change: import('../shared/types/workspace').TreeChange) => void>()
+function treeChangeListener(
+  _e: Electron.IpcRendererEvent,
+  id: number,
+  change: import('../shared/types/workspace').TreeChange,
+): void {
+  treeWatchers.get(id)?.(change)
+}
+
 // 渲染进程能用的能力只通过这里暴露，统一挂在 window.pixelsky 上
 const files: FilesBridge = {
   target: ref => call('files:target', ref),
@@ -277,6 +288,17 @@ const files: FilesBridge = {
     const listener = (): void => cb()
     on('files:beforeClose', listener)
     return () => ipcRenderer.removeListener('files:beforeClose', listener)
+  },
+  watch: (ref, onChange) => {
+    const id = ++treeWatchId
+    if (treeWatchers.size === 0) on('files:changed', treeChangeListener)
+    treeWatchers.set(id, onChange)
+    void invoke('files:watch', id, ref).catch(() => {})
+    return () => {
+      if (!treeWatchers.delete(id)) return
+      void invoke('files:watch', id, null).catch(() => {})
+      if (treeWatchers.size === 0) ipcRenderer.removeListener('files:changed', treeChangeListener)
+    }
   },
   finishClose: () => call('files:finishClose'),
 }

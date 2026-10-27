@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
-import { app, BrowserWindow, clipboard, dialog, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, shell, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { Editors } from '../core/editors'
 import * as ipc from '../ipc/guard'
 import { WorkspaceFiles, locateFolder, workspacePath, workspaceRef, type TargetResolver } from '../core/workspace-files'
@@ -12,6 +12,8 @@ import type { EditorKind, EditorState } from '../../shared/types/workspace'
 import { nativeText } from '../app/ui-language'
 import { memoryFile } from '../core/memory-files'
 import { machineOf } from '../machines/identity'
+import { sendTo } from '../app/rendererHealth'
+import { createTreeWatcher } from './tree-watch'
 
 export async function initWorkspace(ctx: AppContext): Promise<void> {
   const resolveTarget: TargetResolver = ref => resolveWorkspace(ctx, ref)
@@ -106,6 +108,65 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
     if (await editors.openFile(file)) return
     const err = await shell.openPath(file)
     if (err) throw new Error('打不开这个文件：' + err)
+  })
+  initTreeWatch(files)
+}
+
+/**
+ * 文件树自动刷新（docs/ui/file-tree-auto-refresh.md §2 B）：看得见、展开着的本机项目根订阅目录监听，变化只推给订阅的窗口。
+ * 远端机器、Linux（递归监听要走遍整棵树）、网络路径不监听，回 false，树照旧按焦点 / 一轮结束刷新
+ */
+function initTreeWatch(files: WorkspaceFiles): void {
+  const watcher = createTreeWatcher()
+  const pages = new Map<WebContents, { subs: Map<number, () => void>; detach: () => void }>()
+  const drop = (contents: WebContents): void => {
+    const page = pages.get(contents)
+    if (!page) return
+    pages.delete(contents)
+    for (const stop of page.subs.values()) stop()
+    page.detach()
+  }
+  ipc.handle('files:watch', (e, id: unknown, ref: unknown) => {
+    if (!Number.isSafeInteger(id)) throw new Error('监听编号不正确')
+    const contents = e.sender
+    const key = id as number
+    pages.get(contents)?.subs.get(key)?.()
+    pages.get(contents)?.subs.delete(key)
+    if (ref == null) return false
+    const valid = workspaceRef(ref)
+    if (process.platform === 'linux' || machineOf(valid.projectId ?? valid.sessionId) !== 'local') return false
+    const target = files.target(valid)
+    const roots = [
+      { path: target.path, prefix: '' },
+      ...(target.folders ?? []).map((f, i) => ({ path: f.path, prefix: `::${i + 1}` })),
+    ].filter(r => !/^[\\/]{2}/.test(r.path))
+    if (!roots.length) return false
+    let page = pages.get(contents)
+    if (!page) {
+      // 页面重新加载或崩溃后页面里已经没有监听：全部退订，树挂上时会重新订阅
+      const onNavigate = (_event: unknown, _url: string, _inPlace: boolean, isMain: boolean): void => {
+        if (isMain) drop(contents)
+      }
+      const gone = (): void => drop(contents)
+      contents.on('did-start-navigation', onNavigate)
+      contents.on('render-process-gone', gone)
+      contents.on('destroyed', gone)
+      page = {
+        subs: new Map(),
+        detach: () => {
+          if (contents.isDestroyed()) return
+          contents.removeListener('did-start-navigation', onNavigate)
+          contents.removeListener('render-process-gone', gone)
+          contents.removeListener('destroyed', gone)
+        },
+      }
+      pages.set(contents, page)
+    }
+    page.subs.set(
+      key,
+      watcher.subscribe(roots, change => sendTo(contents, 'files:changed', key, change)),
+    )
+    return true
   })
 }
 
