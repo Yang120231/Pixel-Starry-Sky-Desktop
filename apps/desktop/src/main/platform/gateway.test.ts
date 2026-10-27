@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Server } from 'node:http'
 import type { SessionRecord } from '@pixelsky/protocol'
 import { CLAUDE_COMPACT_MARKER, setLogSink, type CompactionRequestReport } from '@pixelsky/engine'
-import { eventEnd, platformGateway, reservationConflict } from './gateway'
+import { BODY_LIMIT, eventEnd, platformGateway, reservationConflict } from './gateway'
 import type { ResolvedProvider } from '../core/providers/store'
 let server: Server
 afterEach(() => {
@@ -42,6 +42,52 @@ describe('平台代理按引擎隔离 Responses 与 Messages', () => {
       expect(tracked).not.toHaveBeenCalled()
     },
   )
+
+  it.each(['codex', 'pixel'] as const)('请求体超过上限：%s 不转发，Codex 收到上下文超限', async engine => {
+    const upstream = vi.fn(async () => new Response('ok'))
+    server = platformGateway({
+      sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+      record: () => ({ id: 's', engine, model: 'gpt-5', platform: { groupId: '2', account: 'user' } }) as SessionRecord,
+      account: () => 'user',
+      fetch: upstream,
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const res = await fetch('http://127.0.0.1:' + (server.address() as { port: number }).port + '/v1/responses', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-secret' },
+      body: JSON.stringify({ model: 'gpt-5', input: 'x'.repeat(BODY_LIMIT) }),
+    })
+    const text = await res.text()
+    if (engine === 'codex') {
+      expect(res.status).toBe(200)
+      const event = JSON.parse(text.split('data: ')[1])
+      expect(event).toMatchObject({ type: 'response.failed', response: { error: { code: 'context_length_exceeded' } } })
+    } else {
+      expect(res.status).toBe(413)
+      expect(JSON.parse(text)).toMatchObject({ error: { type: 'request_too_large' } })
+    }
+    expect(upstream).not.toHaveBeenCalled()
+  })
+
+  it.each(['codex', 'pixel'] as const)('上游回 413：%s 只有 Codex 改成上下文超限', async engine => {
+    server = platformGateway({
+      sessions: new Map([['s', { recordId: 's', secret: 'local-secret' }]]),
+      record: () => ({ id: 's', engine, model: 'gpt-5', platform: { groupId: '2', account: 'user' } }) as SessionRecord,
+      account: () => 'user',
+      fetch: async () => new Response('{"error":{"message":"too large"}}', { status: 413 }),
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const res = await fetch('http://127.0.0.1:' + (server.address() as { port: number }).port + '/v1/responses', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-secret' },
+      body: JSON.stringify({ model: 'gpt-5' }),
+    })
+    const text = await res.text()
+    expect(res.status).toBe(engine === 'codex' ? 200 : 413)
+    if (engine === 'codex') expect(text).toContain('"code":"context_length_exceeded"')
+  })
 
   it('压缩请求也不能把 Claude 模型改成 GPT', async () => {
     const upstream = vi.fn(async () => new Response('ok'))

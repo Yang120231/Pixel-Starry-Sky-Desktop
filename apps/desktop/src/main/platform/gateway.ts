@@ -44,17 +44,22 @@ const midStreamError = `event: error\ndata: ${JSON.stringify({
 })}\n\n`
 
 /** Responses 中途断开：收尾用 response.failed（Pi 和 OpenAI SDK 都认这个终止事件；错误代码避开 server_error 这类会重试的词） */
-const responsesFailed = (): string =>
+const responsesFailed = (code = 'stream_interrupted', message = MID_STREAM_TEXT): string =>
   `event: response.failed\ndata: ${JSON.stringify({
     type: 'response.failed',
     response: {
       id: `resp_pixelsky_${randomUUID().replace(/-/g, '')}`,
       object: 'response',
       status: 'failed',
-      error: { code: 'stream_interrupted', message: MID_STREAM_TEXT },
+      error: { code, message },
       output: [],
     },
   })}\n\n`
+
+/** 本机网关收的请求体上限 */
+export const BODY_LIMIT = 32 * 1024 * 1024
+/** Codex 超过上限时的说明（Codex 按错误代码显示它自己的「上下文窗口不够」，这句只进日志和原始事件） */
+const TOO_LARGE_TEXT = 'Request exceeds size limit (32 MB): compact the conversation'
 
 /** Chat Completions 中途断开：OpenAI SDK 读到带 error 的数据块就报错 */
 const chatFailed = `data: ${JSON.stringify({ error: { type: 'stream_interrupted', message: MID_STREAM_TEXT } })}\n\n`
@@ -235,6 +240,16 @@ export function platformGateway(options: {
           ),
         )
     }
+    /**
+     * Codex 的请求太大（网关 32 MB 或上游 413）：回它认得的上下文超限（response.failed + context_length_exceeded），
+     * 下一轮先压缩，压缩请求也超限时它会丢掉最旧的历史再试；回 413 它只当普通错误重试，之后每轮都 413（ui/pixel-request-size.md §5）
+     */
+    const codexTooLarge = (message: string): void => {
+      status = 200
+      res
+        .writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' })
+        .end(responsesFailed('context_length_exceeded', message))
+    }
     /** 像素星空的会话（Pi 会按错误原文重试；余额错误、中途断开要按它的规则回） */
     let pixel = false
     /** 上游报余额不足时说是谁（平台 / 自定义接口「名字」），detail 里的 Key 去掉 */
@@ -257,6 +272,13 @@ export function platformGateway(options: {
           return
         }
         upstream = new Response(text, { status: upstream.status, headers: upstream.headers })
+      }
+      // Responses 线路只有 Codex 和像素星空；像素星空（Pi）认 413，自己压缩重试
+      if (responses && !pixel && upstream.status === 413) {
+        const text = await upstream.text()
+        log.warn('上游说请求太大', { ...trace(), upstreamStatus: 413, detail: redactDetail(upstreamMessage(text)) })
+        codexTooLarge('Upstream rejected the request as too large: compact the conversation')
+        return
       }
       const output: Record<string, string> = {
         'Content-Type': upstream.headers.get('Content-Type') ?? 'application/json',
@@ -491,13 +513,16 @@ export function platformGateway(options: {
       }
       const chunks: Buffer[] = []
       let size = 0
+      // 超限也读完再回：中途跳出循环会销毁请求，回复可能发不全
       for await (const chunk of req) {
         size += chunk.length
-        if (size > 32 * 1024 * 1024) {
-          fail(413, 'Request exceeds size limit')
-          return
-        }
-        chunks.push(Buffer.from(chunk))
+        if (size <= BODY_LIMIT) chunks.push(Buffer.from(chunk))
+      }
+      if (size > BODY_LIMIT) {
+        log.warn('请求超过本机网关的大小上限', { ...trace(), size, engine: record.engine, model: record.model })
+        if (responses && record.engine === 'codex') codexTooLarge(TOO_LARGE_TEXT)
+        else fail(413, 'Request exceeds size limit')
+        return
       }
       let body = Buffer.concat(chunks).toString('utf8')
       let parsed: { model?: unknown }

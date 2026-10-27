@@ -81,7 +81,8 @@ export function httpStatusOf(raw: string): number | undefined {
 
 /**
  * HTTP 状态码 → 归类（和按文字猜时认的状态码一致）；别的状态码（400 等）不归类，交给原文。
- * 413 是请求体太大（Anthropic 的 request_too_large、本机网关的 32 MB 上限），和上下文超限一样压缩后能过；
+ * 413 是请求体太大（Anthropic 的 request_too_large、本机网关的 32 MB 上限），和上下文超限一样压缩后能过
+ * （Codex 的本地压缩要把整段历史再发一遍，413 它不会丢旧历史，所以网关对 Codex 改回上下文超限，见 platform/gateway.ts）；
  * 500 / 502 / 503 / 504 和 Claude Code 的 server_error 一样算繁忙（服务端暂时的问题，稍后重试）
  */
 export function errorKindOfStatus(status: number | null | undefined): NoticeErrorKind | undefined {
