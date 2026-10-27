@@ -379,6 +379,8 @@ export interface FlowInput {
   member: string
   summary: string
   files: string[]
+  /** 交付时说还没做完、没验证到的 */
+  open?: string[]
 }
 
 export interface FlowStepPromptInput {
@@ -399,6 +401,10 @@ export interface FlowStepPromptInput {
   copy?: { branch: string; base: string | null } | null
   /** 汇合步骤：前面的步骤各在哪个分支上，要合并进主目录 */
   merge?: { no: string; title: string; branch: string }[]
+  /** 在主目录做、后面几步会从主目录分出副本：交付前要提交，不然副本里没有这一步的改动 */
+  forks?: boolean
+  /** 汇合步骤：好几个分支都改了的文件（steps 是步骤序号） */
+  overlap?: { path: string; steps: string[] }[]
 }
 
 function inputText(i: FlowInput, locale: Locale): string {
@@ -409,9 +415,14 @@ function inputText(i: FlowInput, locale: Locale): string {
       ? `\n  Files: ${files.join(', ')}${more > 0 ? ` and ${more} more` : ''}`
       : `\n  文件：${files.join('、')}${more > 0 ? ` 等 ${i.files.length} 个` : ''}`
     : ''
+  const open = i.open?.length
+    ? en(locale)
+      ? `\n  Not done / not verified: ${i.open.join('; ')}`
+      : `\n  没做完 / 没验证：${i.open.join('；')}`
+    : ''
   return en(locale)
-    ? `- ${i.no} ${i.title} (${i.member}): ${i.summary}${list}`
-    : `- ${i.no} ${i.title}（${i.member}）：${i.summary}${list}`
+    ? `- ${i.no} ${i.title} (${i.member}): ${i.summary}${list}${open}`
+    : `- ${i.no} ${i.title}（${i.member}）：${i.summary}${list}${open}`
 }
 
 /** 流程里一步的提示词：流程概览、这一步要做什么、依赖交上来的东西、怎么交付 */
@@ -433,16 +444,22 @@ export function flowStepPrompt(input: FlowStepPromptInput): string {
         ? `Delivered by earlier steps:\n${input.inputs.map(i => inputText(i, locale)).join('\n')}`
         : '',
       input.target
-        ? `Review ${input.target.no} "${input.target.title}" by ${input.target.member}. Look at the actual changes with git diff / git status. When done, call task_done with verdict "pass", or "reject" plus issues (one problem per item, concrete enough to fix).`
+        ? `Review ${input.target.no} "${input.target.title}" by ${input.target.member}. Look at the actual changes with git diff / git status. Run the checks you need yourself; do not take the earlier step's word for test results. If something is wrong, reject it so they fix it; do not change the code yourself. When done, call task_done with verdict "pass", or "reject" plus issues (one problem per item, concrete enough to fix).`
         : '',
       step.kind === 'summary'
-        ? 'This is the final step: read what every step delivered, check that the pieces fit together, and write a summary for the user (what was done, which files, anything unresolved).'
+        ? 'This is the final step: read what every step delivered, check that the pieces fit together, and write a summary for the user (what was done, which files, anything unresolved). Keep what you or a reviewer actually verified separate from what earlier steps only claimed, and list every "not done" item they handed over as is.'
         : '',
       input.copy
         ? `You work in a separate Git copy on branch ${input.copy.branch}${input.copy.base ? ` (based on ${input.copy.base})` : ''}. Do not switch branches and do not touch the project's main folder. Before task_done, commit your changes and output files to this branch (git add -A && git commit): later steps take your work from the branch.`
         : '',
       input.merge?.length
         ? `Earlier steps worked on their own branches:\n${input.merge.map(m => `- ${m.no} ${m.title}: ${m.branch}`).join('\n')}\nFirst check with git status that this folder is clean, then git merge --no-ff each branch. Resolve conflicts yourself and explain them in the task_done summary; run the checks after merging, then call task_done.`
+        : '',
+      input.overlap?.length
+        ? `These files were changed on more than one branch; take extra care when merging them:\n${input.overlap.map(o => `- ${o.path} (${o.steps.join(', ')})`).join('\n')}`
+        : '',
+      input.forks
+        ? 'The next steps branch off from the current commit of this folder. Before task_done, commit the files you changed in this step (only yours, not git add -A); otherwise the next steps will not see them.'
         : '',
       `Your step: ${step.no} ${step.title}`,
       `When you are really done, call the task_done tool (summary, files you changed); the flow moves on only after task_done. If you need something from another member${peers ? ` (${peers})` : ''}, call member_ask and then end your turn; the answer will be sent to you as a new message.`,
@@ -457,16 +474,22 @@ export function flowStepPrompt(input: FlowStepPromptInput): string {
     `整个流程（→ 是你这一步）：\n${overview}`,
     input.inputs.length ? `前面的步骤交上来的：\n${input.inputs.map(i => inputText(i, locale)).join('\n')}` : '',
     input.target
-      ? `审查 ${input.target.no}「${input.target.title}」（${input.target.member} 做的）。用 git diff / git status 看实际改动。审完调用 task_done：verdict 写 "pass"（通过）或 "reject"（打回），打回时 issues 一条写一个问题，要具体到能照着改。`
+      ? `审查 ${input.target.no}「${input.target.title}」（${input.target.member} 做的）。用 git diff / git status 看实际改动。需要的检查自己跑一遍，不要采信前一步说的测试结果；有问题打回给它改，不要自己动手改代码。审完调用 task_done：verdict 写 "pass"（通过）或 "reject"（打回），打回时 issues 一条写一个问题，要具体到能照着改。`
       : '',
     step.kind === 'summary'
-      ? '这是最后一步：读每一步交上来的东西，确认它们接得上，给用户写一份总结（做了什么、改了哪些文件、还有什么没解决）。'
+      ? '这是最后一步：读每一步交上来的东西，确认它们接得上，给用户写一份总结（做了什么、改了哪些文件、还有什么没解决）。亲自验证过的（你或审查跑过的）和前面步骤只是声称的分开写；前面交上来的「没做完」原样列出。'
       : '',
     input.copy
       ? `你在独立的 Git 副本里做这一步（分支 ${input.copy.branch}${input.copy.base ? `，基于 ${input.copy.base}` : ''}）。别切换分支，别动项目主目录。调用 task_done 之前把改动和产出的文件提交到这个分支（git add -A && git commit），后面的步骤按分支取你的东西。`
       : '',
     input.merge?.length
       ? `前面的步骤各在自己的分支上：\n${input.merge.map(m => `- ${m.no} ${m.title}：${m.branch}`).join('\n')}\n先用 git status 确认当前目录干净，再逐个 git merge --no-ff 这些分支；有冲突自己解决，并在 task_done 的摘要里说明；合并后跑一遍检查再调用 task_done。`
+      : '',
+    input.overlap?.length
+      ? `这些文件在好几个分支上都改了，合并时格外留意：\n${input.overlap.map(o => `- ${o.path}（${o.steps.join('、')}）`).join('\n')}`
+      : '',
+    input.forks
+      ? '后面的步骤会从这个目录的当前提交分出去。调用 task_done 之前把你这一步改的文件提交（只提交你改的，别用 git add -A），不然后面的步骤看不到。'
       : '',
     `你这一步：${step.no} ${step.title}`,
     `确实做完了再调用 task_done 工具交付（摘要、你改的文件）；流程只在 task_done 之后往下走。需要别的成员${peers ? `（${peers}）` : ''}提供东西时，调用 member_ask，然后结束这一轮，回答会作为新消息发给你。`,
@@ -490,7 +513,7 @@ export function flowPlanPrompt(input: {
     return [
       `In the channel #${input.channel}, the user wants this done by several AI members as a flow:\n${input.request}`,
       `Members you can use:\n${list}`,
-      'Split it into at most 9 steps. Each step: title (what to do), member (exact name), deps (numbers of the steps that must be delivered first, counting from 1), kind ("work"; "review" with target = the step number it reviews; or "summary" for the final wrap-up). Steps that do not depend on each other run in parallel. Do not do the work yourself.',
+      'Split it into at most 9 steps. Each step: title (what to do), member (exact name), deps (numbers of the steps that must be delivered first, counting from 1), kind ("work"; "review" with target = the step number it reviews; or "summary" for the final wrap-up). Steps that do not depend on each other run in parallel. If the work spans several layers (say the main process and the UI), first add a step that defines the shared interfaces and types, and make the others depend on it. Steps that run at the same time should not change the same files; put anything they share into that earlier step. Do not do the work yourself.',
       'When the split is ready, call task_done with summary (one line) and steps. The user will check it and start it.',
       input.auto
         ? 'You are the lead of this channel and the user did not name anyone. If this is just a question, or one member can finish it in one go, do not call task_done: answer directly in your reply.'
@@ -501,7 +524,7 @@ export function flowPlanPrompt(input: {
   return [
     `用户想在频道 #${input.channel} 里让几个 AI 成员按流程做这件事：\n${input.request}`,
     `能用的成员：\n${list}`,
-    '把它拆成最多 9 步。每一步写：title（做什么）、member（成员名字，原样写）、deps（要先交付的步骤序号，从 1 数）、kind（"work" 干活；"review" 审查，target 写审第几步；"summary" 最后汇总）。互相不依赖的步骤会同时做。不要自己动手做这件事。',
+    '把它拆成最多 9 步。每一步写：title（做什么）、member（成员名字，原样写）、deps（要先交付的步骤序号，从 1 数）、kind（"work" 干活；"review" 审查，target 写审第几步；"summary" 最后汇总）。互相不依赖的步骤会同时做。跨好几层的活（比如主进程和界面都要改），先安排一步定共用的接口和类型，其余步骤依赖它；同时做的步骤不要改同一批文件，要共用的东西放进前面那一步。不要自己动手做这件事。',
     '拆好后调用 task_done：summary 写一句话，steps 写上面的步骤。用户确认后才会开始。',
     input.auto
       ? '你是这个频道的牵头成员，用户没有点名交给谁。如果这只是个问题，或者一个成员一次就能做完，不要调用 task_done，直接在回复里回答。'

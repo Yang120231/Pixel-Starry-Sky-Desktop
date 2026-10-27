@@ -122,6 +122,7 @@ import {
   SCHEDULE_MAX,
   scheduleDue,
   startable,
+  overlapFiles,
   withStep,
   type CopyPlan,
 } from './flow'
@@ -220,8 +221,13 @@ export interface ChannelsDeps {
     ): Promise<{ id: string; branch: string; path: string }>
     /** 删掉副本目录（有没提交的改动时报错，留着） */
     remove(copyId: string): Promise<void>
-    /** 项目主目录有没有没提交的改动（不是 Git 仓库时 false） */
-    dirty(projectId: string): Promise<boolean>
+    /** 项目主目录有没有没提交的改动（不是 Git 仓库时 false）；untracked：新建还没加进 Git 的文件也算 */
+    dirty(projectId: string, untracked?: boolean): Promise<boolean>
+    /**
+     * 分支相对主目录 HEAD 改了哪些文件（汇合前提示重叠用）。
+     * shortcut: 起点是现在的 HEAD 不是分叉点，期间主目录有新提交会多报；只是提示，要准再换成 merge-base
+     */
+    changed?(projectId: string, branch: string): Promise<string[]>
   }
 }
 
@@ -2243,6 +2249,7 @@ export class Channels {
       member: this.nameOf(s.memberId),
       summary: s.result?.summary ?? '',
       files: s.result?.files ?? [],
+      open: s.result?.open ?? [],
     }
   }
 
@@ -2255,7 +2262,13 @@ export class Channels {
   }
 
   /** 一步的提示词：整个流程、依赖步骤交上来的、审查的目标；汇总步骤带上所有交付了的 */
-  private stepPrompt(c: StoredChannel, flow: ChannelFlow, step: FlowStep, plan?: CopyPlan | null): string {
+  private stepPrompt(
+    c: StoredChannel,
+    flow: ChannelFlow,
+    step: FlowStep,
+    plan?: CopyPlan | null,
+    overlap?: FlowStep['overlap'],
+  ): string {
     const copy =
       plan?.kind === 'new'
         ? { branch: plan.branch, base: plan.base }
@@ -2296,6 +2309,9 @@ export class Channels {
       peers: [...new Set(flow.steps.map(s => s.memberId))].filter(id => id !== step.memberId).map(this.nameOf),
       copy,
       merge,
+      overlap: (overlap ?? []).map(o => ({ path: o.path, steps: o.steps.map(id => this.stepNo(flow, id)) })),
+      // 在主目录做、有两步以上等着它（之后会各自从主目录分出副本）
+      forks: !copy && flow.isolate !== false && flow.steps.filter(s => s.deps.includes(step.id)).length > 1,
     })
   }
 
@@ -2421,8 +2437,8 @@ export class Channels {
     const step = m?.flow.steps.find(x => x.id === run.flow!.stepId)
     const c = this.store.channels.get(run.channelId)
     if (!m || !step || !c) return { prompt: null }
-    const prompt = (plan: CopyPlan | null): string => {
-      const head = this.stepPrompt(c, m.flow, step, plan)
+    const prompt = (plan: CopyPlan | null, overlap?: FlowStep['overlap']): string => {
+      const head = this.stepPrompt(c, m.flow, step, plan, overlap)
       // 上一轮还没开始就失败、重试原样再发的就是完整的提示词：只发一遍（按现在的位置写）
       const opening = head.split('\n\n')[0]
       return run.round > 1 && !run.prompt.startsWith(opening) ? `${head}\n\n${run.prompt}` : head
@@ -2434,10 +2450,30 @@ export class Channels {
     if (!plan || !copies) return { prompt: prompt(null) }
     if (plan.kind === 'main') {
       if (plan.merge.length && (await copies.dirty(member.projectId))) throw new Error(DIRTY_ERROR)
-      return { prompt: prompt(plan) }
+      // 要合并两个以上分支：先看它们有没有改同样的文件，提示词里和流程卡上都提醒
+      const changed = copies.changed
+      const overlap =
+        plan.merge.length > 1 && changed
+          ? overlapFiles(
+              await Promise.all(
+                plan.merge.map(async id => {
+                  const branch = m.flow.steps.find(s => s.id === id)?.copy?.branch
+                  return { stepId: id, files: branch ? await changed(member.projectId, branch).catch(() => []) : [] }
+                }),
+              ),
+            )
+          : []
+      if (overlap.length || step.overlap)
+        this.updateFlow(run.channelId, run.flow!.messageId, f =>
+          withStep(f, step.id, { overlap: overlap.length ? overlap : undefined }),
+        )
+      return { prompt: prompt(plan, overlap) }
     }
     let copy = plan.kind === 'reuse' ? plan.copy : null
     if (plan.kind === 'new') {
+      // 从主目录分出的副本基于当前提交：没提交的改动（比如前一步刚定的接口）带不过去，先停下让人提交
+      // 新建的文件也算：前一步定接口常常就是新建的类型文件
+      if (!plan.base && (await copies.dirty(member.projectId, true))) throw new Error(DIRTY_ERROR)
       const input = { name: plan.name, branch: plan.branch, base: plan.base ?? '' }
       try {
         copy = await copies.create(member.projectId, input)
@@ -2564,6 +2600,7 @@ export class Channels {
     const result: FlowResult = {
       summary: done.summary,
       files: done.files.length ? done.files : changedFiles(run),
+      ...(done.open?.length ? { open: done.open } : {}),
       ...(done.verdict ? { verdict: done.verdict, issues: done.issues ?? [] } : {}),
     }
     this.store.runs.set(run.taskId, { ...run, ask: undefined, answer: undefined, reminded: undefined })
@@ -2674,6 +2711,8 @@ export class Channels {
         : []
     const { files, dropped } = this.workFiles(run, step, list(args.files, 50, 300))
     const done: NonNullable<TaskRun['done']> = { summary: summary.slice(0, 2000), files }
+    const open = list(args.open, 10, 300)
+    if (open.length) done.open = open
     if (!ref.stepId) {
       if (flow.status !== 'planning') throw new Error('流程已经不在拆分中了')
       const byName = (name: string): string | null =>

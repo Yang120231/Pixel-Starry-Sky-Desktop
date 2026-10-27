@@ -168,6 +168,8 @@ describe('流程调度', () => {
 
     const s3 = sessionOf(c, ch, 's3')
     expect(lastTo(s3).text).toContain('审查 ②「写代码」')
+    // 审查自己跑检查、不自己改（docs/ui/channels-pipeline.md §12 第 4 条）
+    expect(lastTo(s3).text).toContain('不要采信前一步说的测试结果')
     expect(() => c.toolDone(s3, { summary: '有问题' })).toThrow('verdict')
     expect(() => c.toolDone(s3, { summary: '有问题', verdict: 'reject' })).toThrow('issues')
     c.toolDone(s3, { summary: '有问题', verdict: 'reject', issues: ['按钮没对齐'] })
@@ -190,6 +192,8 @@ describe('流程调度', () => {
     expect(s4).not.toBe(s3)
     const prompt = lastTo(s4).text
     expect(prompt).toContain('这是最后一步')
+    // 汇总分开验证过的和只是声称的（§12 第 5 条）
+    expect(prompt).toContain('只是声称的分开写')
     expect(prompt).toContain('贴图画好了')
     expect(prompt).toContain('对齐了')
     c.toolDone(s4, { summary: '都做完了' })
@@ -463,7 +467,7 @@ describe('流程第二批（docs/ui/channels-pipeline.md §6）', () => {
   })
 
   it('并行的步骤各用一个副本；汇总在主目录合并，主目录有改动时先停下；做完删副本；交付的文件规整成相对路径', async () => {
-    let dirty = true
+    let dirty = false
     const created: { name: string; branch: string; base: string }[] = []
     const removed: string[] = []
     const { c, a, b, r, ch } = await setup({
@@ -506,6 +510,7 @@ describe('流程第二批（docs/ui/channels-pipeline.md §6）', () => {
     expect(reply).toContain('没有记下')
     await endTurn(c, s1, '好了')
     expect(stepOf(c, ch, 's1').result?.files).toEqual(['img/btn.png'])
+    dirty = true
     const s2 = sessionOf(c, ch, 's2')
     c.toolDone(s2, { summary: '代码好了' })
     await endTurn(c, s2, '好了')
@@ -526,6 +531,96 @@ describe('流程第二批（docs/ui/channels-pipeline.md §6）', () => {
     expect(flowOf(c, ch).status).toBe('done')
     await settle()
     expect(removed.sort()).toEqual(['c1', 'c2'])
+  })
+
+  it('前一步在主目录做完没提交（新建的文件也算）：从主目录分副本前先停下，提交后继续再分', async () => {
+    let dirty = false
+    const asked: (boolean | undefined)[] = []
+    const created: { name: string; branch: string; base: string }[] = []
+    const { c, a, b, r, ch } = await setup({
+      copies: {
+        create: async (_projectId, input) => {
+          created.push(input)
+          return { id: `c${created.length}`, branch: input.branch, path: `D:/copies/${input.name}` }
+        },
+        remove: async () => {},
+        dirty: async (_projectId, untracked) => {
+          asked.push(untracked)
+          return dirty
+        },
+      },
+    })
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '先定接口',
+      steps: [
+        { id: 's1', title: '定共用接口', memberId: a, deps: [], kind: 'work' },
+        { id: 's2', title: '主进程实现', memberId: b, deps: ['s1'], kind: 'work' },
+        { id: 's3', title: '界面实现', memberId: r, deps: ['s1'], kind: 'work' },
+      ],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    // 后面两步要从主目录分副本：提示词让它交付前提交自己改的文件
+    expect(lastTo(s1).text).toContain('提交')
+    c.toolDone(s1, { summary: '接口定好了' })
+    dirty = true
+    await endTurn(c, s1, '好了')
+    expect(created).toEqual([])
+    expect(asked).toContain(true)
+    expect(flowOf(c, ch)).toMatchObject({ status: 'paused', paused: { reason: 'dirty' } })
+    dirty = false
+    await c.flowAction(ch, { type: 'resume', messageId })
+    await settle()
+    expect(created.map(x => x.base)).toEqual(['', ''])
+    expect(stepOf(c, ch, 's2').status).toBe('running')
+    expect(stepOf(c, ch, 's3').status).toBe('running')
+  })
+
+  it('汇合前算出几个分支都改了的文件；交付的「没做完」交给后面的步骤', async () => {
+    const changed: Record<string, string[]> = {}
+    const { c, a, b, r, ch } = await setup({
+      copies: {
+        create: async (_projectId, input) => ({
+          id: input.name,
+          branch: input.branch,
+          path: `D:/copies/${input.name}`,
+        }),
+        remove: async () => {},
+        dirty: async () => false,
+        changed: async (_projectId, branch) => changed[branch] ?? [],
+      },
+    })
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '导出',
+      steps: [
+        { id: 's1', title: '主进程', memberId: a, deps: [], kind: 'work' },
+        { id: 's2', title: '界面', memberId: b, deps: [], kind: 'work' },
+        { id: 's3', title: '合并汇总', memberId: r, deps: ['s1', 's2'], kind: 'summary' },
+      ],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const tag = messageId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6)
+    changed[`pixelsky/flow-${tag}-a`] = ['src/main/export.ts', 'src/shared/types.ts', 'src/preload/index.ts']
+    changed[`pixelsky/flow-${tag}-b`] = ['src/shared/types.ts', 'src/renderer/Export.tsx', 'src/preload/index.ts']
+    const s1 = sessionOf(c, ch, 's1')
+    c.toolDone(s1, { summary: '通道写好了', open: ['大文件分块写没做', ' ', 42] })
+    await endTurn(c, s1, '好了')
+    expect(stepOf(c, ch, 's1').result?.open).toEqual(['大文件分块写没做'])
+    const s2 = sessionOf(c, ch, 's2')
+    c.toolDone(s2, { summary: '按钮好了' })
+    await endTurn(c, s2, '好了')
+    expect(stepOf(c, ch, 's2').result?.open).toBeUndefined()
+    expect(stepOf(c, ch, 's3').overlap).toEqual([
+      { path: 'src/shared/types.ts', steps: ['s1', 's2'] },
+      { path: 'src/preload/index.ts', steps: ['s1', 's2'] },
+    ])
+    const prompt = lastTo(sessionOf(c, ch, 's3')).text
+    expect(prompt).toContain('- src/shared/types.ts（①、②）')
+    expect(prompt).toContain('没做完 / 没验证：大文件分块写没做')
   })
 })
 

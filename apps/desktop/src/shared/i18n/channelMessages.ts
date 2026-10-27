@@ -677,6 +677,12 @@ export const channelMessages = {
   'channels.flow.gate.send': { zh: '发送', en: 'Send' },
   'channels.flow.gate.detail': { zh: '交付了，等你确认', en: 'Delivered, waiting for your OK' },
   'channels.flow.copy': { zh: '副本 · {branch}', en: 'Copy · {branch}' },
+  'channels.flow.open': { zh: '没做完 / 没验证：{items}', en: 'Not done / not verified: {items}' },
+  'channels.flow.openSep': { zh: '；', en: '; ' },
+  'channels.flow.overlap': {
+    zh: '{steps} 改了同样的文件：{files}',
+    en: '{steps} changed the same files: {files}',
+  },
   'channels.flow.step.gated': { zh: '等你确认', en: 'Waiting for you' },
   'channels.flow.notesHint': {
     zh: '频道说明也是流程的共享约定（接口名、文件位置、贴图规格），每一步都会看到',

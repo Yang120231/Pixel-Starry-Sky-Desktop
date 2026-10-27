@@ -106,6 +106,18 @@ export function withStep(flow: ChannelFlow, id: string, patch: Partial<FlowStep>
   return { ...flow, steps: flow.steps.map(s => (s.id === id ? { ...s, ...patch } : s)) }
 }
 
+export const OVERLAP_MAX = 20
+
+/** 各步分支改了的文件 → 两步以上都改了的（按第一次出现的顺序，最多 OVERLAP_MAX 个） */
+export function overlapFiles(lists: { stepId: string; files: string[] }[]): NonNullable<FlowStep['overlap']> {
+  const by = new Map<string, string[]>()
+  for (const { stepId, files } of lists) for (const f of new Set(files)) by.set(f, [...(by.get(f) ?? []), stepId])
+  return [...by]
+    .filter(([, steps]) => steps.length > 1)
+    .slice(0, OVERLAP_MAX)
+    .map(([path, steps]) => ({ path, steps }))
+}
+
 /**
  * 成员拆好的流程（task_done 的 steps，不可信）→ 草稿步骤。deps / target 用 1 开始的序号；
  * member 用名字，byName 找不到时报错，让它改了再交

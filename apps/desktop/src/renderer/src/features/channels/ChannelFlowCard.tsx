@@ -988,6 +988,24 @@ export function ChannelFlowCard({
                         {(s.status === 'delivered' || s.status === 'gated') && s.result?.summary && (
                           <span className="truncate pl-7 text-meta text-fg-faint">{s.result.summary}</span>
                         )}
+                        {!!s.overlap?.length && (
+                          <span
+                            className="truncate pl-7 text-meta text-warn"
+                            title={s.overlap.map(o => o.path).join('\n')}
+                          >
+                            {tr('channels.flow.overlap', {
+                              steps: [...new Set(s.overlap.flatMap(o => o.steps))]
+                                .map(id => NUMBERS[flow.steps.findIndex(x => x.id === id)] ?? '?')
+                                .join(tr('channels.composer.nameSep')),
+                              files: s.overlap.map(o => o.path).join(tr('channels.composer.nameSep')),
+                            })}
+                          </span>
+                        )}
+                        {(s.status === 'delivered' || s.status === 'gated') && !!s.result?.open?.length && (
+                          <span className="truncate pl-7 text-meta text-warn" title={s.result.open.join('\n')}>
+                            {tr('channels.flow.open', { items: s.result.open.join(tr('channels.flow.openSep')) })}
+                          </span>
+                        )}
                       </button>
                       {s.status === 'gated' && !readOnly && (flow.status === 'running' || flow.status === 'paused') && (
                         <div

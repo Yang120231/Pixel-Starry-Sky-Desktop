@@ -272,6 +272,8 @@ export type FlowStepSettings = Partial<Pick<SessionSettings, 'model' | 'effort' 
 export interface FlowResult {
   summary: string
   files: string[]
+  /** 还没做完、没验证到的（task_done 的 open） */
+  open?: string[]
   /** 审查步骤：通过 / 打回 */
   verdict?: 'pass' | 'reject'
   issues?: string[]
@@ -298,6 +300,8 @@ export interface FlowStep {
   gate?: boolean
   /** 这一步用的 Git 副本（第 11 项，并行时才建）；分支名给汇合步骤合并用 */
   copy?: { id: string; branch: string; path: string } | null
+  /** 汇合步骤：要合并的分支里，两步以上都改了的文件（steps 是步骤 id），最多 20 个 */
+  overlap?: { path: string; steps: string[] }[]
   /** 这一步跑过的轮次（`会话 id:轮次 id`，§10.1），按它从用量记录里算这一步的 token 和花费；流程只有本机成员，不带机器前缀 */
   turns?: string[]
   /** 这一步的用量（主进程按 turns 算好缓存，用量记录变了再刷新） */

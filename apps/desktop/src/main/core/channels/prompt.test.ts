@@ -1,6 +1,6 @@
 // 接力解析前去掉代码（withoutCode）：围栏按 Markdown 的规则认，和界面显示一致
 import { describe, expect, it } from 'vitest'
-import { withoutCode } from './prompt'
+import { flowPlanPrompt, withoutCode } from './prompt'
 
 describe('withoutCode', () => {
   it('代码里的字符串含同样的围栏字符：不提前结束，后面的 @ 仍在代码里', () => {
@@ -23,5 +23,15 @@ describe('withoutCode', () => {
   it('代码块的位置留一个空行：前后两段仍是两段；行内代码照旧去掉', () => {
     expect(withoutCode('@甲 前面\n```\nx\n```\n@乙 后面')).toBe('@甲 前面\n\n@乙 后面')
     expect(withoutCode('用 `@乙` 这个写法，@甲 看看')).toBe('用  这个写法，@甲 看看')
+  })
+})
+
+describe('拆流程的提示词（docs/ui/channels-pipeline.md §12 第 2 条）', () => {
+  it('跨层的活先定接口，同时做的步骤不改同一批文件', () => {
+    const input = { channel: 'web', request: '加导出', members: [{ name: '画师', role: '' }] }
+    const zh = flowPlanPrompt({ ...input, locale: 'zh-CN' })
+    expect(zh).toContain('先安排一步定共用的接口和类型')
+    expect(zh).toContain('同时做的步骤不要改同一批文件')
+    expect(flowPlanPrompt({ ...input, locale: 'en-US' })).toContain('should not change the same files')
   })
 })

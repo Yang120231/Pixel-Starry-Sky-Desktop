@@ -93,6 +93,11 @@ const TOOLS = [
       properties: {
         summary: { type: 'string', minLength: 1, description: '一两句话：做了什么、结论是什么' },
         files: { type: 'array', items: { type: 'string' }, description: '你改了哪些文件（相对路径），可不填' },
+        open: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '还没做完、没验证到的，一条一项（最多 10 条），可不填；后面的步骤和汇总会看到',
+        },
         verdict: { type: 'string', enum: ['pass', 'reject'], description: '审查步骤：通过或打回' },
         issues: { type: 'array', items: { type: 'string' }, description: '打回时的问题，一条一个，要具体到能照着改' },
         steps: {

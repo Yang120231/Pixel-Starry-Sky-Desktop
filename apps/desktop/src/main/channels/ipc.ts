@@ -18,7 +18,7 @@ import { ChannelStore } from '../core/channels/store'
 import { Channels, type MachineLite } from '../core/channels/service'
 import { channelToolsServer } from './channel-mcp'
 import type { CheckRun } from '../../shared/types/checks'
-import type { GitStatus, ProjectCopy } from '../../shared/types/project-tools'
+import type { GitCompareResult, GitStatus, ProjectCopy } from '../../shared/types/project-tools'
 import type { ChannelAlertAction } from '../../shared/channels/alerts'
 import type {
   AgentInput,
@@ -141,9 +141,18 @@ export async function initChannels(ctx: AppContext): Promise<void> {
       remove: async copyId => {
         await tool('projectTools:removeCopy')([copyId, false])
       },
-      dirty: async projectId => {
+      dirty: async (projectId, untracked) => {
         const s = (await tool('projectTools:gitStatus')([{ projectId }])) as GitStatus
-        return s.repo && s.staged.length + s.unstaged.length + s.conflicted.length > 0
+        return (
+          s.repo && s.staged.length + s.unstaged.length + s.conflicted.length + (untracked ? s.untracked.length : 0) > 0
+        )
+      },
+      changed: async (projectId, branch) => {
+        const r = (await tool('projectTools:gitCompare')([
+          { projectId },
+          { from: 'HEAD', to: branch },
+        ])) as GitCompareResult
+        return r.files.map(f => f.path)
       },
     },
   })
