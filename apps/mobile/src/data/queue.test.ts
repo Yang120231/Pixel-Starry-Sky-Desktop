@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { QueuedMessage, SessionSnapshot } from '@pixelsky/protocol'
 import {
   canSteer,
+  isLimitWait,
   isPending,
+  limitNote,
   isReconnecting,
   queueErrorText,
   queueItems,
@@ -56,6 +58,28 @@ describe('消息队列面板', () => {
     expect(queueLabel(q('a', { reconnect }))).toBe('正在重连 2/5')
     expect(queueLabel(q('a', { reconnect }), true)).toBe('重连已暂停 2/5')
     expect(queueLabel(q('a', { reconnect, held: true }))).toBe('已暂停')
+  })
+
+  it('额度用完在等到点继续：写「等额度恢复」，不是「正在重连」', () => {
+    const reconnect = { attempt: 1, max: 3, at: 10, since: 0, reason: '', resend: false, limited: true }
+    const waiting = q('a', { reconnect })
+    expect(isLimitWait(waiting)).toBe(true)
+    expect(isReconnecting(waiting)).toBe(true)
+    expect(queueLabel(waiting)).toBe('等额度恢复')
+    const limit = { kind: 'quota' as const, window: 'five_hour' as const, resetsAt: Date.now() + 3_600_000, tries: [] }
+    expect(queueLabel(q('a', { reconnect, limit }))).toMatch(/^等额度恢复（.+）$/)
+    expect(isLimitWait(q('a', { reconnect: { ...reconnect, limited: false } }))).toBe(false)
+    // 暂停了、连续 3 次还被限流：不会自己继续，不能写「到点自动继续」
+    expect(queueLabel(waiting, true)).toBe('等待已暂停')
+    expect(limitNote(waiting, true)).toBe('不会自己继续，可以现在试一次')
+    const stopped = q('a', { reconnect, limit: { ...limit, tries: [1, 2, 3] } })
+    expect(queueLabel(stopped)).toBe('自动继续已停止')
+    expect(limitNote(stopped, false)).toBe('不会自己继续，可以现在试一次')
+    // 429 和额度用完分开写
+    const rate = q('a', { reconnect, limit: { ...limit, kind: 'rate' as const, resetsAt: null } })
+    expect(queueLabel(rate)).toBe('等限流结束')
+    expect(limitNote(rate, false)).toBe('请求太频繁，到点自动继续')
+    expect(limitNote(waiting, false)).toBe('额度用完，到点自动继续')
   })
 
   it('引导：要排队中、引擎支持、正在跑一轮', () => {

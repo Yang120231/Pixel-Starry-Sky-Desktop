@@ -8,7 +8,9 @@ import type { DesktopLink } from '@/connection'
 import {
   canDismiss,
   canSteer,
+  isLimitWait,
   isPending,
+  limitNote,
   isReconnecting,
   isSendFailure,
   queueErrorText,
@@ -69,6 +71,24 @@ export function QueuePanel({
     const up = queueMoveArg(snapshot.queue, items, q.id, -1, before)
     const down = queueMoveArg(snapshot.queue, items, q.id, 1, before)
     const list: SheetAction[] = []
+    if (isLimitWait(q))
+      return [
+        {
+          label: L('现在试一次', 'Try now'),
+          hint: L(
+            '不等额度恢复，现在就试；还是被限流的话算一次',
+            'Try now instead of waiting; if still limited, it counts as a try',
+          ),
+          disabled: q.status === 'dispatching',
+          onSelect: () => void run(q.id, 'engine:runQueuedNow', q.id),
+        },
+        {
+          label: L('停止', 'Stop'),
+          hint: L('不再等额度恢复，这条算发送失败', 'Stop waiting and mark this message as failed to send'),
+          danger: true,
+          onSelect: () => void run(q.id, 'engine:interrupt'),
+        },
+      ]
     if (isReconnecting(q))
       return [
         {
@@ -222,7 +242,9 @@ export function QueuePanel({
               )}
               {q.reconnect && isReconnecting(q) && (
                 <span className="truncate text-label text-fg-faint">
-                  {q.reconnect.reason || L('连接中断', 'Connection lost')}
+                  {isLimitWait(q)
+                    ? limitNote(q, snapshot.queuePaused)
+                    : q.reconnect.reason || L('连接中断', 'Connection lost')}
                 </span>
               )}
             </span>

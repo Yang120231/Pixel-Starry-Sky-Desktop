@@ -13,6 +13,20 @@ export function isStarting(q: QueuedMessage, paused: boolean): boolean {
 export const isReconnecting = (q: QueuedMessage): boolean =>
   !!q.reconnect && !q.held && (q.status === 'queued' || q.status === 'dispatching')
 
+/** 额度用完 / 限流后在等到点自动继续（同桌面 queueView.ts 的 isLimitWait）：写「等额度恢复」，不是「正在重连」 */
+export const isLimitWait = (q: QueuedMessage): boolean => isReconnecting(q) && !!q.reconnect?.limited
+
+/** 到点继续了 reconnect.max 次还被限流：电脑不再自己继续（同桌面 limitModel.ts 的 stopped） */
+const limitStopped = (q: QueuedMessage): boolean => (q.limit?.tries.length ?? 0) >= (q.reconnect?.max ?? 3)
+
+/** 限流等待那条在面板里的第二行：停了 / 暂停了不会自己继续；429 和额度用完分开写 */
+export function limitNote(q: QueuedMessage, paused: boolean): string {
+  if (paused || limitStopped(q)) return L('不会自己继续，可以现在试一次', "Won't continue on its own; you can try now")
+  return q.limit?.kind === 'rate'
+    ? L('请求太频繁，到点自动继续', 'Too many requests; continues automatically')
+    : L('额度用完，到点自动继续', 'Usage limit reached; continues automatically')
+}
+
 /** 失败的这条已经在对话里：可以「关掉」，不重发也不撤回，对话里标「未送达」 */
 export const canDismiss = (q: QueuedMessage): boolean =>
   (q.status === 'failed' || q.status === 'uncertain') && !!q.messageUuid
@@ -30,6 +44,14 @@ export const isPending = (q: QueuedMessage): boolean => q.status === 'dispatchin
 
 /** paused：整个队列暂停（比如电脑重启后恢复出来的）。重连项这时不会自己重连，要点「继续重连」 */
 export function queueLabel(q: QueuedMessage, paused = false): string {
+  if (isLimitWait(q)) {
+    if (limitStopped(q)) return L('自动继续已停止', 'Auto-continue stopped')
+    if (paused) return L('等待已暂停', 'Waiting paused')
+    const what =
+      q.limit?.kind === 'rate' ? L('等限流结束', 'Waiting for rate limit') : L('等额度恢复', 'Waiting for usage limit')
+    const at = q.limit?.resetsAt
+    return at ? `${what}（${new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}）` : what
+  }
   if (q.reconnect && isReconnecting(q))
     return `${paused ? L('重连已暂停', 'Reconnect paused') : L('正在重连', 'Reconnecting')} ${q.reconnect.attempt}/${q.reconnect.max}`
   if (isSendFailure(q)) return L('发送失败', 'Failed to send')
