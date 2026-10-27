@@ -214,10 +214,13 @@ function workspaceArg(v: unknown): { projectId: string } | { sessionId: string }
   return typeof o.sessionId === 'string' ? { sessionId: asString(o.sessionId) } : { projectId: asString(o.projectId) }
 }
 
-/** 项目里的相对路径，根目录是空字符串（越界由文件 / Git 那一层按项目目录校验） */
+/**
+ * 项目里的相对路径，根目录是空字符串（越界由文件 / Git 那一层按项目目录校验）。
+ * 「::0/完整路径」是电脑上给项目外文件用的（core/workspace-files.ts locateFolder），手机不能用，否则能读整台电脑
+ */
 function relativePath(v: unknown): string {
   if (v === undefined || v === null) return ''
-  if (typeof v !== 'string' || v.length > 4096) throw new Error('MOBILE_BAD_ARGUMENT')
+  if (typeof v !== 'string' || v.length > 4096 || /^::0(?:[\\/]|$)/.test(v)) throw new Error('MOBILE_BAD_ARGUMENT')
   return v
 }
 

@@ -353,6 +353,10 @@ describe('MobileGateway calls', () => {
       'MOBILE_BAD_ARGUMENT',
     )
     await expect(p.call('files:list', {}, '')).rejects.toThrow('MOBILE_BAD_ARGUMENT')
+    // 项目外的完整路径（::0/）：不能读、不能列
+    await expect(p.call('files:read', ref, '::0/C:/Users/me/.ssh/id_rsa')).rejects.toThrow('MOBILE_BAD_ARGUMENT')
+    await expect(p.call('files:list', ref, '::0\\C:\\')).rejects.toThrow('MOBILE_BAD_ARGUMENT')
+    await expect(p.call('files:list', ref, '::0')).rejects.toThrow('MOBILE_BAD_ARGUMENT')
     expect(calls).toHaveLength(10)
   })
 
