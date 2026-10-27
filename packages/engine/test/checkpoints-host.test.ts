@@ -158,7 +158,8 @@ async function sendUntil(
   return itemId
 }
 
-describe('对话检查点（宿主）', () => {
+// 比 until() 的 10 秒大：负载高时让它自己的「timeout: …」先报出来，而不是 vitest 默认的 5 秒
+describe('对话检查点（宿主）', { timeout: 20_000 }, () => {
   it('每轮记下改了哪些文件；改动卡片撤回新建的文件、再恢复', async () => {
     write('keep.txt', 'v0\n')
     const { host, id, send } = setup({ a: { 'a.txt': 'new\n', 'keep.txt': 'v1\n' } })
