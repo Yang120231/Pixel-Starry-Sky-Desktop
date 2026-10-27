@@ -36,6 +36,10 @@ export const terminalMessages = {
   'terminal.bottom': { zh: '回到底部', en: 'Scroll to bottom' },
   'terminal.copy': { zh: '复制选中内容', en: 'Copy selection' },
   'terminal.paste': { zh: '粘贴', en: 'Paste' },
+  'terminal.dropRemote': {
+    zh: '远端终端不能拖本机文件，可以从左侧文件树拖',
+    en: 'Local files can’t be dropped into a remote terminal; drag from the file tree instead',
+  },
   'terminal.pasteTitle': { zh: '粘贴多行内容？', en: 'Paste multiple lines?' },
   'terminal.pasteHint': {
     zh: '以下内容将发送到终端，换行可能执行命令。',

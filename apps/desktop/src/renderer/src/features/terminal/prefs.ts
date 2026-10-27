@@ -20,17 +20,45 @@ function readScrollback(): ScrollbackChoice {
   }
 }
 
+/** 终端字号（docs/ui/terminal-small-polish.md §2）：Ctrl+= / Ctrl+- 调，所有终端共用；没设（null）跟随界面字号 */
+export const TERMINAL_FONT_SIZE_KEY = 'pixelsky.terminal.fontSize'
+export const FONT_SIZE_MIN = 8
+export const FONT_SIZE_MAX = 32
+
+function readFontSize(): number | null {
+  try {
+    const value = Number(localStorage.getItem(TERMINAL_FONT_SIZE_KEY) || NaN)
+    return Number.isInteger(value) && value >= FONT_SIZE_MIN && value <= FONT_SIZE_MAX ? value : null
+  } catch {
+    return null
+  }
+}
+
+/** 放大 / 缩小一号后的字号：从当前实际字号（current，没设时是界面字号）起算，不超出 8～32 */
+export const zoomedFontSize = (current: number, step: 1 | -1): number =>
+  Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, Math.round(current) + step))
+
 const browser = typeof window !== 'undefined'
 let state = {
   scrollback: browser ? readScrollback() : DEFAULT_SCROLLBACK,
   screenReader: browser ? readStoredFlag(TERMINAL_SCREEN_READER_KEY) : false,
+  fontSize: browser ? readFontSize() : null,
 }
 const listeners = new Set<() => void>()
 const emit = (): void => listeners.forEach(listener => listener())
 
 function reload(): void {
-  const next = { scrollback: readScrollback(), screenReader: readStoredFlag(TERMINAL_SCREEN_READER_KEY) }
-  if (next.scrollback === state.scrollback && next.screenReader === state.screenReader) return
+  const next = {
+    scrollback: readScrollback(),
+    screenReader: readStoredFlag(TERMINAL_SCREEN_READER_KEY),
+    fontSize: readFontSize(),
+  }
+  if (
+    next.scrollback === state.scrollback &&
+    next.screenReader === state.screenReader &&
+    next.fontSize === state.fontSize
+  )
+    return
   state = next
   emit()
 }
@@ -57,10 +85,29 @@ export function setTerminalScreenReader(next: boolean): void {
   emit()
 }
 
+/** null：恢复跟随界面 */
+export function setTerminalFontSize(next: number | null): void {
+  if (next !== null && (!Number.isInteger(next) || next < FONT_SIZE_MIN || next > FONT_SIZE_MAX)) return
+  if (next === state.fontSize) return
+  state = { ...state, fontSize: next }
+  if (next === null)
+    try {
+      localStorage.removeItem(TERMINAL_FONT_SIZE_KEY)
+    } catch {
+      /* 存储不可用时，本次仍然生效 */
+    }
+  else write(TERMINAL_FONT_SIZE_KEY, String(next))
+  emit()
+}
+
 let stops: (() => void)[] = []
 function subscribe(listener: () => void): () => void {
   if (!listeners.size)
-    stops = [onStoredChange(TERMINAL_SCROLLBACK_KEY, reload), onStoredChange(TERMINAL_SCREEN_READER_KEY, reload)]
+    stops = [
+      onStoredChange(TERMINAL_SCROLLBACK_KEY, reload),
+      onStoredChange(TERMINAL_SCREEN_READER_KEY, reload),
+      onStoredChange(TERMINAL_FONT_SIZE_KEY, reload),
+    ]
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
