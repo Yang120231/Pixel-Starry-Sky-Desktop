@@ -22,6 +22,8 @@ export interface TerminalRecord {
   generation: number
   createdAt: number
   lastStartedAt?: number
+  /** 会话 TUI 终端（docs/ui/tui-toggle.md §4.2）：绑到哪个对话；不落盘、不进终端列表、不占 12 上限 */
+  sessionId?: string
 }
 export type TerminalEvent =
   | { type: 'data'; terminalId: string; generation: number; seq: number; data: string }

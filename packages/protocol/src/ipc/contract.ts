@@ -438,6 +438,11 @@ export const IPC_CONTRACT = {
     remote: 'engine:cancelSideQuestion',
     trust: 'sender',
   },
+  // 会话 ⇄ 终端（TUI）切换（docs/ui/tui-toggle.md §4.1）：只做本机，不进远端
+  'engine:tuiCheck': { kind: 'invoke', route: 'local', trust: 'sender' },
+  'engine:tuiOpen': { kind: 'invoke', route: 'local', trust: 'window' },
+  'engine:tuiClose': { kind: 'invoke', route: 'local', trust: 'window' },
+
   'engine:runQueuedNow': {
     kind: 'invoke',
     route: 'resource',

@@ -37,6 +37,8 @@ export const ACTIONS = [
   { id: 'quoteSelection', label: 'editor.quote.action', binding: key('KeyL') },
   // 快捷键一览（docs/ui/ui-polish-2026-10-13.md §5）；代码编辑器和终端里不抢（编辑器里是注释）
   { id: 'shortcutsHelp', label: 'shortcuts.help.action', binding: key('Slash') },
+  // 会话界面 ⇄ 终端（TUI）（docs/ui/tui-toggle.md §3.1）；默认 Alt+T
+  { id: 'toggleTuiMode', label: 'session.tui.toggle', binding: key('KeyT', { mod: false, alt: true }) },
 ] as const satisfies readonly { id: string; label: TranslationKey; binding: Binding }[]
 
 export type ActionId = (typeof ACTIONS)[number]['id']

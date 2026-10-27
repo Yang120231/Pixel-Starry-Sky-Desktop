@@ -22,6 +22,7 @@ import { demoConnectors } from './connectors'
 import { demoAccounts } from './accounts'
 import { statusDemoInbox, statusDemoSessionState } from './statusDemo'
 import { demoMachines, demoMachineProjects, demoMachineWorkspaces } from './machines'
+import { DemoTuiPanel } from './DemoTuiPanel'
 import { demoBoardTasks } from './board'
 import {
   demoEngineCatalog,
@@ -70,6 +71,7 @@ export const demoSource: DemoSource = {
   machines: demoMachines,
   machineProjects: demoMachineProjects,
   machineWorkspaces: demoMachineWorkspaces,
+  tuiPanel: DemoTuiPanel,
   boardTasks: demoBoardTasks,
   scheduledSessions: demoScheduledSessions,
   connectors: demoConnectors,

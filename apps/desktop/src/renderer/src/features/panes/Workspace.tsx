@@ -13,6 +13,7 @@ import {
 import './panes.css'
 import { SessionHeader } from '@/features/session/SessionHeader'
 import { useHeaderActions } from '@/features/session/SessionView'
+import { useTuiToggle } from '@/features/session/tuiToggle'
 import { cn } from '@/ui'
 import { Toast } from '@/ui/Toast'
 import {
@@ -77,6 +78,7 @@ export function WorkspaceHeader({ membersShown = false, ...props }: WorkspacePro
     parsed = current ? parseFileTab(current) : null
   const showActions = useHeaderActions(sessionId)
   const page = usePage()
+  const tuiToggle = useTuiToggle(page === 'board' || page === 'channels' || parsed || file ? null : sessionId)
   const channel = useChannels(selectedChannel)
   // 协作频道页沿用同一个顶栏（换组件会丢焦点）：标题是频道名，面板开关控制成员面板（docs/ui/channels.md §2）
   // 任务看板（docs/ui/task-board.md §2）：顶栏标题是「任务看板」，没有右侧面板开关
@@ -116,6 +118,16 @@ export function WorkspaceHeader({ membersShown = false, ...props }: WorkspacePro
       title=""
       showActions={showActions && !parsed}
       sessionId={parsed || file ? null : sessionId}
+      tui={
+        tuiToggle
+          ? {
+              mode: tuiToggle.mode,
+              running: tuiToggle.running,
+              disabledReason: tuiToggle.disabledReason,
+              onChange: tuiToggle.onChange,
+            }
+          : null
+      }
       {...props}
     />
   )

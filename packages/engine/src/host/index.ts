@@ -56,6 +56,7 @@ import type {
   UsagePage,
   UsageSummary,
 } from '@pixelsky/protocol'
+import { backgroundAgents } from '@pixelsky/protocol'
 import { ClaudeAdapter } from '../claude'
 import type { CompactionRequestReport } from '../compaction'
 import { CodexAdapter } from '../codex'
@@ -71,7 +72,7 @@ import { HostCompaction } from './compaction'
 import type { EngineHostOptions, HostContext, HostModules, Runtime } from './context'
 import { HostEvents } from './events'
 import { HostGuard } from './guard'
-import { HostHandoff } from './handoff'
+import { HostHandoff, lastItemId } from './handoff'
 import { HostLogin } from './login'
 import { HostNative } from './native'
 import { HostProjects } from './projects'
@@ -85,6 +86,17 @@ import { HostUsage } from './usage'
 
 export type { EngineHostOptions, PlatformRouteResult } from './context'
 export type { SyncableEngineSettings } from './settings'
+
+/** 不能切到终端的原因代码（tuiBlock）：界面按代码显示文字 */
+export type TuiBlock = 'engine' | 'busy' | 'liveTerminal' | 'liveOther'
+
+/** 切换时直接报错用的文字（和界面 session.tui.disabled* 的中文一致，界面能翻译） */
+const TUI_BLOCK_TEXT: Record<TuiBlock, string> = {
+  engine: '当前引擎不支持终端模式',
+  busy: '请先停止当前任务再切换',
+  liveTerminal: '外部终端正开着这个会话',
+  liveOther: '其他程序正开着这个会话',
+}
 
 export class EngineHost {
   private readonly ctx: HostContext
@@ -664,6 +676,177 @@ export class EngineHost {
   /** 这次不带合并摘要 */
   dropPendingMerge(id: string): void {
     this.m.branch.dropPendingMerge(id)
+  }
+
+  /** 从终端模式补轮次（docs/ui/tui-toggle.md §5.4） */
+  syncFromTui(id: string): Promise<{ added: number; mismatched: boolean }> {
+    return this.m.native.syncFromTui(id)
+  }
+
+  /**
+   * 现在能不能切到终端（docs/ui/tui-toggle.md §3.1）：不能时返回原因代码，界面按代码显示文字；能切返回 null。
+   * 已在终端模式时不算（自己的 TUI 不算占用）
+   */
+  tuiBlock(id: string): TuiBlock | null {
+    const ctx = this.ctx
+    const rt = this.m.sessions.runtime(id)
+    const record = rt.snapshot.record
+    if (record.engine !== 'claude') return 'engine'
+    if (record.tui) return null
+    if (
+      ctx.closing ||
+      ctx.changingSessions.has(id) ||
+      rt.snapshot.state !== 'idle' ||
+      rt.pumping ||
+      rt.stopping ||
+      rt.activeId ||
+      rt.inspectingContext ||
+      rt.snapshot.queue.length ||
+      rt.snapshot.pending?.length ||
+      // 后台子智能体还在跑：切过去要关界面进程，会把它们一起停掉
+      backgroundAgents(rt.snapshot.subagents, rt.snapshot.tasks).length
+    )
+      return 'busy'
+    return this.tuiLiveBlock(record)
+  }
+
+  /** 外部终端 / 其他程序占着这个引擎会话 */
+  private tuiLiveBlock(record: SessionRecord): TuiBlock | null {
+    const sid = record.engineSessionId
+    const live = sid
+      ? (this.ctx.adapters.claude?.nativeLive?.([{ id: sid, mtimeMs: Date.now() }]).get(sid) ?? null)
+      : null
+    if (live === 'terminal') return 'liveTerminal'
+    if (live === 'other' || live === 'maybe') return 'liveOther'
+    return null
+  }
+
+  async prepareTui(id: string): Promise<import('../adapter').TuiLaunch> {
+    const ctx = this.ctx
+    const m = this.m
+    const rt = m.sessions.runtime(id)
+    let record = rt.snapshot.record
+    if (record.tui?.terminalId) throw new Error('已经在终端模式')
+    const blocked = this.tuiBlock(id)
+    if (blocked) throw new Error(TUI_BLOCK_TEXT[blocked])
+    const adapter = ctx.adapters[record.engine]
+    if (!adapter?.tuiLaunch) throw new Error('当前引擎还不支持终端模式')
+
+    ctx.changingSessions.add(id)
+    let extensions: import('@pixelsky/protocol').ExtensionLaunch | undefined
+    try {
+      // §5.3：有待落实的回退 / 分叉 / 压缩前副本 / 接力 seed 时，先起一次界面进程再关
+      const seed = await m.handoff.pendingSeed(id)
+      const needsFlush = !!(record.pendingRewind || record.pendingFork || seed)
+      if (needsFlush) {
+        extensions = await ctx.opts.extensions?.(record)
+        // 已有空闲进程时 warm 不会再 spawn，pending / seed 落实不了：先关掉再起干净的一次
+        if (rt.session) {
+          const prev = rt.session
+          rt.session = null
+          if (rt.idleTimer) {
+            clearTimeout(rt.idleTimer)
+            rt.idleTimer = null
+          }
+          await prev.close()
+        }
+        rt.session = m.turn.createEngineSession(id, adapter, {
+          extensions,
+          maxRetries: m.settings.file.maxRetries,
+          engineId: record.engine,
+        })
+        if (!rt.session.warm) {
+          throw new Error(
+            seed
+              ? '还有未写入的接力聊天，当前引擎无法在切终端前自动落实，请先在界面里发一条消息'
+              : '还有未落实的回退或分叉，当前引擎无法在切终端前自动落实，请先在界面里发一条消息',
+          )
+        }
+        if (seed) {
+          if (!rt.session.queueSeed) {
+            throw new Error('还有未写入的接力聊天，当前引擎无法在切终端前自动落实，请先在界面里发一条消息')
+          }
+          rt.session.queueSeed(seed)
+        }
+        try {
+          await rt.session.warm()
+        } catch (err) {
+          throw new Error(
+            (seed ? '落实接力写入失败，无法切到终端：' : '落实回退或分叉失败，无法切到终端：') +
+              (err instanceof Error ? err.message : String(err)),
+          )
+        }
+        if (seed && rt.session.hasQueuedSeed?.()) {
+          throw new Error('落实接力写入失败，无法切到终端：seed 未能写入引擎会话记录')
+        }
+        record = m.sessions.runtime(id).snapshot.record
+        if (record.pendingRewind || record.pendingFork) {
+          throw new Error('落实回退或分叉后标记仍在，请先在界面里发一条消息再切终端')
+        }
+        // seed 已写入原生记录：推进游标，避免切回界面后再发消息时重复注入
+        if (seed && record.engineSessions) {
+          const engine = record.engine
+          const entry = record.engineSessions[engine]
+          const items = m.sessions.runtime(id).snapshot.items
+          m.events.patchRecord(id, {
+            engineSessions: {
+              ...record.engineSessions,
+              [engine]: {
+                ...entry,
+                id: entry?.id ?? record.engineSessionId,
+                seen: lastItemId(items),
+              },
+            },
+          })
+          record = m.sessions.runtime(id).snapshot.record
+        }
+      }
+
+      const old = rt.session
+      rt.session = null
+      if (rt.idleTimer) {
+        clearTimeout(rt.idleTimer)
+        rt.idleTimer = null
+      }
+      await old?.close()
+
+      // 关进程后再查一次外部占用（自己的已关，不算；不能用 tuiBlock：changingSessions 里有自己）
+      const live = this.tuiLiveBlock(m.sessions.runtime(id).snapshot.record)
+      if (live) throw new Error(TUI_BLOCK_TEXT[live])
+
+      if (!extensions) extensions = await ctx.opts.extensions?.(m.sessions.runtime(id).snapshot.record)
+      let current = m.sessions.runtime(id).snapshot.record
+      let launch = await adapter.tuiLaunch(current, extensions)
+      if (current.engineSessionId !== launch.engineSessionId) {
+        m.events.patchRecord(id, { engineSessionId: launch.engineSessionId })
+        current = m.sessions.runtime(id).snapshot.record
+        launch = await adapter.tuiLaunch(current, extensions)
+      }
+      rt.tuiLive = true
+      m.events.patchRecord(id, { tui: { terminalId: '', since: Date.now() } })
+      // extensions.dispose 不在这里调：mcp 临时文件还要给 TUI 进程用；进程退出后由下次 prepare 覆盖或 OS 清临时目录
+      return launch
+    } catch (err) {
+      rt.tuiLive = false
+      m.events.patchRecord(id, { tui: null })
+      extensions?.dispose?.()
+      throw err
+    } finally {
+      ctx.changingSessions.delete(id)
+    }
+  }
+
+  /** 桌面主进程起好 pty 后回写 terminalId */
+  setTuiTerminal(id: string, terminalId: string): void {
+    const record = this.m.sessions.runtime(id).snapshot.record
+    if (!record.tui) throw new Error('不在终端模式')
+    this.m.events.patchRecord(id, { tui: { ...record.tui, terminalId } })
+  }
+
+  /** 切回界面：清 tui 标记（补轮次由 syncFromTui 做） */
+  clearTui(id: string): void {
+    this.m.sessions.runtime(id).tuiLive = false
+    this.m.events.patchRecord(id, { tui: null })
   }
 
   /** 旁聊：单独问一次，不进主对话（§3） */

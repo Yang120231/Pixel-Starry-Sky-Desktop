@@ -24,6 +24,7 @@ import type {
   Launcher,
   LoginProcess,
   SessionContext,
+  TuiLaunch,
 } from '../adapter'
 import type { QuotaReading } from '../quota'
 import { engineEnv, systemProxyEnv } from '../env'
@@ -39,6 +40,7 @@ import {
   forgetClaudeAccount,
   holdConfigDir,
   nativeMcpServers,
+  writeAccountMcpFile,
   prepareClaudeAccount,
 } from './accounts'
 import { claudeInstaller, customClaude, discoverClaude, parseAuthStatus, type ClaudeDiscovery } from './discover'
@@ -51,7 +53,13 @@ import { LoginGate, RESUME_GATE_MIN_MS } from './login-gate'
 import { logger } from '../log'
 import { parseClaudeUsage, unknownControl } from './quota'
 import { obj, str } from './shape'
-import { ClaudeSession, reservedClaudeArg, type ClaudeLaunchOptions } from './session'
+import {
+  ClaudeSession,
+  claudeTuiArgs,
+  claudeSettingsArgument,
+  reservedClaudeArg,
+  type ClaudeLaunchOptions,
+} from './session'
 import { loadSavedRuns, loadSubagentTranscript } from './runs'
 import {
   anchorPosition,
@@ -556,6 +564,61 @@ export class ClaudeAdapter implements EngineAdapter {
     beforeRestore?: (files: string[]) => void,
   ): Promise<RewindFilesReply> {
     return rewindFilesOnce(await this.helperTarget(record), userItemId, dryRun, beforeRestore)
+  }
+
+  /**
+   * 终端（TUI）模式启动参数（docs/ui/tui-toggle.md §5.2）。
+   * 已有 engineSessionId 用 --resume；没有则分配新 id 用 --session-id（宿主写入记录）。
+   */
+  tuiLaunch(record: SessionRecord, extensions?: import('@pixelsky/protocol').ExtensionLaunch): TuiLaunch {
+    if (record.engine !== 'claude') throw new Error('终端模式一期只支持 Claude Code')
+    const launcher = this.readyLauncher(record)
+    // 和界面进程一样：会话 id 是 engineSessionId，没有时用对话 id；记录文件已经有了才 --resume，否则 --session-id 开新的
+    // （只看 engineSessionId 有没有不行：新对话第一次切时宿主刚写进去，文件还不存在，--resume 会报找不到会话）
+    const engineSessionId = record.engineSessionId ?? record.id
+    const resume = claudeTranscriptExists(this.projectsDir(), record.cwd, engineSessionId)
+    const maxRetries = record.platform ? PLATFORM_MAX_RETRIES : null
+    const env = this.launchEnv(record, maxRetries, extensions?.pathDirs ?? [])
+    if (extensions?.env) Object.assign(env, extensions.env)
+    const launch = this.opts.launchOptions?.()
+    const args = claudeTuiArgs(record, engineSessionId, resume, launch ? { args: launch.args } : undefined)
+    for (const dir of record.extraDirs ?? []) args.push('--add-dir', dir)
+    for (const path of extensions?.pluginDirs ?? []) args.push('--plugin-dir', path)
+    // --mcp-config：扩展的 + 添加的订阅账号原文件里的（与 ClaudeSession.mcpConfigFile 同思路）
+    let mcpFile: string | null | undefined = extensions?.mcpFile
+    const accountDir = viaGateway(record) ? null : (this.opts.account?.() ?? null)
+    if (accountDir) {
+      try {
+        mcpFile =
+          writeAccountMcpFile(
+            accountDir,
+            nativeMcpServers(this.baseEnv(), record.cwd),
+            extensions?.mcpFile ?? undefined,
+          ) ?? mcpFile
+      } catch {
+        // 写不了就只带扩展的
+      }
+    }
+    if (mcpFile) args.push('--mcp-config', mcpFile)
+    const gateway = viaGateway(record) ? env.PIXELSKY_GATEWAY_SETTINGS : undefined
+    if (viaGateway(record) && !gateway) throw new Error('本机网关不可用，请重启应用')
+    const modelSettings = this.windows(record)?.modelSettings
+    const allow = [...new Set([...(extensions?.allowTools ?? []), ...(this.userRules?.list() ?? [])])]
+    const extra: Record<string, unknown> = {
+      crossSessionInbound: launch?.peerMessages ? 'accept' : 'refuse',
+      ...(launch?.outputStyle ? { outputStyle: launch.outputStyle } : {}),
+      ...(modelSettings ? { modelSettings } : {}),
+      ...(allow.length ? { permissions: { allow } } : {}),
+    }
+    const settingsArg = claudeSettingsArgument(gateway, maxRetries, extra)
+    if (settingsArg) args.push('--settings', settingsArg)
+    return {
+      command: launcher.command,
+      args: [...launcher.args, ...args],
+      env,
+      cwd: record.cwd,
+      engineSessionId,
+    }
   }
 
   /** 旁聊：带着这个会话的上下文单独问一次，没有工具、不写记录（docs/ui/rewind-fork-sidechat.md §3） */

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { resolve, join } from 'node:path'
-import { TerminalManager } from './manager'
+import { TerminalManager, commandEnvironment } from './manager'
 
 describe('TerminalManager.stopUnder', () => {
   it('stops only running terminals whose cwd is the path or inside it', async () => {
@@ -54,5 +54,58 @@ describe('TerminalManager.create', () => {
     release()
     await expect(created).resolves.toMatchObject({ status: 'stopped' })
     expect(start).not.toHaveBeenCalled()
+  })
+})
+
+describe('TerminalManager.spawnCommand', () => {
+  it('does not persist session terminals or count toward the 12 limit', () => {
+    const manager = new TerminalManager(
+      resolve('scratch-tui-none'),
+      () => ({ projectId: 'p', projectName: 'p', cwd: process.cwd() }),
+      () => {},
+    )
+    const internals = manager as unknown as {
+      startCommand: (...args: unknown[]) => { id: string; sessionId?: string }
+      save: () => Promise<void>
+      records: Array<{ sessionId?: string }>
+    }
+    const save = vi.fn()
+    internals.save = save
+    internals.startCommand = (_owner, record) => ({ ...(record as object), status: 'running' }) as never
+    const record = manager.spawnCommand({
+      owner: 1,
+      cwd: process.cwd(),
+      command: 'claude',
+      args: ['--resume', 'x'],
+      label: 'Claude Code',
+      sessionId: 'sess-1',
+      projectId: 'p',
+      projectName: 'p',
+    })
+    expect(record.sessionId).toBe('sess-1')
+    expect(save).not.toHaveBeenCalled()
+    expect(internals.records.filter(r => r.sessionId).length).toBe(1)
+    const state = manager.state(1)
+    expect(state.terminals.every(t => !t.sessionId)).toBe(true)
+  })
+})
+
+describe('commandEnvironment', () => {
+  it('以引擎给的 env 为底：本进程里的 Claude 子会话标记不带进去，引擎的 PIXELSKY_* 保留', () => {
+    const source = { PATH: '/bin', CLAUDE_CODE_CHILD_SESSION: '1', CLAUDECODE: '1' }
+    const engine = {
+      PATH: '/bin:/extra',
+      CLAUDE_CONFIG_DIR: '/acct',
+      PIXELSKY_GATEWAY_SETTINGS: '{}',
+      NODE_OPTIONS: '--x',
+    }
+    const env = commandEnvironment(engine, source)
+    expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
+    expect(env.CLAUDECODE).toBeUndefined()
+    expect(env.PATH).toBe('/bin:/extra')
+    expect(env.CLAUDE_CONFIG_DIR).toBe('/acct')
+    expect(env.PIXELSKY_GATEWAY_SETTINGS).toBe('{}')
+    expect(env.NODE_OPTIONS).toBeUndefined()
+    expect(env.TERM).toBe('xterm-256color')
   })
 })

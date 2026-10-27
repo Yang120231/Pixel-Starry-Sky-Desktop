@@ -1,7 +1,7 @@
 // 演示数据的入口（AGENTS.md §5、docs/restructure.md §9.3）。
 // 演示数据本身在 mock/，只由 main.tsx 在演示模式下动态加载后装进来；其它文件不导入 mock/，经 demo() 取用。
 // 默认模式不加载 mock/（构建时它是单独的分块）。
-import { useSyncExternalStore } from 'react'
+import { useSyncExternalStore, type ComponentType } from 'react'
 import type {
   AccountQuota,
   ArtifactResponse,
@@ -108,6 +108,15 @@ export type DemoAccounts = Record<
   }
 >
 
+/** 演示的终端（TUI）面板 */
+export interface DemoTuiPanelProps {
+  cwd?: string
+  engineSessionId?: string | null
+  /** 界面里已有的对话，用来种到终端历史里 */
+  items?: readonly Item[]
+  onBack: () => void
+}
+
 export interface DemoSource {
   connectors: DemoConnectors
   accounts: DemoAccounts
@@ -168,6 +177,8 @@ export interface DemoSource {
   /** 演示时某台机器（WSL）自己的项目和工作区；没有的机器沿用 appData.projects */
   machineProjects?: Record<string, Array<Project & { path: string }>>
   machineWorkspaces?: (machineId: string) => WorkspaceChoice[]
+  /** 演示时「终端」模式的假 Claude Code 界面（docs/ui/tui-toggle.md；真实模式是内置终端） */
+  tuiPanel?: ComponentType<DemoTuiPanelProps>
   projectTools: {
     tasks: TaskState
     /** 左栏「任务」：项目里能跑的命令（docs/ui/coding-tasks.md） */

@@ -16,6 +16,7 @@ import {
   FileText,
   Globe,
   Info,
+  Keyboard,
   ListTodo,
   Plug,
   Search,
@@ -103,6 +104,13 @@ export function UserBubble({ item, actions }: { item: ItemOf<'user'>; actions?: 
         <div className="mb-2 whitespace-normal">
           <FileAttachments files={item.files} />
         </div>
+      )}
+      {/* 在终端（TUI）模式里发的，切回时补进来的（docs/ui/tui-toggle.md §3.3） */}
+      {item.source === 'tui' && (
+        <span data-tui-source className="mb-1 flex items-center gap-1 text-label text-fg-faint">
+          <Keyboard size={12} strokeWidth={1.75} aria-hidden />
+          {tr('session.tui.source')}
+        </span>
       )}
       <UserBody id={item.id} text={item.text} />
     </div>

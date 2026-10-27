@@ -1,0 +1,150 @@
+/* 演示用 Claude Code TUI 面板（对齐 docs/ui/session-tui-toggle-mockup.html） */
+.demo-tui {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  background: var(--terminal-bg, var(--color-app));
+  color: var(--terminal-fg, var(--color-fg));
+  font-family: var(--font-mono);
+}
+
+.demo-tui-bar {
+  display: flex;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--color-line, color-mix(in srgb, var(--color-fg) 12%, transparent));
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--color-fg-muted, color-mix(in srgb, var(--color-fg) 55%, transparent));
+}
+
+.demo-tui-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--terminal-fg, var(--color-fg));
+}
+
+.demo-tui-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--terminal-ansi-2, #3d9a6a);
+}
+
+.demo-tui-dot.off {
+  background: var(--color-fg-muted, #888);
+}
+
+.demo-tui-warn {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.demo-tui-warn button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--terminal-ansi-4, #5b8def);
+  cursor: pointer;
+  font: inherit;
+}
+
+.demo-tui-warn button:hover {
+  text-decoration: underline;
+}
+
+.demo-tui-body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px 8px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.demo-tui-dim {
+  color: var(--color-fg-muted, color-mix(in srgb, var(--color-fg) 55%, transparent));
+}
+
+.demo-tui-or {
+  color: var(--terminal-ansi-3, #c9852a);
+}
+
+.demo-tui-gr {
+  color: var(--terminal-ansi-2, #3d9a6a);
+}
+
+.demo-tui-bl {
+  color: var(--terminal-ansi-4, #5b8def);
+}
+
+.demo-tui-welcome {
+  display: inline-block;
+  margin-bottom: 10px;
+  border: 1px solid var(--terminal-ansi-3, #c9852a);
+  border-radius: 6px;
+  padding: 6px 12px;
+  white-space: pre;
+}
+
+.demo-tui-line {
+  margin: 0;
+}
+
+.demo-tui-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+  border: 1px solid var(--color-line, color-mix(in srgb, var(--color-fg) 12%, transparent));
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+.demo-tui-input-row.shell {
+  border-color: transparent;
+  padding-left: 0;
+}
+
+.demo-tui-input-row input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  caret-color: currentColor;
+}
+
+.demo-tui-help {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--color-fg-muted, color-mix(in srgb, var(--color-fg) 55%, transparent));
+}
+
+.demo-tui-foot {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--color-line, color-mix(in srgb, var(--color-fg) 12%, transparent));
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--color-fg-muted, color-mix(in srgb, var(--color-fg) 55%, transparent));
+}
+
+.demo-tui-foot kbd {
+  border: 1px solid var(--color-line, color-mix(in srgb, var(--color-fg) 18%, transparent));
+  border-radius: 3px;
+  padding: 0 4px;
+  font: inherit;
+}

@@ -131,6 +131,8 @@ export type Item =
       limit?: { since: number; at: number }
       /** 发送失败后用户点了「关掉」：没送到，留在对话里变淡，标「未送达」 */
       dismissed?: boolean
+      /** 在终端（TUI）模式里发出的用户消息（docs/ui/tui-toggle.md §5.4） */
+      source?: 'tui'
     }
   /** 助手回复，Markdown */
   | { kind: 'assistant'; id: string; text: string; status: ItemStatus }

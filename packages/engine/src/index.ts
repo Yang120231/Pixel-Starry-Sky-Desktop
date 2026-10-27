@@ -1,5 +1,11 @@
-export { EngineHost, type EngineHostOptions, type PlatformRouteResult, type SyncableEngineSettings } from './host'
-export type { EngineAdapter, EngineSession, Launcher, SessionContext } from './adapter'
+export {
+  EngineHost,
+  type EngineHostOptions,
+  type PlatformRouteResult,
+  type SyncableEngineSettings,
+  type TuiBlock,
+} from './host'
+export type { EngineAdapter, EngineSession, Launcher, SessionContext, TuiLaunch } from './adapter'
 export { ClaudeAdapter, type ClaudeAdapterOptions } from './claude'
 export { ENGINES, ENGINE_ORDER } from './registry'
 export { engineEnv } from './env'
@@ -21,6 +27,7 @@ export {
   type CompactionRequestReport,
 } from './compaction'
 export { LONG_CONTEXT_ENV, claudeModelName } from './claude/long-context'
+export { registerOwnClaudePid, unregisterOwnClaudePid, ownClaudePids } from './claude/process'
 export { CODEX_WINDOW_ENV } from './codex/context-config'
 export { CodexAdapter } from './codex'
 export { OneShotError, type OneShotProblem, type OneShotReply, type OneShotRequest } from './oneshot'

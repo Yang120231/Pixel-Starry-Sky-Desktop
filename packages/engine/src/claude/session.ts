@@ -158,6 +158,21 @@ export function claudeArgs(
   return args
 }
 
+/** 终端（TUI）模式参数：不要 -p / stream-json / AskUserQuestion 禁用（docs/ui/tui-toggle.md §5.2） */
+export function claudeTuiArgs(
+  settings: SessionSettings,
+  sessionId: string,
+  resume: boolean,
+  launch?: Pick<ClaudeLaunchOptions, 'args'>,
+): string[] {
+  const args = ['--permission-mode', TO_CLAUDE_MODE[settings.permissionMode]]
+  if (settings.model) args.push('--model', settings.model)
+  if (settings.effort) args.push('--effort', settings.effort)
+  args.push(resume ? '--resume' : '--session-id', sessionId)
+  if (launch?.args?.length) args.push(...launch.args)
+  return args
+}
+
 export interface ClaudeSessionDeps {
   extensions?: import('@pixelsky/protocol').ExtensionLaunch
   maxRetries?: number | null
@@ -498,6 +513,19 @@ export class ClaudeSession implements EngineSession {
       return true
     }
     return msg.command_uuid === job.id || (msg.type === 'user' && msg.uuid === job.id)
+  }
+
+  /** 切 TUI 前落实 pendingRewind / pendingFork / seed（docs/ui/tui-toggle.md §5.3） */
+  async warm(): Promise<void> {
+    await this.ensureProcess()
+  }
+
+  queueSeed(seed: ChatSeed): void {
+    this.seed = seed
+  }
+
+  hasQueuedSeed(): boolean {
+    return this.seed != null
   }
 
   private ensureProcess(): Promise<ClaudeProcess> {

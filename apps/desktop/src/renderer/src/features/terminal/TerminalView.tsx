@@ -10,7 +10,7 @@ import { isDemo } from '@/data'
 import { openFile } from '@/features/files/store'
 import { findPathMatches } from '@/features/files/pathMatch'
 import { terminalFilePath } from './fileLinks'
-import { COMMAND_PALETTE, NEW_TERMINAL, TOGGLE_TERMINAL } from '@/features/layout/shortcuts'
+import { COMMAND_PALETTE, NEW_TERMINAL, TOGGLE_TERMINAL, TOGGLE_TUI_MODE } from '@/features/layout/shortcuts'
 import { isMac } from '@/features/layout/keybindings'
 import { isCopyKey } from './copyKey'
 import { terminalPrefs, useTerminalPrefs } from './prefs'
@@ -150,7 +150,13 @@ export function TerminalView({
     term.attachCustomKeyEventHandler(event => {
       if (event.type !== 'keydown') return true
       // 命令面板、终端的快捷键（可以自定义）交给应用处理，不发给终端
-      if (COMMAND_PALETTE.match(event) || TOGGLE_TERMINAL.match(event) || NEW_TERMINAL.match(event)) return false
+      if (
+        COMMAND_PALETTE.match(event) ||
+        TOGGLE_TERMINAL.match(event) ||
+        NEW_TERMINAL.match(event) ||
+        TOGGLE_TUI_MODE.match(event)
+      )
+        return false
       if ((event.ctrlKey || event.metaKey) && event.code === 'KeyF' && !event.altKey) {
         event.preventDefault()
         event.stopPropagation()

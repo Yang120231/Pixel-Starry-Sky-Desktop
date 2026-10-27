@@ -33,6 +33,8 @@ export const NATIVE_TEXT = {
   summaryOnly: '以上是压缩之前的轮次，模型只看到压缩摘要',
   newer: (turns: number) => `这个会话在终端里又聊了 ${turns} 轮，显示里还没有`,
   synced: (turns: number) => `已补上终端里的 ${turns} 轮`,
+  /** 从终端（TUI）模式切回时补上的分隔（docs/ui/tui-toggle.md §3.3） */
+  tuiSynced: (turns: number) => `在终端里聊了 ${turns} 轮 · 已补上`,
   gone: '这个会话的记录已经不在了',
   /** Codex 读取进程被关掉了（更新 / 安装 Codex、换了 Codex 的位置、应用退出）时，排队的读取请求被拒绝 */
   codexReaderClosed: 'Codex 正在更新或已重新检测，读取被中断了，请重试',

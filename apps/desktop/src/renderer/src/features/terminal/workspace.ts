@@ -10,5 +10,5 @@ export function workspaceTerminals(
     const normalized = value.replaceAll('\\', '/').replace(/\/$/, '')
     return windows ? normalized.toLowerCase() : normalized
   }
-  return items.filter(item => item.projectId === projectId && (!path || key(item.cwd) === key(path)))
+  return items.filter(item => !item.sessionId && item.projectId === projectId && (!path || key(item.cwd) === key(path)))
 }

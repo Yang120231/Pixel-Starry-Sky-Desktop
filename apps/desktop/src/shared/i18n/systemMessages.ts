@@ -766,6 +766,10 @@ export const systemMessages = {
     zh: '已补上终端里的 {p0} 轮',
     en: 'Added {p0} turns from the terminal',
   },
+  'system.tuiSynced': {
+    zh: '在终端里聊了 {p0} 轮 · 已补上',
+    en: 'Synced {p0} turns from the terminal',
+  },
   'system.nativeGone': {
     zh: '这个会话的记录已经不在了',
     en: 'The record of this session is gone',

@@ -34,6 +34,8 @@ export const NEW_TERMINAL = action('newTerminal')
 export const QUOTE_SELECTION = action('quoteSelection')
 /** 快捷键一览：默认 Ctrl+/（macOS ⌘/），docs/ui/ui-polish-2026-10-13.md §5 */
 export const SHORTCUTS_HELP = action('shortcutsHelp')
+/** 会话界面 ⇄ 终端（TUI）：默认 Alt+T（docs/ui/tui-toggle.md §3.1） */
+export const TOGGLE_TUI_MODE = action('toggleTuiMode')
 
 const mod = (e: KeyboardEvent): boolean => (isMac ? e.metaKey : e.ctrlKey)
 
