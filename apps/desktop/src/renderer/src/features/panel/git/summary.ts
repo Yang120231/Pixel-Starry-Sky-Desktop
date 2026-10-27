@@ -97,9 +97,20 @@ export function refreshGitStatus(ref: WorkspaceRef, soft = false, recheck = fals
 let timer = 0
 let stop: (() => void) | null = null
 
-function reloadSoon(): void {
+/** 改文件时等停下 3 秒再读：AI 连着改文件时每改一个就读一次，Windows 上起 git 会同步卡住主进程（每次 0.5~1 秒） */
+const FILE_CHANGE_DELAY = 3000
+
+/** 排着的是 400ms 的那种（一轮结束、切回窗口）：改文件不能把它往后推 */
+let soon = false
+
+function reloadSoon(delay = 400): void {
+  if (soon && delay > 400) return
   window.clearTimeout(timer)
-  timer = window.setTimeout(() => users.forEach(u => void load(u.ref, true)), 400)
+  soon = delay <= 400
+  timer = window.setTimeout(() => {
+    soon = false
+    users.forEach(u => void load(u.ref, true))
+  }, delay)
 }
 
 /** 有人在用时才挂监听 */
@@ -112,17 +123,16 @@ function watch(): void {
     if (state.focused) reloadSoon()
   })
   const offEngine = bridge.engine.onEvent(e => {
-    if (
-      e.kind === 'session' &&
-      (e.event.type === 'turn_completed' || (e.event.type === 'item_completed' && e.event.item.kind === 'file_change'))
-    )
-      reloadSoon()
+    if (e.kind !== 'session') return
+    if (e.event.type === 'turn_completed') reloadSoon()
+    else if (e.event.type === 'item_completed' && e.event.item.kind === 'file_change') reloadSoon(FILE_CHANGE_DELAY)
   })
   stop = () => {
     offTools()
     offWindow()
     offEngine()
     window.clearTimeout(timer)
+    soon = false
     stop = null
   }
 }

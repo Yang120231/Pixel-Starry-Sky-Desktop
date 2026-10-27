@@ -115,8 +115,19 @@ export interface ClaudeAdapterOptions {
 const CATALOG_TTL = 30 * 60_000
 /** 后台刷新握手失败、留着旧列表时，隔多久再试 */
 const CATALOG_RETRY = 60_000
-/** 临时进程（握手、读额度、预热）的参数：stream-json 收发控制请求，不发消息 */
-const PROBE_ARGS = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']
+/**
+ * 临时进程（握手、读额度、预热）的参数：stream-json 收发控制请求，不发消息。
+ * 不起用户配置的 MCP 服务器（--strict-mcp-config，又没给 --mcp-config）：用不到，npx 起服务器能让一次握手拖到二十多秒、和会话抢资源
+ */
+const PROBE_ARGS = [
+  '-p',
+  '--input-format',
+  'stream-json',
+  '--output-format',
+  'stream-json',
+  '--verbose',
+  '--strict-mcp-config',
+]
 /**
  * 临时进程用完：先关输入让它自己退出，这么久没退才强制结束（docs/ui/claude-login-recovery.md §1 第 2 条）。
  * 正在刷新登录时被强制结束，服务器已经换了新凭据、新的却没写回文件，登录就丢了

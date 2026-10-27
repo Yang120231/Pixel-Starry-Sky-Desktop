@@ -2,6 +2,7 @@
 //
 // 根据用户消息内容决定行为：
 //   含「思考」→ 先发 thinking 块，停 1.5 秒再回正文
+//   含「切回」→ 自己把权限模式切回 default 并报 status（批准计划后的真实 CLI）
 //   含「表格」→ 回很宽的 Markdown 表格（8 列 5 行）
 //   含「计划」→ 发 TodoWrite（5 项）再回正文
 //   含「写文件」→ 调用 Write 工具，先发 can_use_tool 等审批，允许就「写入」，拒绝就报错
@@ -369,6 +370,16 @@ async function runTurn(text) {
       '想好了：',
       '先确认前提，再逐条比较，结论是可以做。',
     ])
+    result('success')
+    turn = null
+    return
+  }
+
+  if (text.includes('切回')) {
+    // 像批准计划后的真实 CLI：自己把权限模式切回 default 并报一条 status
+    permissionMode = 'default'
+    out({ type: 'system', subtype: 'status', status: null, permissionMode })
+    await streamText('已切回。', ['已切回。'])
     result('success')
     turn = null
     return

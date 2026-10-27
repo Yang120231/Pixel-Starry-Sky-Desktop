@@ -300,6 +300,8 @@ export class ClaudeSession implements EngineSession {
   private starting: Promise<ClaudeProcess> | null = null
   /** 启动期间（还没有 proc）改的设置：launch 用的是开头读的记录，进程就绪后补上 */
   private lateSettings: Partial<SessionSettings> | null = null
+  /** 当前进程已经用上的设置：每轮开始前 update 只发变了的（以前每轮把 7~8 项设置串行重发一遍，Fast 还要多一次 initialize） */
+  private applied: Partial<SessionSettings> = {}
   /** 跨引擎接力还没注入的聊天：启动进程时写进会话记录；进程已经在跑或写不进去时，发消息时退回文字交接 */
   private seed: ChatSeed | null = null
   private readonly translator: ClaudeTranslator
@@ -328,6 +330,8 @@ export class ClaudeSession implements EngineSession {
         if (id !== ctx.record().engineSessionId) ctx.setEngineSessionId(id)
       },
       permissionMode: mode => {
+        // 进程报的就是它现在用的模式（批准计划后 Claude Code 自己切回原模式）：记成已用上，用户再选回原来的才会发出去
+        this.applied = { ...this.applied, permissionMode: mode }
         // 启动期间用户新选的模式还没补给进程：进程报的是启动时的旧模式，不能写回去盖掉
         if (this.lateSettings?.permissionMode) return
         if (mode !== ctx.record().permissionMode) ctx.setPermissionMode(mode)
@@ -665,6 +669,13 @@ export class ClaudeSession implements EngineSession {
     // 上下文超过 200K 的自定义模型带 [1m] 启动（docs/ui/custom-api.md §10）
     const model = rec.model ? claudeModelName(rec.model, this.deps.env) : rec.model
     const args = claudeArgs({ ...rec, model }, sid, resume, this.deps.launch, rewindAt, fork)
+    // 命令行参数按这一刻的记录拼：记下来当作进程已经用上的（rec 是活的，启动期间用户改的要靠 lateSettings 补发）
+    const launched: Partial<SessionSettings> = {
+      model: rec.model,
+      platform: rec.platform,
+      effort: rec.effort,
+      permissionMode: rec.permissionMode,
+    }
     // 项目的附加文件夹（docs/ui/multi-root-projects.md §3.3）：Claude Code 能读写，也会告诉模型
     for (const dir of rec.extraDirs ?? []) args.push('--add-dir', dir)
     for (const path of this.deps.extensions?.pluginDirs ?? []) args.push('--plugin-dir', path)
@@ -746,15 +757,17 @@ export class ClaudeSession implements EngineSession {
     if (!proc.alive) throw new StartupError(proc.stderrTail)
     this.proc = proc
     this.procViaGateway = launchedViaGateway
+    this.applied = launched
     if (sid !== rec.engineSessionId) this.ctx.setEngineSessionId(sid)
     if (rec.pendingRewind) this.ctx.clearPendingRewind?.()
     if (rec.pendingFork) this.ctx.clearPendingFork?.()
     this.seedRuns()
     // Ultracode / Fast 不是命令行参数，启动后用 flag settings 打开，再确认是否生效
-    if (rec.ultracode)
-      await proc.request('apply_flag_settings', { settings: { ultracode: true } }).catch(() => undefined)
-    if (rec.fast) await this.applyFast(proc, true)
-    await this.applyThinking(proc, rec.thinkingSummaries)
+    const { ultracode, fast, thinkingSummaries } = rec
+    if (ultracode) await proc.request('apply_flag_settings', { settings: { ultracode: true } }).catch(() => undefined)
+    if (fast) await this.applyFast(proc, true)
+    await this.applyThinking(proc, thinkingSummaries)
+    this.applied = { ...this.applied, ultracode, fast, thinkingSummaries }
     await this.syncSettings(proc)
     // 启动期间用户又改了设置（模型、权限模式等）：在发第一条消息之前补上
     const late = this.lateSettings
@@ -986,6 +999,9 @@ export class ClaudeSession implements EngineSession {
       if (this.starting) this.lateSettings = { ...this.lateSettings, ...patch }
       return
     }
+    const same = (a: unknown, b: unknown): boolean => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+    const applied = this.applied as Record<string, unknown>
+    patch = Object.fromEntries(Object.entries(patch).filter(([key, value]) => !same(applied[key], value)))
     if ('model' in patch || 'platform' in patch) this.translator.context.reset(false, true)
     try {
       if ('model' in patch)
@@ -1002,6 +1018,7 @@ export class ClaudeSession implements EngineSession {
       if (patch.thinkingSummaries !== undefined) await this.applyThinking(proc, patch.thinkingSummaries)
       // 换模型可能改变能不能开 Ultracode
       if ('model' in patch || patch.ultracode !== undefined) await this.syncSettings(proc)
+      this.applied = { ...this.applied, ...patch }
     } catch (err) {
       if (strict) throw err
       this.translator.notice('warn', `设置没能立即生效：${(err as Error).message}`)

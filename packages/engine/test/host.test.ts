@@ -1334,6 +1334,51 @@ describe('回退到某条用户消息之前（Claude 假引擎，模拟真实记
   })
 })
 
+describe('Claude 每轮开始前只发变了的设置', () => {
+  it('设置没变的第二轮不重发 set_model / 权限 / 强度；改了权限模式只发这一项', async () => {
+    const host = makeHost()
+    const { record } = setup(host)
+    const controls = (): string[] => {
+      try {
+        return readFileSync(join(root, 'argv.control.log'), 'utf8').split('\n').filter(Boolean)
+      } catch {
+        return []
+      }
+    }
+    const settled = (text: string) => () => {
+      const snap = host.open(record.id)
+      return (
+        snap.state === 'idle' &&
+        snap.items.some(i => i.kind === 'user' && i.text === text) &&
+        snap.items.at(-1)?.kind !== 'user'
+      )
+    }
+    const turn = async (text: string): Promise<void> => {
+      await host.send(record.id, text)
+      await waitFor(settled(text))
+    }
+    const settings = (list: string[]) =>
+      list.filter(c =>
+        ['set_model', 'set_permission_mode', 'apply_flag_settings', 'set_max_thinking_tokens'].includes(c),
+      )
+    await turn('第一轮')
+    let before = controls().length
+    await turn('第二轮')
+    expect(settings(controls().slice(before))).toEqual([])
+    before = controls().length
+    await host.update(record.id, { permissionMode: 'edits' })
+    await turn('第三轮')
+    expect(settings(controls().slice(before))).toEqual(['set_permission_mode'])
+    // Claude Code 自己切了模式（批准计划后切回原模式）：之后用户再选回 plan 一定要发出去
+    await host.update(record.id, { permissionMode: 'plan' })
+    await turn('切回')
+    expect(host.open(record.id).record.permissionMode).toBe('ask')
+    before = controls().length
+    await host.update(record.id, { permissionMode: 'plan' })
+    expect(settings(controls().slice(before))).toEqual(['set_permission_mode'])
+  })
+})
+
 describe('停止时连同后台子智能体', () => {
   const controlLog = (): string[] => {
     try {

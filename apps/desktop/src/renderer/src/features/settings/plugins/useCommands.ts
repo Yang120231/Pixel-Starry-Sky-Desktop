@@ -29,7 +29,8 @@ export function useCommands(sessionId: string | null | undefined, engine: Engine
       active = false
       stop?.()
     }
-  }, [sessionId, workspace.key, engine])
+    // 有会话时按会话取，不跟着当前工作区变：切标签页会换工作区，每个挂着的会话都重扫一遍插件（主进程同步扫描，用户机器上每次约 3.5 秒）
+  }, [sessionId, sessionId ? null : workspace.key, engine])
   const loaded = snapshot?.commands
   return useMemo(
     () =>
