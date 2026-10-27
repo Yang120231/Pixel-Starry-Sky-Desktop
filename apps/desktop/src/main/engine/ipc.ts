@@ -37,6 +37,7 @@ import { historyEnabled, historyServer } from './history-mcp'
 import { threadsServer } from './threads-mcp'
 import { bundledPixelCli } from './pixel-cli'
 import { registerQuotaIpc } from './quota-ipc'
+import { spawnTui } from './tui-spawn'
 import { initTerminalIpc, localTerminals } from '../terminal/ipc'
 import { initMachines } from '../machines/service'
 import { machineOf } from '../machines/identity'
@@ -223,24 +224,17 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     const record = h.record(sessionId)
     if (!record) throw new Error('会话不存在')
     const project = h.projects().find(p => p.id === record.projectId)
-    let term
-    try {
-      term = localTerminals().spawnCommand({
-        owner,
-        cwd: launch.cwd,
-        command: launch.command,
-        args: launch.args,
-        env: launch.env,
-        label: 'Claude Code',
-        sessionId,
-        projectId: record.projectId,
-        projectName: project?.name ?? record.projectId,
-      })
-    } catch (err) {
-      // prepareTui 已经标了终端模式：起不来就撤掉，不然会话卡在没有终端的终端模式里
-      h.clearTui(sessionId)
-      throw err
-    }
+    const term = await spawnTui(localTerminals(), id => h.clearTui(id), {
+      owner,
+      cwd: launch.cwd,
+      command: launch.command,
+      args: launch.args,
+      env: launch.env,
+      label: 'Claude Code',
+      sessionId,
+      projectId: record.projectId,
+      projectName: project?.name ?? record.projectId,
+    })
     h.setTuiTerminal(sessionId, term.id)
     return { terminalId: term.id, engineSessionId: launch.engineSessionId }
   })
