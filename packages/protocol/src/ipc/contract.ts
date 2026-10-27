@@ -653,6 +653,8 @@ export const IPC_CONTRACT = {
   'files:finishClose': { kind: 'invoke', route: 'hostOnly', trust: 'sender' },
   'files:grep': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:grep', trust: 'sender' },
   'files:headContent': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:headContent', trust: 'sender' },
+  // 从系统拖进来的本机文件复制进项目（docs/ui/file-tree-external-drop.md）：源路径只在本机有意义，不转发远端
+  'files:import': { kind: 'invoke', route: 'hostOnly', trust: 'sender' },
   'files:list': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:list', trust: 'sender' },
   'files:read': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:read', trust: 'sender' },
   'files:remove': { kind: 'invoke', route: 'selected', ids: [0], remote: 'files:remove', trust: 'sender' },

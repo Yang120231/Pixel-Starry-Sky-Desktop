@@ -7,6 +7,7 @@ import type {
   FileStageRequest,
   FileStageResult,
   GrepResult,
+  ImportResult,
   EditorKind,
   EditorState,
 } from '../shared/types/workspace'
@@ -23,6 +24,8 @@ export interface FilesBridge {
   create(ref: WorkspaceRef, path: string, kind: 'file' | 'folder'): Promise<{ path: string }>
   /** 项目内重命名或移动，返回新的相对路径 */
   rename(ref: WorkspaceRef, from: string, to: string): Promise<{ path: string }>
+  /** 把从系统拖进来的本机文件 / 文件夹复制进项目里的文件夹（只限本机项目）；量大且没确认时只返回数量 */
+  import(ref: WorkspaceRef, folder: string, sources: string[], confirmed?: boolean): Promise<ImportResult>
   /** 移到回收站 */
   remove(ref: WorkspaceRef, path: string): Promise<void>
   status(ref: WorkspaceRef): Promise<Record<string, string>>

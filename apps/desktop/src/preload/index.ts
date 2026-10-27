@@ -276,6 +276,7 @@ const files: FilesBridge = {
   grep: (ref, query) => call('files:grep', ref, query),
   create: (ref, path, kind) => call('files:create', ref, path, kind),
   rename: (ref, from, to) => call('files:rename', ref, from, to),
+  import: (ref, folder, sources, confirmed) => call('files:import', ref, folder, sources, confirmed),
   remove: (ref, path) => call('files:remove', ref, path),
   status: ref => call('files:status', ref),
   read: (ref, path) => call('files:read', ref, path),

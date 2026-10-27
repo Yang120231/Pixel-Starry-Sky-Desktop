@@ -20,17 +20,19 @@ export const refKey = (ref: WorkspaceRef): string => ref.projectId ?? ref.sessio
 export const parentOf = (path: string): string => path.split('/').slice(0, -1).join('/')
 export const join2 = (parent: string, name: string): string => (parent ? `${parent}/${name}` : name)
 
-/** 放下后进哪个文件夹（'' 是项目根目录）；不能放返回 null */
+/** 悬停位置对应的文件夹（'' 是项目根目录，文件行是它所在的文件夹）；符号链接文件夹可能指到项目外面，返回 null */
+export function dropFolder(over: DragOver): string | null {
+  if (over.kind === 'root') return ''
+  if (over.kind === 'directory') return over.linked ? null : over.path
+  return parentOf(over.path)
+}
+
+/** 树里拖动放下后进哪个文件夹（'' 是项目根目录）；不能放返回 null */
 export function dropTarget(source: DragSource, over: DragOver): { folder: string } | null {
   // 不同项目可能在不同机器上，第一版不做跨项目
   if (refKey(source.ref) !== refKey(over.ref)) return null
-  let folder: string
-  if (over.kind === 'root') folder = ''
-  else if (over.kind === 'directory') {
-    // 符号链接文件夹可能指到项目外面
-    if (over.linked) return null
-    folder = over.path
-  } else folder = parentOf(over.path)
+  const folder = dropFolder(over)
+  if (folder === null) return null
   // 放回原来的文件夹等于没动
   if (folder === parentOf(source.path)) return null
   // 文件夹不能放进自己或子孙；按 '/' 分段比，src 和 src2 不是父子

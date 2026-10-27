@@ -45,7 +45,19 @@ import type { ProjectFolder } from '@pixelsky/protocol'
 import { demo } from '@/data/demo'
 import { requestFileHistory } from '@/features/panel/git/fileHistory'
 import { sendPathToChat } from './sendPath'
-import { cutPasteKeys, dropTarget, hasFileDrag, join2, movedPath, parentOf, refKey, writeDragData } from './treeDrag'
+import { isRemoteRef } from './reveal'
+import { formatBytes } from '@/features/panel/artifacts/artifactsModel'
+import {
+  cutPasteKeys,
+  dropFolder,
+  dropTarget,
+  hasFileDrag,
+  join2,
+  movedPath,
+  parentOf,
+  refKey,
+  writeDragData,
+} from './treeDrag'
 import type { DragOver, DragSource } from './treeDrag'
 import { REVEAL_FOLDER_EVENT, takeFolderReveal } from './treeReveal'
 import { FileIcon } from './icons/FileIcon'
@@ -150,6 +162,10 @@ interface TreeOpsValue {
   setCut(source: DragSource | null): void
   /** 粘贴到这里：和拖动放下同一套规则（dropTarget）、同一个移动和撤销 */
   paste(over: DragOver): void
+  /** 正在从系统（资源管理器 / 访达）拖文件进来（docs/ui/file-tree-external-drop.md） */
+  external: boolean
+  /** 系统拖来的文件放下：复制进 folder；路径要在 drop 事件里同步取 */
+  importDrop(over: DragOver, folder: string, data: DataTransfer): void
 }
 const TreeOps = createContext<TreeOpsValue>({
   editing: null,
@@ -165,6 +181,8 @@ const TreeOps = createContext<TreeOpsValue>({
   cut: null,
   setCut: () => {},
   paste: () => {},
+  external: false,
+  importDrop: () => {},
 })
 
 /** 右键菜单的「粘贴到这里」：有剪切的东西才出现，这里放不下时灰掉并说明 */
@@ -190,15 +208,26 @@ function useDropProps(ops: TreeOpsValue, over: DragOver | null, expand?: () => v
     timer.current = undefined
   }
   useEffect(() => clear, [])
-  // 拖动结束（放下、取消）后不再等着展开
+  // 拖动结束（放下、取消、拖出去）后不再等着展开
   useEffect(() => {
-    if (!ops.drag) clear()
-  }, [ops.drag])
+    if (!ops.drag && !ops.external) clear()
+  }, [ops.drag, ops.external])
   const target = ops.drag && over ? dropTarget(ops.drag, over) : null
   const mine = !!ops.drag && !!over
+  // 从系统拖来的文件：复制进悬停位置对应的文件夹（链接文件夹不能放）
+  const external = (e: DragEvent): boolean => !ops.drag && !!over && e.dataTransfer.types.includes('Files')
+  const folder = over ? dropFolder(over) : null
   return {
     'data-drop-target': target ? target.folder : undefined,
     onDragOver: (e: DragEvent) => {
+      if (external(e)) {
+        e.stopPropagation()
+        e.preventDefault()
+        e.dataTransfer.dropEffect = folder === null ? 'none' : 'copy'
+        ops.hover(folder === null ? null : dropKeyOf(over!.ref, folder))
+        if (folder === null) clear()
+        return
+      }
       if (!mine || !hasFileDrag(e.dataTransfer)) return
       // 不管能不能放都不再往外层冒泡，否则外层（树下方空白处）会把它当成放到根目录
       e.stopPropagation()
@@ -213,7 +242,7 @@ function useDropProps(ops: TreeOpsValue, over: DragOver | null, expand?: () => v
       ops.hover(dropKeyOf(ops.drag!.ref, target.folder))
     },
     onDragEnter: (e: DragEvent) => {
-      if (mine && expand && !timer.current && hasFileDrag(e.dataTransfer))
+      if (expand && !timer.current && ((mine && hasFileDrag(e.dataTransfer)) || (external(e) && folder !== null)))
         timer.current = window.setTimeout(() => {
           timer.current = undefined
           expand()
@@ -225,6 +254,14 @@ function useDropProps(ops: TreeOpsValue, over: DragOver | null, expand?: () => v
       clear()
     },
     onDrop: (e: DragEvent) => {
+      if (external(e)) {
+        e.stopPropagation()
+        e.preventDefault()
+        clear()
+        if (folder !== null) ops.importDrop(over!, folder, e.dataTransfer)
+        else ops.endDrag()
+        return
+      }
       if (!mine || !hasFileDrag(e.dataTransfer)) return
       e.stopPropagation()
       e.preventDefault()
@@ -397,7 +434,17 @@ export function FileTree({
     [opError, setOpError] = useState('')
   const [drag, setDrag] = useState<DragSource | null>(null),
     [dropKey, setDropKey] = useState<string | null>(null),
-    [cut, setCut] = useState<DragSource | null>(null)
+    [cut, setCut] = useState<DragSource | null>(null),
+    // 从系统拖文件进来（docs/ui/file-tree-external-drop.md）：拖动中、量大等确认的那一批
+    [external, setExternal] = useState(false),
+    [importing, setImporting] = useState<{
+      ref: WorkspaceRef
+      folder: string
+      paths: string[]
+      files: number
+      bytes: number
+    } | null>(null),
+    [importBusy, setImportBusy] = useState(false)
   const toast = useToast()
   // 只记最近一次移动；之后有新的移动 / 新建 / 重命名 / 删除就作废
   const lastMove = useRef<{ ref: WorkspaceRef; from: string; to: string } | null>(null)
@@ -589,6 +636,43 @@ export function FileTree({
       if (moved) setCut(current => (current === source ? null : current))
     })
   }
+  /** 复制进 folder；量大时先弹确认，确认后带 confirmed 再调一次 */
+  const importPaths = async (ref: WorkspaceRef, folder: string, paths: string[], confirmed = false): Promise<void> => {
+    setOpError('')
+    if (isDemo) return setOpError(tr('workspace.demoCannotModify'))
+    if (isRemoteRef(ref)) return void toast(tr('workspace.importRemote'))
+    lastMove.current = null
+    try {
+      const result = await window.pixelsky!.files.import(ref, folder, paths, confirmed)
+      if ('confirm' in result) return setImporting({ ref, folder, paths, ...result.confirm })
+      setImporting(null)
+      expandFolder(ref, folder)
+      refresh()
+      const what =
+        result.paths.length === 1
+          ? result.paths[0].split('/').pop()!
+          : tr('workspace.importItems', { count: result.paths.length })
+      toast(
+        (folder ? tr('workspace.imported', { what, folder }) : tr('workspace.importedRoot', { what })) +
+          (result.skipped ? tr('workspace.importSkippedLinks', { count: result.skipped }) : ''),
+      )
+    } catch (e) {
+      setOpError((e as Error).message)
+    }
+  }
+  const importDrop = (over: DragOver, folder: string, data: DataTransfer): void => {
+    endDrag()
+    setExternal(false)
+    // 浏览器里的图片、压缩包里的文件没有本机路径：整批不发
+    const paths = [...data.items]
+      .filter(item => item.kind === 'file')
+      .map(item => {
+        const file = item.getAsFile()
+        return file ? (window.pixelsky?.pathForFile(file) ?? '') : ''
+      })
+    if (!paths.length || paths.some(path => !path)) return void toast(tr('workspace.importNoPath'))
+    void importPaths(over.ref, folder, paths)
+  }
   const treeOps: TreeOpsValue = {
     editing,
     edit: startEdit,
@@ -612,11 +696,13 @@ export function FileTree({
       if (source) toast(tr('workspace.cutDone', { name: source.name }))
     },
     paste,
+    external,
+    importDrop,
   }
   // 树下方空白处：只有一个项目时放到根目录
   const blankDrop = useDropProps(treeOps, single ? { ref: single, kind: 'root' } : null)
-  // 拖动期间靠近列表上下边缘时自动滚动；拖动结束清理
-  const dragging = !!drag
+  // 拖动期间（树里拖、从系统拖进来）靠近列表上下边缘时自动滚动；拖动结束清理
+  const dragging = !!drag || external
   useEffect(() => {
     const el = scroller.current
     if (!dragging || !el) return
@@ -626,9 +712,15 @@ export function FileTree({
       y = e.clientY
     }
     const leave = (e: globalThis.DragEvent): void => {
-      if (!el.contains(e.relatedTarget as Node | null)) y = -1
+      if (el.contains(e.relatedTarget as Node | null)) return
+      y = -1
+      // 系统拖来的拖出了树：收不到 dragend（源不在页面里），离开就算结束
+      setExternal(false)
     }
-    const stop = (): void => setDrag(null)
+    const stop = (): void => {
+      setDrag(null)
+      setExternal(false)
+    }
     const tick = (): void => {
       const r = el.getBoundingClientRect()
       if (y >= r.top && y <= r.bottom) {
@@ -754,7 +846,7 @@ export function FileTree({
                 </span>
               )}
             </div>
-            {opError && !deleting && (
+            {opError && !deleting && !importing && (
               <p role="alert" className="mx-3 mb-2 text-label text-danger">
                 {translateMessage(opError)}
               </p>
@@ -763,6 +855,10 @@ export function FileTree({
               ref={scroller}
               data-file-tree-scroll
               {...blankDrop}
+              onDragEnter={e => {
+                blankDrop.onDragEnter(e)
+                if (!drag && e.dataTransfer.types.includes('Files')) setExternal(true)
+              }}
               onDragLeave={e => {
                 blankDrop.onDragLeave(e)
                 if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropKey(null)
@@ -838,6 +934,30 @@ export function FileTree({
               onConfirm={() => void confirmDisplace()}
               onCancel={() => {
                 setDisplacing(null)
+                setOpError('')
+              }}
+            />
+          )}
+          {importing && (
+            <ConfirmDialog
+              title={tr('workspace.importConfirmTitle')}
+              description={tr('workspace.importConfirm', {
+                files: importing.files,
+                size: formatBytes(importing.bytes),
+                folder: importing.folder || tr('workspace.importRootName'),
+              })}
+              confirmLabel={tr('workspace.importConfirmAction')}
+              cancelLabel={tr('workspace.cancel')}
+              error={opError ? translateMessage(opError) : null}
+              busy={importBusy}
+              onConfirm={() => {
+                setImportBusy(true)
+                void importPaths(importing.ref, importing.folder, importing.paths, true).finally(() =>
+                  setImportBusy(false),
+                )
+              }}
+              onCancel={() => {
+                setImporting(null)
                 setOpError('')
               }}
             />

@@ -79,6 +79,26 @@ export const workspaceMessages = {
   'workspace.demoCannotModify': { zh: '演示模式不能修改文件', en: 'Files can’t be changed in demo mode' },
   'workspace.moved': { zh: '已把 {name} 移到 {folder}', en: 'Moved {name} to {folder}' },
   'workspace.movedRoot': { zh: '已把 {name} 移到项目根目录', en: 'Moved {name} to the project root' },
+  // 从系统拖进来＝复制（docs/ui/file-tree-external-drop.md §2）
+  'workspace.imported': { zh: '已复制 {what} 到 {folder}', en: 'Copied {what} to {folder}' },
+  'workspace.importedRoot': { zh: '已复制 {what} 到项目根目录', en: 'Copied {what} to the project root' },
+  'workspace.importItems': { zh: '{count} 项', en: '{count} items' },
+  'workspace.importSkippedLinks': { zh: '（跳过 {count} 个链接）', en: ' ({count} links skipped)' },
+  'workspace.importRemote': {
+    zh: '远端项目（SSH / WSL）暂不支持从本机拖入',
+    en: 'Dropping local files into remote (SSH / WSL) projects isn’t supported yet',
+  },
+  'workspace.importNoPath': {
+    zh: '拖进来的内容没有本机路径（如浏览器图片、压缩包里的文件），先保存到磁盘再拖',
+    en: 'What you dropped has no local path (e.g. a browser image or a file inside an archive). Save it to disk first',
+  },
+  'workspace.importConfirmTitle': { zh: '复制大量文件', en: 'Copy many files' },
+  'workspace.importConfirmAction': { zh: '复制', en: 'Copy' },
+  'workspace.importRootName': { zh: '项目根目录', en: 'the project root' },
+  'workspace.importConfirm': {
+    zh: '要复制 {files} 个文件（{size}）到 {folder} 吗？',
+    en: 'Copy {files} files ({size}) to {folder}?',
+  },
   'workspace.undo': { zh: '撤销', en: 'Undo' },
   'workspace.cut': { zh: '剪切', en: 'Cut' },
   'workspace.cutDone': {

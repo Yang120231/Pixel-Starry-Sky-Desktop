@@ -133,3 +133,6 @@ export interface OpenTool {
   name: string
   path: string
 }
+
+/** 从系统拖进来复制进项目的结果：复制出来的路径（带附加文件夹前缀）和跳过的链接数；量大且没确认时只给数量 */
+export type ImportResult = { paths: string[]; skipped: number } | { confirm: { files: number; bytes: number } }

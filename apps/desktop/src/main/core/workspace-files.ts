@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { lstat, mkdir, readdir, realpath, stat, open, rename, unlink, rm } from 'node:fs/promises'
+import { cp, lstat, mkdir, readdir, realpath, stat, open, rename, unlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
@@ -21,6 +21,7 @@ import type {
   FileDocument,
   GrepResult,
   FileStageRequest,
+  ImportResult,
   WorkspaceRef,
   WorkspaceTarget,
 } from '../../shared/types/workspace'
@@ -142,6 +143,22 @@ export async function workspaceNewPath(
   }
   if (existing && !sameEntry) throw codedError('files.exists', { name })
   return { root, path }
+}
+
+/** 拖进来一次最多几项；超过多少文件 / 字节先问一次（docs/ui/file-tree-external-drop.md §4.3） */
+const IMPORT_MAX_SOURCES = 200
+export const IMPORT_CONFIRM_FILES = 5000
+export const IMPORT_CONFIRM_BYTES = 500 * 1024 * 1024
+
+/** 数文件数和字节数（只数普通文件，不跟随链接），超过确认线就停 */
+async function measure(path: string, size: { files: number; bytes: number }): Promise<void> {
+  // 已经超了就不用再数（拖进 node_modules 这种几十万个文件的）
+  if (size.files > IMPORT_CONFIRM_FILES || size.bytes > IMPORT_CONFIRM_BYTES) return
+  const info = await lstat(path)
+  if (info.isFile()) {
+    size.files++
+    size.bytes += info.size
+  } else if (info.isDirectory()) for (const name of await readdir(path)) await measure(join(path, name), size)
 }
 
 const relativeTo = (root: string, path: string): string => relative(root, path).split(sep).join('/')
@@ -457,6 +474,83 @@ export class WorkspaceFiles {
       throw err
     }
     return { path: at.prefix + relativeTo(target.root, target.path) }
+  }
+
+  /**
+   * 把从系统拖进来的本机文件 / 文件夹复制进项目里的文件夹（docs/ui/file-tree-external-drop.md §3.1）。
+   * 先全部检查再写：有同名整批不写；量大且没确认时只返回数量；链接（含 junction）跳过不跟随；
+   * 先复制成临时名，全部成功再改成正式名，中途失败把临时名都删掉
+   */
+  async importPaths(ref: WorkspaceRef, folder: unknown, sources: unknown, confirmed = false): Promise<ImportResult> {
+    if (!Array.isArray(sources) || !sources.length || sources.length > IMPORT_MAX_SOURCES) throw new Error('参数不正确')
+    for (const s of sources)
+      if (typeof s !== 'string' || s.includes('\0') || !isAbsolute(s) || /^[\\/]{2}/.test(s))
+        throw new Error('参数不正确')
+    const at = locateFolder(this.target(ref), folder)
+    if (at.prefix.startsWith('::0/') || typeof at.rel !== 'string') throw codedError('files.outsideProject')
+    const dir = await workspacePath(at.root, at.rel, 'directory')
+    let skipped = 0
+    const items: { source: string; root: string; path: string }[] = []
+    const conflicts: string[] = []
+    for (const source of sources as string[]) {
+      const info = await lstat(source).catch(() => null)
+      if (!info) throw codedError('files.notFound')
+      if (info.isSymbolicLink()) {
+        skipped++
+        continue
+      }
+      const real = await realpath(source)
+      if (real === dir || inside(real, dir)) throw codedError('files.outsideProject')
+      const name = basename(source)
+      // macOS / Linux 允许的名字（带 \ : 结尾的点）在这里不合法；不先拦，\ 会被当成路径分隔、复制到别的文件夹
+      if (!validName(name)) throw codedError('files.invalidName')
+      const rel = at.rel.replace(/\/+$/, '')
+      try {
+        const { root, path } = await workspaceNewPath(at.root, rel ? `${rel}/${name}` : name)
+        if (items.some(i => i.path.toLowerCase() === path.toLowerCase())) conflicts.push(name)
+        else items.push({ source, root, path })
+      } catch (err) {
+        if (parseCodedError((err as Error).message)?.code !== 'files.exists') throw err
+        conflicts.push(name)
+      }
+    }
+    if (conflicts.length) throw codedError('files.exists', { name: conflicts.join('、') })
+    if (!confirmed) {
+      const size = { files: 0, bytes: 0 }
+      for (const item of items) await measure(item.source, size)
+      if (size.files > IMPORT_CONFIRM_FILES || size.bytes > IMPORT_CONFIRM_BYTES) return { confirm: size }
+    }
+    // 只复制普通文件和文件夹：链接不跟随，套接字 / 管道（cp 遇到会报错）也跳过
+    const plain = async (path: string): Promise<boolean> => {
+      const info = await lstat(path)
+      const ok = info.isFile() || info.isDirectory()
+      if (!ok) skipped++
+      return ok
+    }
+    // 直接复制成正式名（不先写临时名再改名：Windows 上杀毒软件刚扫过的新文件夹改名常报 EPERM）；中途失败删掉这次写的
+    const created: string[] = []
+    let current = ''
+    try {
+      for (const item of items) {
+        current = basename(item.path)
+        // shortcut: 检查到复制之间仍有极小的竞态（期间别处新建了同名条目），真遇到再改成复制到临时名 + 带重试的改名
+        if (await lstat(item.path).catch(() => null)) throw codedError('files.exists', { name: current })
+        created.push(item.path)
+        await cp(item.source, item.path, {
+          recursive: true,
+          errorOnExist: true,
+          force: false,
+          preserveTimestamps: true,
+          filter: plain,
+        })
+      }
+    } catch (err) {
+      await Promise.all(created.map(p => rm(p, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})))
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === 'EBUSY' || code === 'EPERM') throw codedError('files.busy', { name: current })
+      throw err
+    }
+    return { paths: items.map(i => at.prefix + relativeTo(i.root, i.path)), skipped }
   }
 
   /** 删除：移到回收站，不做永久删除 */

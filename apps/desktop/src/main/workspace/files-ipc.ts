@@ -54,6 +54,12 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
       if (err) throw new Error('打不开项目目录：' + err)
     }
   })
+  // 从系统拖进来＝复制进项目（docs/ui/file-tree-external-drop.md §3.1）：源路径在本机，远端项目第一版不做
+  handle('files:import', async (_e, ref, folder, sources, confirmed) => {
+    const valid = workspaceRef(ref)
+    if (machineOf(valid.projectId ?? valid.sessionId) !== 'local') throw new Error('远端项目暂不支持从本机拖入')
+    return files.importPaths(valid, folder, sources, confirmed === true)
+  })
   handle('files:copyPath', async (_e, ref, path = '') => {
     const at = locateFolder(files.target(ref), path)
     clipboard.writeText(await workspacePath(at.root, at.rel))

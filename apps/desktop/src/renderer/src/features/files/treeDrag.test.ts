@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { cutPasteKeys, dropTarget, movedPath, type CutPasteOps, type DragOver, type DragSource } from './treeDrag'
+import {
+  cutPasteKeys,
+  dropFolder,
+  dropTarget,
+  movedPath,
+  type CutPasteOps,
+  type DragOver,
+  type DragSource,
+} from './treeDrag'
 
 const ref = { projectId: 'p1' }
 const file = (path: string): DragSource => ({ ref, path, kind: 'file', name: path.split('/').pop()! })
@@ -39,6 +47,16 @@ describe('dropTarget', () => {
   })
   it('链接文件夹是 null', () => {
     expect(dropTarget(file('a.md'), onDir('linked', true))).toBeNull()
+  })
+})
+
+describe('dropFolder（从系统拖进来时用）', () => {
+  it('项目名行是根目录，文件夹行是它自己，文件行是它所在的文件夹，链接文件夹不能放', () => {
+    expect(dropFolder({ ref, kind: 'root' })).toBe('')
+    expect(dropFolder({ ref, kind: 'directory', path: 'src/lib' })).toBe('src/lib')
+    expect(dropFolder({ ref, kind: 'file', path: 'src/a.ts' })).toBe('src')
+    expect(dropFolder({ ref, kind: 'file', path: 'a.ts' })).toBe('')
+    expect(dropFolder({ ref, kind: 'directory', path: 'link', linked: true })).toBeNull()
   })
 })
 
