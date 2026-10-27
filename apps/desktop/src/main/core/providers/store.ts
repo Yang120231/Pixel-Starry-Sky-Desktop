@@ -40,14 +40,6 @@ export interface ResolvedProvider extends StoredProvider {
   headers: Record<string, string>
 }
 
-export const PROVIDER_TEMPLATES: Record<
-  Exclude<ProviderTemplate, 'custom'>,
-  { protocol: ProviderProtocol; baseUrl: string }
-> = {
-  anthropic: { protocol: 'anthropic', baseUrl: 'https://api.anthropic.com' },
-  openai: { protocol: 'responses', baseUrl: 'https://api.openai.com/v1' },
-}
-
 const MAX_PROVIDERS = 50
 const MAX_MODELS = 200
 const MAX_HEADERS = 20

@@ -33,9 +33,6 @@ export const CLAUDE_SHARED_DIRS = [
   'plugins',
 ] as const
 
-/** 空闲时从原目录三方合并过来的文件（Claude Code 写它们是「写临时文件再改名」，硬链接会断） */
-export const CLAUDE_SYNCED_FILES = ['settings.json', 'CLAUDE.md'] as const
-
 /** .claude.json 里每个项目要共用的设置（MCP 服务器本身不在这里：每次启动从原文件读，经 --mcp-config 传） */
 export const SHARED_PROJECT_KEYS = [
   'allowedTools',

@@ -1,10 +1,5 @@
 // 反馈页的纯逻辑（docs/ui/feedback.md）：正文拼接、限额检查、日志时间窗、通知内容、错误文字。不依赖 window，可以直接单测。
-import {
-  FEEDBACK_LIMITS,
-  type FeedbackDiagnostics,
-  type FeedbackSummary,
-  type FeedbackType,
-} from '../../../../shared/types/feedback'
+import { FEEDBACK_LIMITS, type FeedbackDiagnostics, type FeedbackSummary } from '../../../../shared/types/feedback'
 import { isQuiet, type NotificationPrefs } from '../notifications/policy'
 import type { LogWindow } from './draft'
 
@@ -62,8 +57,6 @@ export function windowSince(window: LogWindow, now: number, around: number | nul
 export function sizeText(bytes: number): string {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
-
-export const TYPE_ORDER: FeedbackType[] = ['bug', 'feature', 'other']
 
 /** 第一页（轮询拿到的）+ 手动加载的更早页，按 id 去重，第一页的数据优先 */
 export function mergeThreads(first: FeedbackSummary[], older: FeedbackSummary[]): FeedbackSummary[] {

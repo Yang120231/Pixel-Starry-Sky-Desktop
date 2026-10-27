@@ -8,7 +8,6 @@ export const NOTE_FIELDS: readonly ElementNoteField[] = ['route', 'selector', 'e
 /** 元素文字、元素截图的上限 */
 export const ELEMENT_TEXT_MAX = 80
 export const SHOT_MAX_EDGE = 720
-export const SHOT_PADDING = 16
 const SHOT_DATA_MAX = 400_000
 
 const THEME_KEYS = ['accent', 'onAccent', 'popover', 'surface', 'text', 'muted', 'border', 'mono'] as const
