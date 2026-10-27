@@ -23,7 +23,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   vi.mocked(fsp.cp).mockClear()
-  await rm(folder, { recursive: true, force: true })
+  await rm(folder, { recursive: true, force: true, maxRetries: 3 })
 })
 
 describe('WorkspaceFiles.importPaths', () => {
@@ -89,6 +89,35 @@ describe('WorkspaceFiles.importPaths', () => {
     expect(await readdir(join(root, 'src'))).toEqual([])
   })
 
+  it('回归：检查完到复制前别处建了同名文件：报重名，别人的文件不删、内容不变', async () => {
+    await writeFile(join(outside, 'one.txt'), '1')
+    await writeFile(join(outside, 'two.txt'), 'mine')
+    const real = vi.mocked(fsp.cp).getMockImplementation()!
+    vi.mocked(fsp.cp)
+      .mockImplementationOnce(real)
+      .mockImplementationOnce(async (...args) => {
+        await writeFile(join(root, 'src', 'two.txt'), 'theirs')
+        return real(...args)
+      })
+    await expect(service.importPaths(ref, 'src', [join(outside, 'one.txt'), join(outside, 'two.txt')])).rejects.toThrow(
+      /files\.exists.*two\.txt/,
+    )
+    expect(await readdir(join(root, 'src'))).toEqual(['two.txt'])
+    expect(await readFile(join(root, 'src', 'two.txt'), 'utf8')).toBe('theirs')
+  })
+
+  it('回归：撞名发生在自己新建的文件夹里面（大小写不同的两个文件进不分大小写的盘）：文件夹照常回滚，不当成别人的', async () => {
+    await mkdir(join(outside, 'pkg'))
+    await writeFile(join(outside, 'pkg', 'README.md'), 'x')
+    vi.mocked(fsp.cp).mockImplementationOnce(async (_src, dest) => {
+      await mkdir(String(dest))
+      await writeFile(join(String(dest), 'README.md'), 'x')
+      throw Object.assign(new Error('exists'), { code: 'ERR_FS_CP_EEXIST', path: join(String(dest), 'readme.md') })
+    })
+    await expect(service.importPaths(ref, 'src', [join(outside, 'pkg')])).rejects.toThrow('exists')
+    expect(await readdir(join(root, 'src'))).toEqual([])
+  })
+
   it(`超过 ${IMPORT_CONFIRM_FILES} 个文件又没确认：只返回数量，什么都不写；确认后照常复制`, async () => {
     const big = join(outside, 'big')
     await mkdir(big)
@@ -97,7 +126,11 @@ describe('WorkspaceFiles.importPaths', () => {
       confirm: { files: IMPORT_CONFIRM_FILES + 1, bytes: 0 },
     })
     expect(await readdir(root)).toEqual(['src'])
+    // 真复制几千个文件太慢，复制本身第一条已经测过
+    vi.mocked(fsp.cp).mockResolvedValueOnce(undefined)
     expect(await service.importPaths(ref, '', [big], true)).toEqual({ paths: ['big'], skipped: 0 })
+    expect(fsp.cp).toHaveBeenCalledOnce()
+    expect(fsp.cp).toHaveBeenCalledWith(big, expect.stringMatching(/项目[\\/]big$/), expect.anything())
   }, 60_000)
 
   it('参数不对：不是绝对路径、网络路径、空列表都拒绝', async () => {

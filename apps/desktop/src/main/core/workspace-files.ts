@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
+import { constants as fsConstants } from 'node:fs'
 import { cp, lstat, mkdir, readdir, realpath, stat, open, rename, unlink, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -533,20 +534,29 @@ export class WorkspaceFiles {
     try {
       for (const item of items) {
         current = basename(item.path)
-        // shortcut: 检查到复制之间仍有极小的竞态（期间别处新建了同名条目），真遇到再改成复制到临时名 + 带重试的改名
         if (await lstat(item.path).catch(() => null)) throw codedError('files.exists', { name: current })
         created.push(item.path)
+        // COPYFILE_EXCL：检查完到写入之间别处建了同名文件时，建文件那一刻就报 EEXIST，不覆盖
         await cp(item.source, item.path, {
           recursive: true,
           errorOnExist: true,
           force: false,
+          mode: fsConstants.COPYFILE_EXCL,
           preserveTimestamps: true,
           filter: plain,
         })
       }
     } catch (err) {
+      const e = err as NodeJS.ErrnoException & { dest?: string }
+      const code = e.code
+      // 正在复制的这一项本身撞上了别处刚建的同名条目：那是别人的，不删。只认这一项自己的路径——
+      // 文件夹里面撞名（大小写不同的两个文件复制进不分大小写的盘）是这次自己建的文件夹，照常回滚
+      const hit = e.dest ?? e.path
+      const taken =
+        (code === 'EEXIST' || code === 'ERR_FS_CP_EEXIST') && !!hit && resolve(hit) === resolve(created.at(-1) ?? '')
+      if (taken) created.pop()
       await Promise.all(created.map(p => rm(p, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})))
-      const code = (err as NodeJS.ErrnoException).code
+      if (taken) throw codedError('files.exists', { name: current })
       if (code === 'EBUSY' || code === 'EPERM') throw codedError('files.busy', { name: current })
       throw err
     }
