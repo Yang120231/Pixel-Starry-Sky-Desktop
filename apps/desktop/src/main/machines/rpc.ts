@@ -11,6 +11,8 @@ import type { RpcHandler } from '@pixelsky/link/rpc'
  */
 export class RpcPeer {
   private buffer = ''
+  /** 收到过合法消息：之前的非 JSON 行是远端 shell 启动文件（.bashrc 等）打印的，跳过 */
+  private started = false
   private readonly decoder = new StringDecoder('utf8')
   private readonly core: RpcCore
   onEvent: (channel: string, data: unknown) => void = () => {}
@@ -78,9 +80,11 @@ export class RpcPeer {
       try {
         message = JSON.parse(line)
       } catch (e) {
+        if (!this.started) continue
         this.close(e as Error)
         return
       }
+      this.started = true
       this.core.receive(message)
       if (this.core.isClosed) return
     }

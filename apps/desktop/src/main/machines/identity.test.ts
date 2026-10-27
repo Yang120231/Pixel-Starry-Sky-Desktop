@@ -53,6 +53,13 @@ describe('machine resource ownership', () => {
       branch: { startAfter: 'some-item' },
     })
   })
+  it('prefixes the owner of a native session, so the resume picker opens the remote conversation', () => {
+    const native = { id: 'native-claude-id', ownerId: id }
+    const encoded = remoteIds([native], machine, true)
+    expect(encoded[0].ownerId).toBe(machine + '~' + id)
+    expect(encoded[0].id).toBe('native-claude-id')
+    expect(remoteIds({ ownerId: id }, machine, true)).toEqual({ ownerId: machine + '~' + id })
+  })
   it('routes references by ownership even after another machine is selected', () => {
     expect(argumentMachine([{ projectId: machine + '~' + id }])).toBe(machine)
     expect(argumentMachine([machine + '~' + id, 'hello'])).toBe(machine)

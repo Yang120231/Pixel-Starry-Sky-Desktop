@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { isRemoteCliEntry } from './remote-cli'
+import { stopStale } from './remote-lock'
 
 // This entry is bundled separately and uploaded over the authenticated SSH connection.
 // Never include Electron or desktop credentials in this process.
@@ -20,8 +21,12 @@ try {
       const command = readFileSync(`/proc/${pid}/cmdline`, 'utf8')
       if (command.includes('/helper-') && command.split('\0').includes(namespace)) {
         process.kill(pid, 0)
-        process.stderr.write('SSH_ALREADY_CONNECTED')
-        process.exit(2)
+        // ssh- 命名空间是这台桌面在 machines.json 里随机生成的，活着的旧进程只会是断网后半开连接留下的自己：
+        // 结束它再接着连。wsl- 的 id 按发行版名算，开发版和安装版会共用，照旧拒绝
+        if (!namespace.startsWith('ssh-') || !stopStale(pid)) {
+          process.stderr.write('SSH_ALREADY_CONNECTED')
+          process.exit(2)
+        }
       }
     } catch {
       /* Stale lock or PID reused by another process. */

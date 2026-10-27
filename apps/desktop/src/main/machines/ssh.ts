@@ -18,6 +18,13 @@ import { remoteCliArchive, type RemoteCliProvider } from './remote-cli-source'
 /** Upload directory of the helper on the remote machine; changes together with the protocol version. */
 const REMOTE_DIR = 'v' + REMOTE_PROTOCOL
 export const quoteSh = (value: string): string => "'" + value.replaceAll("'", "'\\''") + "'"
+/** 命令输出的最后一个非空行：远端 shell 的启动文件（.bashrc 等）可能在前面打印东西，我们的脚本只输出一行 */
+export const lastLine = (output: string): string =>
+  output
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .at(-1) ?? ''
 export type { RemoteHello }
 export class FingerprintRequired extends Error {
   constructor(
@@ -108,7 +115,7 @@ export class SshConnection implements RemoteLink {
     )
     let info: { home: string; platform: string; version: string; arch?: string }
     try {
-      info = JSON.parse(probe)
+      info = JSON.parse(lastLine(probe))
     } catch {
       throw new Error('SSH_NODE_REQUIRED')
     }
@@ -118,7 +125,7 @@ export class SshConnection implements RemoteLink {
       hash = createHash('sha256').update(helper).digest('hex')
     // Upload through stdin; paths/data never become shell fragments.
     const install = `const fs=require('node:fs'),p=require('node:path'),c=require('node:crypto');const b=[];process.stdin.on('data',x=>b.push(x));process.stdin.on('end',()=>{const data=Buffer.concat(b);if(c.createHash('sha256').update(data).digest('hex')!==${JSON.stringify(hash)})process.exit(2);const dir=p.join(require('node:os').homedir(),'.local','share','pixelsky','remote',${JSON.stringify(REMOTE_DIR)});fs.mkdirSync(dir,{recursive:true,mode:448});const file=p.join(dir,${JSON.stringify('helper-' + hash + '.cjs')});fs.writeFileSync(file,data,{mode:384});process.stdout.write(file)})`
-    const remotePath = (await this.exec('node -e ' + quoteSh(install), helper)).trim()
+    const remotePath = lastLine(await this.exec('node -e ' + quoteSh(install), helper))
     if (!remotePath.startsWith(info.home + '/.local/share/pixelsky/remote/' + REMOTE_DIR + '/helper-'))
       throw new Error('SSH_HELPER_PATH_INVALID')
     const namespace = input.id ?? 'default'
@@ -154,17 +161,19 @@ export class SshConnection implements RemoteLink {
       if (!remoteCliSupported(info.version, info.arch)) return null
       const archive = await this.cliArchive(info.arch as 'x64' | 'arm64')
       if (!archive) return null
-      let path = (await this.exec('node -e ' + quoteSh(remoteCliCheckScript(archive.hash)))).trim()
-      if (!path) {
-        path = (
+      // 只认最后一行、而且得是装好的入口：.bashrc 打印的横幅不能被当成「已装好」
+      const valid = (path: string): string | null => (isRemoteCliEntry(path, info.home, archive.hash) ? path : null)
+      const found = valid(lastLine(await this.exec('node -e ' + quoteSh(remoteCliCheckScript(archive.hash)))))
+      if (found) return found
+      return valid(
+        lastLine(
           await this.exec(
             'node -e ' + quoteSh(remoteCliInstallScript(archive.hash)),
             archive.data,
             REMOTE_CLI_INSTALL_TIMEOUT,
-          )
-        ).trim()
-      }
-      return isRemoteCliEntry(path, info.home, archive.hash) ? path : null
+          ),
+        ),
+      )
     } catch {
       return null
     }

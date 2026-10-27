@@ -48,6 +48,21 @@ describe('SSH JSONL RPC', () => {
     for (const byte of data) input.write(Buffer.from([byte]))
     expect(values).toEqual(['中文路径'])
   })
+  it('第一条消息之前远端 shell 打印的横幅跳过；之后的坏行照样断开', () => {
+    const input = new PassThrough(),
+      output = new PassThrough(),
+      values: unknown[] = []
+    const peer = new RpcPeer(input, output)
+    peers.push(peer)
+    let closed = false
+    peer.whenClosed(() => (closed = true))
+    peer.onEvent = (_name, value) => values.push(value)
+    input.write('Welcome to Ubuntu\n' + JSON.stringify({ event: 'test', data: 1 }) + '\n')
+    expect(values).toEqual([1])
+    expect(closed).toBe(false)
+    input.write('garbage\n')
+    expect(closed).toBe(true)
+  })
   it('handle 按频道接收事件，未注册的频道仍给 onEvent', () => {
     const input = new PassThrough(),
       peer = new RpcPeer(input, new PassThrough()),
