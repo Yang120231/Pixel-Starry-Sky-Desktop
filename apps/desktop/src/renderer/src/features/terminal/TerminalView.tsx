@@ -12,9 +12,15 @@ import { findPathMatches } from '@/features/files/pathMatch'
 import { terminalFilePath } from './fileLinks'
 import { COMMAND_PALETTE, NEW_TERMINAL, TOGGLE_TERMINAL, TOGGLE_TUI_MODE } from '@/features/layout/shortcuts'
 import { isMac } from '@/features/layout/keybindings'
-import { isCopyKey } from './copyKey'
-import { terminalPrefs, useTerminalPrefs } from './prefs'
+import { isCopyKey, isPasteKey, zoomKey } from './copyKey'
+import { setTerminalFontSize, terminalPrefs, useTerminalPrefs, zoomedFontSize } from './prefs'
+import { quotePath } from './dropPath'
+import { FILE_DRAG_TYPE, hasFileDrag, type DragSource } from '@/features/files/treeDrag'
+import { splitExtra } from '@/features/files/extraFolderPaths'
+import { projectOf } from './projectOf'
+import { machineOf } from '@/features/machines/store'
 import { useI18n } from '@/i18n/I18nProvider'
+import { tr } from '@/i18n/core'
 
 const ansi = [
   'black',
@@ -50,7 +56,8 @@ export function TerminalView({
   const { t } = useI18n()
   const host = useRef<HTMLDivElement>(null),
     instance = useRef<Terminal | null>(null),
-    refit = useRef<() => void>(() => {})
+    refit = useRef<() => void>(() => {}),
+    restyle = useRef<() => void>(() => {})
   const latest = useRef({ record, visible, onPaste, onFind, onCycle })
   latest.current = { record, visible, onPaste, onFind, onCycle }
   const [away, setAway] = useState(false),
@@ -89,7 +96,8 @@ export function TerminalView({
       })
       term.options.theme = theme
       term.options.fontFamily = style.fontFamily
-      term.options.fontSize = parseFloat(style.fontSize) || 13
+      // 用 Ctrl+= / Ctrl+- 调过就用调过的，没调过跟随界面字号
+      term.options.fontSize = terminalPrefs().fontSize ?? (parseFloat(style.fontSize) || 13)
       fitNow()
     }
     const fitNow = (): void => {
@@ -102,6 +110,7 @@ export function TerminalView({
           .catch(terminalError)
     }
     refit.current = fitNow
+    restyle.current = applyStyle
     applyStyle()
     const observer = new ResizeObserver(fitNow)
     observer.observe(el)
@@ -141,6 +150,39 @@ export function TerminalView({
       latest.current.onPaste(record.id, text)
     }
     el.addEventListener('paste', paste, true)
+    // 把文件拖进来粘贴路径（docs/ui/terminal-small-polish.md §1）：系统里拖来的是绝对路径，文件树拖来的是相对项目的路径
+    const dragOver = (event: DragEvent): void => {
+      const data = event.dataTransfer
+      if (!data || !(hasFileDrag(data) || data.types.includes('Files'))) return
+      event.preventDefault()
+      event.stopPropagation()
+      // 文件树拖动只允许 move，系统文件用 copy
+      data.dropEffect = hasFileDrag(data) ? 'move' : 'copy'
+    }
+    const drop = (event: DragEvent): void => {
+      const data = event.dataTransfer
+      if (!data || !(hasFileDrag(data) || data.files.length)) return
+      event.preventDefault()
+      event.stopPropagation()
+      const now = latest.current.record
+      let paths: string[]
+      if (hasFileDrag(data)) {
+        const source = JSON.parse(data.getData(FILE_DRAG_TYPE)) as DragSource
+        // 别的项目的文件可能在别的机器上，不接；文件树开在会话上时 ref 是会话，按它所属的项目比。
+        // 附加文件夹里的（::N/…）不在项目目录下，相对路径对不上，也不接
+        if (projectOf(source.ref) !== now.projectId || splitExtra(source.path).index !== null) return
+        paths = [source.path]
+      } else if (machineOf(now.projectId) !== 'local') {
+        terminalError(tr('terminal.dropRemote'))
+        return
+      } else paths = [...data.files].map(file => window.pixelsky?.pathForFile(file) ?? '').filter(Boolean)
+      if (!paths.length) return
+      const windows = window.pixelsky?.platform === 'win32'
+      latest.current.onPaste(now.id, paths.map(path => quotePath(path, now.profileId, windows)).join(' '))
+      term.focus()
+    }
+    el.addEventListener('dragover', dragOver)
+    el.addEventListener('drop', drop)
     const copy = async (): Promise<void> => {
       if (term.hasSelection()) {
         if (isDemo) await navigator.clipboard.writeText(term.getSelection())
@@ -178,7 +220,13 @@ export function TerminalView({
           .catch(terminalError)
         return false
       }
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.code === 'KeyV') {
+      const zoom = zoomKey(event, isMac)
+      if (zoom !== null) {
+        event.preventDefault()
+        setTerminalFontSize(zoom === 0 ? null : zoomedFontSize(term.options.fontSize ?? 13, zoom))
+        return false
+      }
+      if (isPasteKey(event, isMac)) {
         event.preventDefault()
         void (isDemo ? navigator.clipboard.readText() : window.pixelsky!.terminal.clipboardRead())
           .then(text => latest.current.onPaste(record.id, text))
@@ -253,6 +301,8 @@ export function TerminalView({
       scroll.dispose()
       links.dispose()
       el.removeEventListener('paste', paste, true)
+      el.removeEventListener('dragover', dragOver)
+      el.removeEventListener('drop', drop)
       el.removeEventListener('contextmenu', contextMenu)
       screens.delete(record.id)
       term.dispose()
@@ -269,6 +319,9 @@ export function TerminalView({
     term.options.scrollback = Number(prefs.scrollback)
     term.options.screenReaderMode = prefs.screenReader
   }, [prefs])
+  useEffect(() => {
+    if (instance.current) restyle.current()
+  }, [prefs.fontSize])
   useEffect(() => {
     if (!menu) return
     const dismiss = () => setMenu(null)

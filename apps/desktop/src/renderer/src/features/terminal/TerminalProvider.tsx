@@ -1,9 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useActiveWorkspace } from '@/features/editor/target'
-import { getEngineState } from '@/features/engine/store'
 import { ConfirmDialog } from '@/ui/ConfirmDialog'
-import { isDemo, projects } from '@/data'
+import { isDemo } from '@/data'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import {
   initTerminalStore,
@@ -18,6 +17,7 @@ import {
   useTerminalStore,
 } from './store'
 import { screens } from './screens'
+import { projectOf } from './projectOf'
 import { exitSuffix, TaskCommandError } from '@/features/coding/tasks/model'
 import { openRightTab } from '@/features/panel/workspaceStore'
 import { workspaceTerminals } from './workspace'
@@ -124,17 +124,6 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     [error, setError] = useState<string | null>(null)
   const creating = useRef(false),
     returning = useRef<HTMLElement | null>(null)
-  const projectOf = (ref: WorkspaceRef | null): string | null => {
-    if (!ref) return null
-    if (ref.projectId) return ref.projectId
-    if (isDemo) return projects.find(p => p.sessions.some(s => s.id === ref.sessionId))?.id ?? null
-    const engine = getEngineState()
-    return (
-      engine.snapshots[ref.sessionId!]?.record.projectId ??
-      engine.sessions.find(s => s.record.id === ref.sessionId)?.record.projectId ??
-      null
-    )
-  }
   useEffect(() => {
     void initTerminalStore()
   }, [])
