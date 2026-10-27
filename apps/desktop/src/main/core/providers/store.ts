@@ -286,7 +286,11 @@ export class ProviderStore {
     const small = input.smallModel !== undefined ? input.smallModel : (existing?.smallModel ?? null)
     if (small !== null && (typeof small !== 'string' || small.length > 200)) throw new Error('后台小模型格式不对')
 
-    const old = existing ? (this.secrets.get(existing.id) ?? {}) : {}
+    const baseUrl = normalizeBaseUrl(input.baseUrl, protocol)
+    // 换了地址的主机就不沿用已存的密钥、请求头：它们是给原来那家的，不能发到新填的地址
+    const sameHost = !!existing && new URL(baseUrl).origin === new URL(existing.baseUrl).origin
+    const saved = existing ? (this.secrets.get(existing.id) ?? {}) : {}
+    const old = sameHost ? saved : {}
     const secrets: Record<string, string> = {}
     if (typeof input.apiKey === 'string' && input.apiKey.trim()) {
       const key = input.apiKey.trim()
@@ -294,6 +298,7 @@ export class ProviderStore {
       if (key.length > 4096 || /[\s\u0000-\u001f\u007f]/.test(key)) throw new Error('API Key 格式不对')
       secrets.key = key
     } else if (old.key) secrets.key = old.key
+    else if (saved.key) throw new Error('改了接口地址，请重新填写 API Key')
     const rawHeaders =
       input.headers ?? Object.fromEntries((existing?.headerNames ?? []).map(n => [n, MASKED_SECRET] as const))
     if (!rawHeaders || typeof rawHeaders !== 'object' || Array.isArray(rawHeaders))
@@ -319,7 +324,7 @@ export class ProviderStore {
         draft && (typeof input.name !== 'string' || !input.name.trim()) ? '未命名接口' : text(input.name, '名称', 60),
       template,
       protocol,
-      baseUrl: normalizeBaseUrl(input.baseUrl, protocol),
+      baseUrl,
       auth,
       models,
       // 后台小模型已经不在模型列表里（列表里删掉了）：存成 null，用列表第一个

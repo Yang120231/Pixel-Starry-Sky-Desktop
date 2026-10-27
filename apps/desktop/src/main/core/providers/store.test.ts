@@ -138,6 +138,18 @@ describe('自定义 API 配置存储（docs/ui/custom-api.md §4.2）', () => {
     expect(() => store.save({ ...input, id: 'gone' })).toThrow('已经删除')
   })
 
+  it('改了地址的主机：已存的 Key 和请求头不沿用，要重新填；同一主机换路径照常沿用', () => {
+    const store = new ProviderStore(dir, cipher())
+    const { id } = store.save(input)
+    const relay = { ...input, id, baseUrl: 'https://relay.example.net/v1', apiKey: '' }
+    expect(() => store.draft({ ...relay, headers: {} })).toThrow('重新填写 API Key')
+    expect(() => store.save({ ...relay, apiKey: 'sk-relay-1', headers: { 'X-Org': MASKED_SECRET } })).toThrow('X-Org')
+    store.save({ ...input, id, baseUrl: 'https://api.example.com/other/v1', apiKey: '' })
+    expect(store.resolve(id)).toMatchObject({ apiKey: KEY, headers: { 'X-Org': 'org-secret-9' } })
+    store.save({ ...relay, apiKey: 'sk-relay-1', headers: {} })
+    expect(store.resolve(id)?.apiKey).toBe('sk-relay-1')
+  })
+
   it('系统加密不可用时只放内存，不写 secrets.json；重启后 Key 没了', () => {
     const store = new ProviderStore(dir, cipher(false))
     const { id } = store.save(input)

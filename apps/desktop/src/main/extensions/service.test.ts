@@ -282,6 +282,20 @@ describe('管理配置与凭据', () => {
     const packages = readdirSync(join(root, 'extensions', 'packages'))
     expect(packages).toHaveLength(1)
   })
+  it('改 MCP 时保存配置失败：密钥也放回原样，之后照常启动（以前请求头改名后会话都起不来）', () => {
+    const e = service.upsert({
+      kind: 'mcp',
+      name: 'remote',
+      scope: global,
+      mcp: { type: 'http', url: 'https://example.com/mcp', headers: { 'X-Old': 'old-token' } },
+    })
+    mkdirSync(join(root, 'extensions', 'config.json.tmp'))
+    expect(() => service.upsert({ ...e, mcp: { ...e.mcp!, headers: { 'X-New': 'new-token' } } })).toThrow()
+    rmSync(join(root, 'extensions', 'config.json.tmp'), { recursive: true })
+    const launch = service.launch(project)
+    expect(readFileSync(launch.mcpFile!, 'utf8')).toContain('old-token')
+    launch.dispose?.()
+  })
   it('导入技能：引擎不对、保存配置失败时不留包目录，配置不多出条目', async () => {
     const src = join(root, 'skill')
     mkdirSync(src)

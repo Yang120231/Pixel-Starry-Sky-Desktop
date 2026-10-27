@@ -48,4 +48,12 @@ export class Secrets {
   remove(id: string): void {
     this.store.remove(id)
   }
+  /** 这一项现在存的值（配置保存失败时用 restore 放回去） */
+  snapshot(id: string): Readonly<Record<string, string>> | undefined {
+    return this.store.get(id)
+  }
+  restore(id: string, values: Readonly<Record<string, string>> | undefined): void {
+    if (values) this.store.set(id, { ...values })
+    else this.store.remove(id)
+  }
 }

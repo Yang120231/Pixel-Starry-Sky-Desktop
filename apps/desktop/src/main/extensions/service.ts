@@ -229,6 +229,8 @@ export class ExtensionService {
       revision: this.config.revision + 1,
       engines: data.engines ?? existing?.engines ?? ['claude'],
     }
+    // 密钥先存、配置后存：配置保存失败时密钥也要放回原样，不然回滚后的配置找不到它的密钥，会话都起不来
+    const secretsBefore = data.kind === 'mcp' ? this.secrets.snapshot(e.id) : undefined
     if (data.kind === 'mcp') e.mcp = this.secrets.put(e.id, data.mcp!)
     if (data.kind === 'cli') {
       e.command = data.command
@@ -271,6 +273,7 @@ export class ExtensionService {
       this.save()
     } catch (error) {
       this.config.entries = before
+      if (data.kind === 'mcp') this.secrets.restore(e.id, secretsBefore)
       if (created) removeTree(inside(this.dir, created))
       throw error
     }
