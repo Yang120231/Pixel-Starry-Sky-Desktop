@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Item } from '@pixelsky/protocol'
-import { discoverPorts, portsOfOutput, type PortCache } from './portTipsModel'
+import {
+  IGNORED_SESSIONS,
+  discoverPorts,
+  portsOfOutput,
+  readIgnored,
+  saveIgnored,
+  type PortCache,
+} from './portTipsModel'
 
 const ESC = '\u001b'
 const cmd = (id: string, output: string, command = 'pnpm dev'): Item =>
@@ -34,5 +41,30 @@ describe('discoverPorts', () => {
     cache.set('a', { output: 'http://localhost:3000', ports: [1] })
     expect(discoverPorts([cmd('a', 'http://localhost:3000')], cache)[0].port).toBe(1)
     expect(discoverPorts([cmd('a', 'http://localhost:3001')], cache)[0].port).toBe(3001)
+  })
+})
+
+describe('忽略记录跨重启', () => {
+  const data = new Map<string, string>()
+  beforeEach(() => {
+    data.clear()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => void data.set(key, value),
+    })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('按会话存取；坏数据当没有；超过上限丢最早忽略的会话', () => {
+    expect(readIgnored('a')).toEqual([])
+    saveIgnored('a', [5173])
+    saveIgnored('b', [3000, 9333])
+    expect(readIgnored('a')).toEqual([5173])
+    expect(readIgnored('b')).toEqual([3000, 9333])
+    data.set('pixelsky.portTip.ignored', 'not json')
+    expect(readIgnored('a')).toEqual([])
+    for (let i = 0; i <= IGNORED_SESSIONS; i++) saveIgnored(`s${i}`, [i + 1])
+    expect(readIgnored('s0')).toEqual([])
+    expect(readIgnored(`s${IGNORED_SESSIONS}`)).toEqual([IGNORED_SESSIONS + 1])
   })
 })

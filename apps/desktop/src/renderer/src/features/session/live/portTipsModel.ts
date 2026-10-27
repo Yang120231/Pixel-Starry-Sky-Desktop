@@ -40,3 +40,34 @@ export function discoverPorts(items: readonly Item[], cache?: PortCache): FoundP
   }
   return found
 }
+
+/** 忽略过的端口按会话存（docs/ui/port-preview.md §6）：{会话 id: 端口[]}，按最后忽略的先后排，最多留这么多个会话 */
+const IGNORED_KEY = 'pixelsky.portTip.ignored'
+export const IGNORED_SESSIONS = 200
+
+function readAll(): Record<string, number[]> {
+  try {
+    const all: unknown = JSON.parse(localStorage.getItem(IGNORED_KEY) ?? '{}')
+    return all && typeof all === 'object' && !Array.isArray(all) ? (all as Record<string, number[]>) : {}
+  } catch {
+    return {}
+  }
+}
+
+export function readIgnored(sessionId: string): number[] {
+  const ports = readAll()[sessionId]
+  return Array.isArray(ports) ? ports.filter(Number.isInteger) : []
+}
+
+export function saveIgnored(sessionId: string, ports: readonly number[]): void {
+  const all = readAll()
+  delete all[sessionId]
+  all[sessionId] = [...ports]
+  const ids = Object.keys(all)
+  for (const id of ids.slice(0, Math.max(0, ids.length - IGNORED_SESSIONS))) delete all[id]
+  try {
+    localStorage.setItem(IGNORED_KEY, JSON.stringify(all))
+  } catch {
+    // 存不下（配额满）：这次只在内存里忽略，和以前一样
+  }
+}
