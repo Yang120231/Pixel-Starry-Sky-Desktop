@@ -91,6 +91,9 @@ const everOpened = new Set<string>()
 const SWEEP_DELAY_MS = 3000
 let sweepTimer: ReturnType<typeof setTimeout> | undefined
 
+/** 收到过几次 sessions / projects 推送：拉列表期间来了新推送，就不用拉回来的旧列表盖掉它 */
+let listPushes = 0
+
 let pendingRaf: number | undefined
 let pendingTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -177,6 +180,7 @@ function onHostEvent(e: HostEvent): void {
       applySessionEvent(e)
       return
     case 'sessions': {
+      listPushes++
       const ids = new Set(e.sessions.map(s => s.record.id)),
         archived = new Set(
           e.sessions
@@ -211,6 +215,7 @@ function onHostEvent(e: HostEvent): void {
       return
     }
     case 'projects':
+      listPushes++
       set({ projects: e.projects, currentProjectId: pickProject(e.projects, state.sessions, state.currentProjectId) })
       return
     case 'engines':
@@ -305,7 +310,8 @@ export function setCurrentProject(id: string): void {
 }
 export async function refreshMachineEngine(machine: string): Promise<void> {
   if (!bridge) return
-  const [projects, sessions, defaults, engines, config] = await Promise.all([
+  const pushes = listPushes
+  const [fetchedProjects, fetchedSessions, defaults, engines, config] = await Promise.all([
     bridge.projects(),
     bridge.sessions(),
     bridge.defaults(),
@@ -313,6 +319,10 @@ export async function refreshMachineEngine(machine: string): Promise<void> {
     bridge.config(),
   ])
   if (getMachines().currentId !== machine) return
+  // 引擎、配置走 SSH 比列表慢得多，期间推来的会话状态（刚变空闲、刚删掉）比拉回来的新
+  const fresh = listPushes === pushes
+  const projects = fresh ? fetchedProjects : state.projects,
+    sessions = fresh ? fetchedSessions : state.sessions
   let current: string | null = null
   try {
     current = JSON.parse(localStorage.getItem('pixelsky.last-workspace.' + machine) ?? 'null')?.projectId ?? null
@@ -403,8 +413,9 @@ function drop(ids: readonly string[]): void {
 /** 重新检测引擎（用户装好 / 登录之后） */
 export async function redetectEngines(): Promise<void> {
   if (!bridge) return
-  const engines = await bridge.engines(true)
-  set({ engines, detectGen: state.detectGen + 1 })
+  const machine = getMachines().currentId,
+    engines = await bridge.engines(true)
+  if (getMachines().currentId === machine) set({ engines, detectGen: state.detectGen + 1 })
 }
 
 /** 一次加了几个项目时广播的事件：ProjectImport 据此弹一句「已添加 3 个项目，1 个已在列表里」 */

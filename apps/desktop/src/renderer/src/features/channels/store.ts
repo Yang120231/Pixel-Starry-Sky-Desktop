@@ -390,9 +390,11 @@ export const channelActions = {
         ...(extra.files.length ? { files: extra.files } : {}),
       })
       const list = state.messages[channelId] ?? []
+      // 按发完时的 state 清引用条：发送期间别的频道点了「回复」、这个频道换了引用对象，都不能用发送前的拷贝盖掉
+      const replied = !threadId && (state.replyTo[channelId] ?? null) === replyToId
       set({
         messages: { ...state.messages, [channelId]: upsertMessage(list, message) },
-        ...keepReply,
+        ...(replied ? { replyTo: { ...state.replyTo, [channelId]: null } } : {}),
       })
       return
     }
