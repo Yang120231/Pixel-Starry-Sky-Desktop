@@ -2,7 +2,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { mkdir, readdir, realpath, rm, rmdir } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import type { CopyInput, CopyPreview, ProjectCopy } from '../../../shared/types/project-tools'
-import { JsonStore, git, gitInfo, inside, samePath, value, type ToolsHost } from './common'
+import { JsonStore, git, gitInfo, inside, run, samePath, value, type ToolsHost } from './common'
 
 /** 副本目录删不掉时的提示（目录被终端或别的程序当作当前目录） */
 const busyMessage = (path: string): string =>
@@ -101,14 +101,22 @@ export class Copies {
         const preview = await this.preview(projectId, input)
         if (data.copies.some(c => samePath(c.path, preview.path))) throw new Error('同名副本已经存在')
         await mkdir(dirname(preview.path), { recursive: true })
-        await git(preview.root, [
-          'worktree',
-          'add',
-          ...(input.existingBranch ? [] : ['-b', preview.branch]),
-          '--',
-          preview.path,
-          input.existingBranch ? preview.branch : preview.commit,
-        ])
+        // 不设超时：worktree add 先登记、建分支再检出，大仓库检出超过 2 分钟被打断会留下应用里看不到的半成品
+        await run(
+          'git',
+          [
+            '-C',
+            preview.root,
+            'worktree',
+            'add',
+            ...(input.existingBranch ? [] : ['-b', preview.branch]),
+            '--',
+            preview.path,
+            input.existingBranch ? preview.branch : preview.commit,
+          ],
+          undefined,
+          0,
+        )
         created = { root: preview.root, path: preview.path }
         const now = Date.now(),
           copy: ProjectCopy = {

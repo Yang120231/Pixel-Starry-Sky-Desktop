@@ -24,6 +24,22 @@ import { JsonStore, exec, run as runProgram, type ToolsHost } from './common'
 import { childEnvironment, findProgram, redact } from './services'
 
 const OUTPUT_CHARS = 8000
+
+/**
+ * macOS / Linux 上正在跑的检查（各自一个进程组）：退出应用时结束掉，不然卡住的检查会一直跑。
+ * Windows 不用记：子进程在 Node 的作业对象里，应用退出时系统一起结束
+ */
+const running = new Set<number>()
+
+export function killChecks(): void {
+  for (const pid of running)
+    try {
+      process.kill(-pid, 'SIGKILL')
+    } catch {
+      /* 已经退出 */
+    }
+  running.clear()
+}
 const FINDINGS_MAX = 50
 const FILE_BYTES = 1024 * 1024
 const UNTRACKED_MAX = 200
@@ -247,6 +263,8 @@ export async function runCommand(root: string, c: CheckCommand, deadline: number
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
+    const pid = child.pid
+    if (pid && process.platform !== 'win32') running.add(pid)
     const decoders = [new ConsoleLineDecoder(), new ConsoleLineDecoder()]
     const take = (decoder: ConsoleLineDecoder) => (chunk: Buffer) => {
       output = (output + decoder.write(chunk)).slice(-OUTPUT_CHARS * 2)
@@ -255,7 +273,6 @@ export async function runCommand(root: string, c: CheckCommand, deadline: number
     child.stderr?.on('data', take(decoders[1]))
     const timer = setTimeout(() => {
       timedOut = true
-      const pid = child.pid
       if (!pid) return
       if (process.platform === 'win32')
         void runProgram('taskkill.exe', ['/PID', String(pid), '/T', '/F'], undefined, 6000).catch(() => {})
@@ -268,6 +285,7 @@ export async function runCommand(root: string, c: CheckCommand, deadline: number
     }, left)
     const done = (status: CheckCommandResult['status'], exitCode: number | null, extra = '') => {
       clearTimeout(timer)
+      if (pid) running.delete(pid)
       output += decoders.map(d => d.end()).join('')
       resolve({
         ...base,

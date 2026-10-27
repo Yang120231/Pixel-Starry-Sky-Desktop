@@ -7,7 +7,7 @@ import { samePath, type ToolsHost } from './common'
 import { Copies } from './copies'
 import { GitTools, type GitTrash } from './git'
 import { Services } from './services'
-import { Checks } from './checks'
+import { Checks, killChecks } from './checks'
 import { Tasks } from './tasks'
 
 export class ProjectTools {
@@ -46,6 +46,7 @@ export class ProjectTools {
   }
 
   shutdown(): Promise<void> {
+    killChecks()
     return this.services.shutdown()
   }
 

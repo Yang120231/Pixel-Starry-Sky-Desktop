@@ -348,8 +348,8 @@ export class Services {
     s.status = 'stopping'
     this.changed()
     try {
-      if (process.platform === 'win32')
-        await run('taskkill.exe', ['/PID', String(pid), '/T', ...(force ? ['/F'] : [])], undefined, 6000)
+      // Windows 上服务是隐藏窗口启动的，不带 /F 的 taskkill 结束不了没有窗口的进程，所以总是带 /F
+      if (process.platform === 'win32') await run('taskkill.exe', ['/PID', String(pid), '/T', '/F'], undefined, 6000)
       else process.kill(-pid, force ? 'SIGKILL' : 'SIGTERM')
     } catch {
       /* The close event is the authority; the process may already have exited. */
