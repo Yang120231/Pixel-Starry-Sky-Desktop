@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { I18nProvider } from '@/i18n/I18nProvider'
 import { Markdown } from './Markdown'
-import { describeMermaidError, mermaidThemeVars, mix, sizeSvg, svgDataUrl, type Rgb } from './mermaid'
+import {
+  createSvgCache,
+  describeMermaidError,
+  MERMAID_MAX_LINES,
+  mermaidThemeVars,
+  mix,
+  sizeSvg,
+  svgDataUrl,
+  type Rgb,
+} from './mermaid'
 
 const html = (text: string, streaming = false): string =>
   renderToStaticMarkup(
@@ -93,7 +102,31 @@ describe('回复里的 mermaid 代码块', () => {
     expect(out).toContain('data-code-lang="mermaid"')
   })
 
+  it('太大的图不自动画：显示源码和「仍然画图」，没有加载占位', () => {
+    const body = Array.from({ length: MERMAID_MAX_LINES + 1 }, (_, i) => `  N${i} --> N${i + 1}`).join('\n')
+    const out = html('```mermaid\nflowchart LR\n' + body + '\n```')
+    expect(out).toContain('仍然画图')
+    expect(out).not.toContain('正在加载图表')
+    expect(out).toContain('N600')
+  })
+
   it('其它语言不受影响', () => {
     expect(html('```ts\nlet a = 1\n```')).not.toContain('aria-pressed')
+  })
+})
+
+describe('Mermaid 图缓存', () => {
+  it('按字数限总量：超了丢最早放进去的，单张超过上限的不缓存', () => {
+    const cache = createSvgCache(10)
+    cache.set('a', '1234')
+    cache.set('b', '1234')
+    expect(cache.get('a')).toBe('1234')
+    cache.set('c', '1234')
+    expect(cache.get('a')).toBeUndefined()
+    expect(cache.get('b')).toBe('1234')
+    expect(cache.get('c')).toBe('1234')
+    cache.set('d', '12345678901')
+    expect(cache.get('d')).toBeUndefined()
+    expect(cache.get('c')).toBe('1234')
   })
 })

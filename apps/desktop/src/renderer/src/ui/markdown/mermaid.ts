@@ -128,6 +128,39 @@ export function describeMermaidError(e: unknown): { line: number | null; reason:
   return { line: line ? +line[1] : null, reason: (useLast ? last : lines[0]) || message }
 }
 
+/** 自动画图的上限：mermaid 排版是同步的，巨型图会卡住界面几秒；超过的先显示源码，用户点了再画 */
+export const MERMAID_MAX_CHARS = 20_000
+export const MERMAID_MAX_LINES = 600
+
+export const tooLargeToAutoRender = (code: string): boolean =>
+  code.length > MERMAID_MAX_CHARS || code.split('\n').length > MERMAID_MAX_LINES
+
+/**
+ * 画好的图的缓存：按字数（键 + SVG）限总量，超了丢最早放进去的；单张超过上限的不缓存。
+ * shortcut: 按 UTF-16 字数算，不是实际占用的内存；够用来防止几张大图把缓存撑到上百 MB
+ */
+export function createSvgCache(limit: number): {
+  get(key: string): string | undefined
+  set(key: string, svg: string): void
+} {
+  const map = new Map<string, string>()
+  let size = 0
+  return {
+    get: key => map.get(key),
+    set(key, svg) {
+      const n = key.length + svg.length
+      if (n > limit || map.has(key)) return
+      map.set(key, svg)
+      size += n
+      for (const [k, v] of map) {
+        if (size <= limit) break
+        map.delete(k)
+        size -= k.length + v.length
+      }
+    },
+  }
+}
+
 // mermaid.render 同时跑几个会互相抢全局配置：串行排队
 let queue: Promise<unknown> = Promise.resolve()
 let seq = 0

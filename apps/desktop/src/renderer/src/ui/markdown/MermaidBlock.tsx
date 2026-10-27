@@ -8,18 +8,21 @@ import { CodeBlock } from '@/ui/code/CodeBlock'
 import { cn } from '@/ui/cn'
 import { ImageViewer } from '@/ui/ImageViewer'
 import { Spinner } from '@/ui/Spinner'
-import { describeMermaidError, renderMermaid, svgDataUrl, useThemeVars } from './mermaid'
+import {
+  createSvgCache,
+  describeMermaidError,
+  renderMermaid,
+  svgDataUrl,
+  tooLargeToAutoRender,
+  useThemeVars,
+} from './mermaid'
 
 /** 回复还在流式输出（Markdown 的流式分支提供） */
 export const StreamingContext = createContext(false)
 
-const CACHE_LIMIT = 50
-// 画好的图按（主题, 源码）缓存：长对话折叠后再展开、流式换成完整渲染时块会重新挂载，不用再显示「加载中」
-const cache = new Map<string, string>()
-const remember = (key: string, svg: string): void => {
-  cache.set(key, svg)
-  if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value!)
-}
+// 画好的图按（主题, 源码）缓存：长对话折叠后再展开、流式换成完整渲染时块会重新挂载，不用再显示「加载中」。
+// 总共约 200 万字（约 4MB）
+const cache = createSvgCache(2_000_000)
 
 type Outcome = { key: string; svg: string } | { key: string; error: { line: number | null; reason: string } }
 
@@ -35,7 +38,7 @@ function useDiagram(code: string, enabled: boolean, attempt: number) {
     let stale = false
     renderMermaid(code, vars).then(
       svg => {
-        remember(cacheKey, svg)
+        cache.set(cacheKey, svg)
         if (!stale) setOutcome({ key, svg })
       },
       (e: unknown) => {
@@ -60,9 +63,13 @@ export const MermaidBlock = memo(function MermaidBlock({ code }: { code: string 
   const [showSource, setShowSource] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [zoomed, setZoomed] = useState(false)
-  const result = useDiagram(text, !streaming, attempt)
+  const [force, setForce] = useState(false)
+  const large = tooLargeToAutoRender(text)
+  const result = useDiagram(text, !streaming && (!large || force), attempt)
   const svg = result && 'svg' in result ? result.svg : null
   const error = result && 'error' in result ? result.error : null
+  // 太大的图没自动画（画过的在缓存里，照常显示）
+  const held = large && !force && !result
 
   if (streaming) return <CodeBlock code={code} lang="mermaid" />
 
@@ -106,22 +113,35 @@ export const MermaidBlock = memo(function MermaidBlock({ code }: { code: string 
       </button>
     </>
   )
-  const notice = error && (
-    <div className="flex items-start gap-1.5 border-b border-line-subtle bg-[color-mix(in_srgb,var(--danger)_8%,var(--bg-surface))] px-3 py-1.5 text-meta text-danger">
-      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-      <span className="min-w-0 break-words">
-        {tr('mermaid.failed', {
-          reason: (error.line ? tr('mermaid.failedLine', { line: error.line }) : '') + error.reason,
-        })}
-      </span>
+  const notice = held ? (
+    <div className="flex items-start gap-1.5 border-b border-line-subtle bg-subtle px-3 py-1.5 text-meta text-fg-muted">
+      <span className="min-w-0 break-words">{tr('mermaid.tooLarge')}</span>
       <button
         type="button"
         className="ml-auto shrink-0 whitespace-nowrap text-fg-muted hover:text-fg"
-        onClick={() => setAttempt(n => n + 1)}
+        onClick={() => setForce(true)}
       >
-        {tr('mermaid.retry')}
+        {tr('mermaid.renderAnyway')}
       </button>
     </div>
+  ) : (
+    error && (
+      <div className="flex items-start gap-1.5 border-b border-line-subtle bg-[color-mix(in_srgb,var(--danger)_8%,var(--bg-surface))] px-3 py-1.5 text-meta text-danger">
+        <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+        <span className="min-w-0 break-words">
+          {tr('mermaid.failed', {
+            reason: (error.line ? tr('mermaid.failedLine', { line: error.line }) : '') + error.reason,
+          })}
+        </span>
+        <button
+          type="button"
+          className="ml-auto shrink-0 whitespace-nowrap text-fg-muted hover:text-fg"
+          onClick={() => setAttempt(n => n + 1)}
+        >
+          {tr('mermaid.retry')}
+        </button>
+      </div>
+    )
   )
   const view = diagram ? (
     <div className="flex justify-center bg-surface px-3 py-3.5">
@@ -133,7 +153,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code }: { code: string 
         className="h-auto max-w-full"
       />
     </div>
-  ) : !result ? (
+  ) : !result && !held ? (
     <div className="flex items-center justify-center gap-2 bg-surface px-3 py-6 text-meta text-fg-muted">
       <Spinner size={13} />
       {tr('mermaid.loading')}
