@@ -765,10 +765,11 @@ export class ClaudeSession implements EngineSession {
     // Ultracode / Fast 不是命令行参数，启动后用 flag settings 打开，再确认是否生效
     const { ultracode, fast, thinkingSummaries } = rec
     if (ultracode) await proc.request('apply_flag_settings', { settings: { ultracode: true } }).catch(() => undefined)
-    if (fast) await this.applyFast(proc, true)
+    const fastOn = fast ? await this.applyFast(proc, true) : fast
     await this.applyThinking(proc, thinkingSummaries)
-    this.applied = { ...this.applied, ultracode, fast, thinkingSummaries }
-    await this.syncSettings(proc)
+    const ultracodeOn = await this.syncSettings(proc)
+    // 记 CLI 实际生效的值：被拒的 Fast / Ultracode 下次再开要重新发
+    this.applied = { ...this.applied, ultracode: ultracodeOn ?? ultracode, fast: fastOn, thinkingSummaries }
     // 启动期间用户又改了设置（模型、权限模式等）：在发第一条消息之前补上
     const late = this.lateSettings
     if (late) {
@@ -783,8 +784,8 @@ export class ClaudeSession implements EngineSession {
     return proc
   }
 
-  /** 开 / 关 Fast 模式，再发一次 initialize 读实际状态；开不了就关掉开关并提示原因 */
-  private async applyFast(proc: ClaudeProcess, on: boolean): Promise<void> {
+  /** 开 / 关 Fast 模式，再发一次 initialize 读实际状态；开不了就关掉开关并提示原因。返回实际状态，失败时不确定 */
+  private async applyFast(proc: ClaudeProcess, on: boolean): Promise<boolean | undefined> {
     try {
       await proc.request('apply_flag_settings', { settings: { fastMode: on } })
       const init = await proc.request('initialize', {}, 15_000)
@@ -794,9 +795,12 @@ export class ClaudeSession implements EngineSession {
       if (on && state && state === 'off') {
         this.translator.notice('warn', 'Fast 模式暂时不可用' + (blocked ? '：' + fastBlockedText(blocked) : ''))
         this.ctx.setFast(false)
+        return false
       }
+      return on
     } catch (err) {
       this.translator.notice('warn', 'Fast 模式没能' + (on ? '打开' : '关闭') + '：' + (err as Error).message)
+      return undefined
     }
   }
 
@@ -807,13 +811,13 @@ export class ClaudeSession implements EngineSession {
       .catch(() => undefined)
   }
 
-  /** 问 CLI 实际生效的设置（get_settings），同步 Ultracode 的可用性和开关 */
-  private async syncSettings(proc: ClaudeProcess): Promise<void> {
+  /** 问 CLI 实际生效的设置（get_settings），同步 Ultracode 的可用性和开关；返回 Ultracode 实际开没开，老版本不知道 */
+  private async syncSettings(proc: ClaudeProcess): Promise<boolean | undefined> {
     let applied: Msg
     try {
       applied = obj((await proc.request('get_settings', {}, 10_000)).applied)
     } catch {
-      return // 老版本没有 get_settings：不知道支不支持 Ultracode
+      return undefined // 老版本没有 get_settings：不知道支不支持 Ultracode
     }
     const available = applied.ultracodeAvailable === true
     this.setFlags({ ultracodeAvailable: available })
@@ -822,6 +826,7 @@ export class ClaudeSession implements EngineSession {
       this.translator.notice('warn', available ? 'Ultracode 没能打开' : '当前模型不支持 Ultracode，已关闭')
       this.ctx.setUltracode(false)
     }
+    return on
   }
 
   private onExit(proc: ClaudeProcess, code: number | null, tail: string): void {
@@ -1014,10 +1019,12 @@ export class ClaudeSession implements EngineSession {
       if (patch.ultracode !== undefined) {
         await proc.request('apply_flag_settings', { settings: { ultracode: patch.ultracode } })
       }
-      if (patch.fast !== undefined) await this.applyFast(proc, patch.fast)
+      if (patch.fast !== undefined) patch.fast = await this.applyFast(proc, patch.fast)
       if (patch.thinkingSummaries !== undefined) await this.applyThinking(proc, patch.thinkingSummaries)
       // 换模型可能改变能不能开 Ultracode
-      if ('model' in patch || patch.ultracode !== undefined) await this.syncSettings(proc)
+      if ('model' in patch || patch.ultracode !== undefined)
+        patch.ultracode = (await this.syncSettings(proc)) ?? patch.ultracode
+      // 记 CLI 实际生效的值：被拒的 Fast / Ultracode 下次再开要重新发
       this.applied = { ...this.applied, ...patch }
     } catch (err) {
       if (strict) throw err

@@ -59,6 +59,17 @@ function thinkingLog(): string[] {
   }
 }
 
+/** 发给 CLI 的 apply_flag_settings 次数 */
+function flagRequests(): number {
+  try {
+    return readFileSync(join(root, 'argv.control.log'), 'utf8')
+      .split('\n')
+      .filter(c => c === 'apply_flag_settings').length
+  } catch {
+    return 0
+  }
+}
+
 function spawnArgs(): string[][] {
   try {
     return readFileSync(join(root, 'argv.log'), 'utf8')
@@ -982,6 +993,11 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(snap.flags.ultracodeAvailable).toBe(false)
     expect(snap.record.ultracode).toBe(false)
     expect(snap.items.some(i => i.kind === 'notice' && i.text.includes('不支持 Ultracode'))).toBe(true)
+    // 被关掉后再打开：要重新发给 CLI，不能当成「已经开着」跳过
+    const before = flagRequests()
+    await host.update(record.id, { ultracode: true })
+    expect(flagRequests()).toBe(before + 1)
+    expect(host.open(record.id).record.ultracode).toBe(false)
   })
 
   it('Fast 模式：能开时打开，引擎报告 on', async () => {
@@ -1007,6 +1023,11 @@ describe('EngineHost + Claude（假引擎）', () => {
     const snap = host.open(record.id)
     expect(snap.record.fast).toBe(false)
     expect(snap.items.some(i => i.kind === 'notice' && i.text.includes('只支持 Anthropic 官方接口'))).toBe(true)
+    // 被关掉后再打开：要重新发给 CLI，不能当成「已经开着」跳过
+    const before = flagRequests()
+    await host.update(record.id, { fast: true })
+    expect(flagRequests()).toBe(before + 1)
+    expect(host.open(record.id).record.fast).toBe(false)
   })
 
   it('显示思考摘要：启动时按设置发 summarized，关掉后发 omitted', async () => {
