@@ -396,7 +396,8 @@ function LiveSessionView({
                           {tr('session.tui.switchBack')}
                         </button>
                       </div>
-                      <div className="min-h-0 flex-1">
+                      {/* TerminalView 的根是 flex-1：这层要是 flex 容器，不然终端高度跟着内容走、卡在起步的 24 行 */}
+                      <div className="flex min-h-0 flex-1 flex-col">
                         {tuiTerminal ? (
                           <TerminalView
                             record={tuiTerminal}

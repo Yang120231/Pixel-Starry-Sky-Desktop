@@ -103,7 +103,10 @@ class FakeAdapter implements EngineAdapter {
   async nativeSessions(): Promise<NativeSessionList> {
     return { sessions: [] } as unknown as NativeSessionList
   }
+  /** 终端里一句没说：Claude Code 不建记录文件 */
+  noTranscript = false
   async readNativeSession(): Promise<NativeRead | null> {
+    if (this.noTranscript) return null
     return { file: 'x', items: this.native, title: '', turns: 1, shown: 1, summary: null } as NativeRead
   }
   async newerNativeTurns(_cwd: string, _id: string, after: string): Promise<NewerTurns | null> {
@@ -240,6 +243,15 @@ describe('TUI seed-only flush (§5.3)', () => {
     ]
     const before = snap().items.length
     expect(await host.syncFromTui(record.id)).toEqual({ added: 0, mismatched: true })
+    expect(snap().items.length).toBe(before)
+  })
+
+  it('回归：新对话切到终端一句没说就切回（没有记录文件）：没有可补的，不提示对不上', async () => {
+    const { host, claude, record, snap } = setup()
+    await host.prepareTui(record.id)
+    claude.noTranscript = true
+    const before = snap().items.length
+    expect(await host.syncFromTui(record.id)).toEqual({ added: 0, mismatched: false })
     expect(snap().items.length).toBe(before)
   })
 })

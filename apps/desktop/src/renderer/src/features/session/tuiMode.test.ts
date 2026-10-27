@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { tuiActive, tuiBlockKey, tuiDisabledReason, tuiModeOf, tuiToggleVisible } from './tuiMode'
+import { tuiActive, tuiBlockKey, tuiConfirm, tuiDisabledReason, tuiModeOf, tuiToggleVisible } from './tuiMode'
 import type { SessionRecord, SessionSnapshot } from '@pixelsky/protocol'
 
 function snap(partial: Partial<SessionRecord> & Pick<SessionRecord, 'engine'>): SessionSnapshot {
@@ -68,5 +68,21 @@ describe('tuiMode helpers', () => {
     const s = snap({ engine: 'claude' })
     const running = { ...s, subagents: [{ id: 'a', name: '甲', status: 'running', background: true }] }
     expect(tuiDisabledReason(running as unknown as typeof s)).toBe('session.tui.disabledBusy')
+  })
+})
+
+describe('tuiConfirm', () => {
+  it('回归：顶栏那份 hook 碰到 tui.running 设的确认，对话区那份也收得到（原来各存一份，顶栏开关点了没反应）', () => {
+    let heard = 0
+    const stop = tuiConfirm.subscribe(() => heard++)
+    tuiConfirm.set('s1', true)
+    expect(tuiConfirm.has('s1')).toBe(true)
+    expect(tuiConfirm.has('s2')).toBe(false)
+    tuiConfirm.set('s1', true)
+    expect(heard).toBe(1)
+    tuiConfirm.set('s1', false)
+    expect(tuiConfirm.has('s1')).toBe(false)
+    expect(heard).toBe(2)
+    stop()
   })
 })

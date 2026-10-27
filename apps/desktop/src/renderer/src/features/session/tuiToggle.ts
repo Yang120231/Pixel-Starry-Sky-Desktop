@@ -1,5 +1,5 @@
 // 会话界面 ⇄ 终端（TUI）切换的 React hook / IPC（docs/ui/tui-toggle.md）
-import { useCallback, useEffect, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore, type RefObject } from 'react'
 import { isDemo } from '@/data'
 import { matchesAction } from '@/features/layout/keybindings'
 import { machineOf } from '@/features/machines/store'
@@ -15,6 +15,7 @@ import {
   isTuiRunningError,
   tuiDisabledReason,
   tuiBlockKey,
+  tuiConfirm,
   tuiModeOf,
   tuiToggleVisible,
   type TuiMode,
@@ -84,7 +85,13 @@ export function useTuiToggle(
   const toast = useToast()
   const terminals = useTerminalStore()
   const [busy, setBusy] = useState(false)
-  const [confirm, setConfirm] = useState(false)
+  const confirm = useSyncExternalStore(tuiConfirm.subscribe, () => !!sessionId && tuiConfirm.has(sessionId))
+  const setConfirm = useCallback(
+    (on: boolean) => {
+      if (sessionId) tuiConfirm.set(sessionId, on)
+    },
+    [sessionId],
+  )
   const record = snapshot?.record
   // 远程机器（SSH / WSL）上的对话不开放（§3.1）
   const visible = tuiToggleVisible(record) && !!sessionId && machineOf(sessionId) === 'local'
@@ -152,7 +159,7 @@ export function useTuiToggle(
         setBusy(false)
       }
     },
-    [sessionId, busy, disabledReason, toast, mismatch],
+    [sessionId, busy, disabledReason, toast, mismatch, setConfirm],
   )
 
   const forceClose = useCallback(() => {
@@ -165,7 +172,7 @@ export function useTuiToggle(
       })
       .catch(err => toast(err instanceof Error ? err.message : String(err)))
       .finally(() => setBusy(false))
-  }, [sessionId, toast, mismatch])
+  }, [sessionId, toast, mismatch, setConfirm])
 
   useEffect(() => {
     if (!sessionId || !visible || !main) return

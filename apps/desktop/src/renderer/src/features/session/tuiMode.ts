@@ -53,3 +53,23 @@ export function isTuiRunningError(err: unknown): boolean {
 export function isDemoTuiTerminal(terminalId: string | null | undefined): boolean {
   return terminalId === DEMO_TUI_TERMINAL_ID
 }
+
+/**
+ * 「终端还在运行，结束并切回？」等确认的会话。顶栏和对话区各有一份 useTuiToggle，确认框只在对话区画：
+ * 状态放这里共用，顶栏开关碰到 tui.running 时对话区那份也能弹出来
+ */
+const confirming = new Set<string>()
+const confirmListeners = new Set<() => void>()
+export const tuiConfirm = {
+  has: (sessionId: string): boolean => confirming.has(sessionId),
+  set(sessionId: string, on: boolean): void {
+    if (on === confirming.has(sessionId)) return
+    if (on) confirming.add(sessionId)
+    else confirming.delete(sessionId)
+    for (const listener of confirmListeners) listener()
+  },
+  subscribe(listener: () => void): () => void {
+    confirmListeners.add(listener)
+    return () => confirmListeners.delete(listener)
+  },
+}

@@ -280,8 +280,8 @@ export class HostNative {
       const all = rt.snapshot.items.filter(item => item.kind === 'user')
       let found: { items: Item[]; shown: number } | null = null
       if (all.length === 0) {
-        // 新对话：还没有用户条目，整段读最近轮次
-        found = (await adapter.readNativeSession?.(record.cwd, sid, { turns: 50 })) ?? null
+        // 新对话：还没有用户条目，整段读最近轮次。终端里一句没说时 Claude Code 不建记录文件，读不到＝没有可补的，不算对不上
+        found = (await adapter.readNativeSession?.(record.cwd, sid, { turns: 50 })) ?? { items: [], shown: 0 }
       } else {
         // 重试 / 重连的条目 id 不是 uuid，不当锚点；只剩这种条目时按对不上处理，不整段重读（会重复）
         for (const user of all
