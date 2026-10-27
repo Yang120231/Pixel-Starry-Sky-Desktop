@@ -444,6 +444,20 @@ describe('对话检查点（宿主）', () => {
     expect(read('other.txt')).toBe('o0\n')
   })
 
+  it('回退代码时读快照中途出错：一个文件都不改（以前前面的文件已经被覆盖、撤销里也没有）', async () => {
+    write('keep.txt', 'v0\n')
+    const { host, id, send } = setup({ a: { 'a.txt': 'a\n', 'keep.txt': 'v1\n' } })
+    const a = await send('a')
+    write('keep.txt', 'hand\n')
+    const repo = internals(host).states.get(id)!.repo
+    const blob = repo.blob.bind(repo)
+    repo.blob = (tree, path) =>
+      path === 'keep.txt' ? Promise.reject(new CheckpointError('failed', 'git 超时了')) : blob(tree, path)
+    await host.rewind(id, a, { conversation: false, code: true }).catch(() => null)
+    expect(read('a.txt')).toBe('a\n')
+    expect(read('keep.txt')).toBe('hand\n')
+  })
+
   it('撤回时读结束快照出了别的错（不是缺内容）：撤回失败，不动文件', async () => {
     write('keep.txt', 'v0\n')
     const { host, id, send } = setup({ a: { 'keep.txt': 'v1\n' } })

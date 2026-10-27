@@ -9,9 +9,13 @@
 // 写入都是同步的小文件操作：保证顺序，量也很小（只在条目开始 / 完成时写，不写流式增量）。
 import {
   appendFileSync,
+  closeSync,
   createReadStream,
   existsSync,
+  fstatSync,
   mkdirSync,
+  openSync,
+  readSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -121,7 +125,29 @@ function writeJson(file: string, data: unknown): void {
 
 const SAFE_ID = /^[A-Za-z0-9_-]+$/
 
+/** 文件最后一个字节不是换行（写到一半断电留下的坏行）；文件不存在或是空的算 false */
+function endsMidLine(file: string): boolean {
+  let fd: number
+  try {
+    fd = openSync(file, 'r')
+  } catch {
+    return false
+  }
+  try {
+    const { size } = fstatSync(fd)
+    if (!size) return false
+    const last = Buffer.alloc(1)
+    readSync(fd, last, 0, 1, size - 1)
+    return last[0] !== 0x0a
+  } finally {
+    closeSync(fd)
+  }
+}
+
 export class Store {
+  /** 本进程里已经核对过 items.jsonl 结尾的会话 */
+  private readonly appendChecked = new Set<string>()
+
   constructor(readonly dir: string) {
     mkdirSync(join(dir, 'sessions'), { recursive: true })
   }
@@ -213,7 +239,20 @@ export class Store {
   appendItem(sessionId: string, item: Item): void {
     const dir = this.sessionDir(sessionId)
     mkdirSync(dir, { recursive: true })
-    appendFileSync(join(dir, 'items.jsonl'), JSON.stringify(item) + '\n', 'utf8')
+    const file = join(dir, 'items.jsonl')
+    // 每个会话本进程第一次追加前看一眼结尾：上次写坏的最后一行没有换行，先补一个，免得新的一条接在后面一起读不出来
+    let lead = ''
+    if (!this.appendChecked.has(sessionId)) {
+      this.appendChecked.add(sessionId)
+      if (endsMidLine(file)) lead = '\n'
+    }
+    try {
+      appendFileSync(file, lead + JSON.stringify(item) + '\n', 'utf8')
+    } catch (err) {
+      // 写了一半就失败（磁盘满）：下次追加再看一眼结尾
+      this.appendChecked.delete(sessionId)
+      throw err
+    }
   }
 
   loadQueue(record: SessionRecord): QueueFile {

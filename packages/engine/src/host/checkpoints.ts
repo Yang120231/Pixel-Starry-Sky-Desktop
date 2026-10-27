@@ -396,16 +396,32 @@ export class HostCheckpoints {
     const current = await state.repo.capture(LATER_TIMEOUT)
     const only = paths ? new Set(paths) : null
     const changes = (await state.repo.diff(before, current)).filter(c => !only || only.has(c.path))
-    const saved: Saved = []
-    let size = 0
+    // 先取齐快照里的内容再写：取的时候 git 可能超时，不能留下改了一半的文件
+    const files: string[] = []
+    const blobs: (Buffer | null)[] = []
     for (const c of changes) {
       const blob = await state.repo.blob(before, c.path)
       if (blob === 'special') continue
-      const file = join(state.data.cwd, c.path)
-      const data = readOrNull(file)
-      size += data?.length ?? 0
-      saved.push({ path: file, data })
-      writeBlob(file, blob)
+      files.push(join(state.data.cwd, c.path))
+      blobs.push(blob)
+    }
+    // 撤销用的当前内容在所有 await 之后、紧挨着写入再读：取快照期间用户又保存的，也算进撤销里
+    const saved: Saved = files.map(path => ({ path, data: readOrNull(path) }))
+    const size = saved.reduce((n, s) => n + (s.data?.length ?? 0), 0)
+    let written = 0
+    try {
+      for (; written < saved.length; written++) writeBlob(saved[written]!.path, blobs[written]!)
+    } catch (err) {
+      // 写到一半失败（文件被占用、磁盘满）：已经写了的改回去，报「代码没变」才是真的。
+      // 从失败的那个开始：writeFileSync 先清空再写，失败时它可能已经被清空了
+      for (let i = written; i >= 0; i--) {
+        try {
+          writeBlob(saved[i]!.path, saved[i]!.data)
+        } catch {
+          /* 改不回去的只能留着，错误照样报出去 */
+        }
+      }
+      throw err
     }
     return { saved: size <= UNDO_LIMIT ? saved : null, count: saved.length }
   }
