@@ -259,6 +259,62 @@ export class HostNative {
   }
 
   /**
+   * 从终端（TUI）模式切回时补轮次（docs/ui/tui-toggle.md §5.4）：
+   * 不要求 imported；sid 用 engineSessionId；锚点用最近用户条目。
+   * mismatched 表示锚点不在当前分支上（对不上了）。
+   */
+  async syncFromTui(id: string): Promise<{ added: number; mismatched: boolean }> {
+    const { ctx } = this
+    const m = ctx.m
+    const rt = m.sessions.runtime(id)
+    const record = rt.snapshot.record
+    const sid = record.engineSessionId
+    if (!sid) return { added: 0, mismatched: false }
+    const adapter = this.adapter(record.engine)
+    if (!adapter.newerNativeTurns) return { added: 0, mismatched: false }
+    const idle = rt.snapshot.state === 'idle' && !rt.pumping && !rt.stopping
+    if (ctx.changingSessions.has(id) || !idle)
+      throw new Error(ctx.changingSessions.has(id) ? '正在处理这个会话，请稍后重试' : '任务运行中，结束后再试')
+    ctx.changingSessions.add(id)
+    try {
+      const all = rt.snapshot.items.filter(item => item.kind === 'user')
+      let found: { items: Item[]; shown: number } | null = null
+      if (all.length === 0) {
+        // 新对话：还没有用户条目，整段读最近轮次
+        found = (await adapter.readNativeSession?.(record.cwd, sid, { turns: 50 })) ?? null
+      } else {
+        // 重试 / 重连的条目 id 不是 uuid，不当锚点；只剩这种条目时按对不上处理，不整段重读（会重复）
+        for (const user of all
+          .filter(item => UUID.test(item.id))
+          .slice(-8)
+          .reverse()) {
+          found = await adapter.newerNativeTurns(record.cwd, sid, user.id, { turns: 50, afterTurn: true })
+          if (found) break
+        }
+      }
+      if (!found) return { added: 0, mismatched: true }
+      if (!found.items.length) return { added: 0, mismatched: false }
+      const tagged = found.items.map(item => (item.kind === 'user' ? { ...item, source: 'tui' as const } : item))
+      const notice = {
+        kind: 'notice' as const,
+        id: randomUUID(),
+        level: 'info' as const,
+        text: NATIVE_TEXT.tuiSynced(found.shown),
+        detail: null,
+      }
+      const next = [...rt.snapshot.items, notice, ...tagged]
+      this.replace(id, next)
+      const entry = record.engineSessions?.[record.engine]
+      m.events.patchRecord(id, {
+        engineSessions: { ...record.engineSessions, [record.engine]: { ...entry, id: sid, seen: next.at(-1)!.id } },
+      })
+      return { added: found.shown, mismatched: false }
+    } finally {
+      ctx.changingSessions.delete(id)
+    }
+  }
+
+  /**
    * 对导入的对话做一件事：earlier 加载更早的、sync 补上终端里新聊的、check 只看有没有新聊的（有就在末尾加提示）、
    * copy 把原地导入的对话改成复制的（启动时发现终端里正开着）
    */

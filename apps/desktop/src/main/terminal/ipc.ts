@@ -199,3 +199,9 @@ export async function closeWindowTerminals(win: BrowserWindow): Promise<void> {
   await manager?.shutdown(win.webContents.id)
   await remote?.shutdown(win.webContents.id)
 }
+
+/** 本机终端管理器（会话 TUI 用，docs/ui/tui-toggle.md §4.2） */
+export function localTerminals(): TerminalManager {
+  if (!manager) throw new Error('终端尚未初始化')
+  return manager
+}

@@ -252,6 +252,11 @@ export interface SessionRecord extends SessionSettings {
    * 目标还是这次暂停的样子就改回进行中；用户自己停止、暂停的不记
    */
   goalHeldAt?: number | null
+  /**
+   * 当前在终端（TUI）模式（docs/ui/tui-toggle.md §5.1）：terminalId 是本机内置终端 id，since 是切过去的时间。
+   * 远程机器不开放；重启后打开会话当作已切回并补轮次
+   */
+  tui?: { terminalId: string; since: number } | null
 }
 
 /**

@@ -34,6 +34,19 @@ export interface FoldedResult {
 export type FoldedMatches = (term: string) => FoldedResult
 
 /**
+ * 这个按键是不是给这个对话区（main）的：事件发生在它里面，或者焦点不在任何地方而它是最近用过的对话区。
+ * 每个挂着的对话都监听 window 时用它挑出一个（Ctrl+F、Alt+T 切终端）
+ */
+export function keyForConversation(el: HTMLElement, e: KeyboardEvent): boolean {
+  if (isHidden(el)) return false
+  const target = e.target instanceof Node ? e.target : null
+  if (target && el.contains(target)) return true
+  const idle = !target || target === document.body || target === document.documentElement
+  const fallback = lastConversation?.isConnected ? lastConversation : document.querySelector('main.conversation-view')
+  return idle && fallback === el
+}
+
+/**
  * 给一个对话区（main）挂 Ctrl+F：事件发生在这个对话区里，或者焦点不在任何地方而它是最近用过的对话区时打开。
  * 终端、编辑器、设置里的 Ctrl+F 事件不在对话区里，不受影响。
  */
@@ -48,13 +61,7 @@ export function useFindShortcut(main: RefObject<HTMLElement | null>, enabled: bo
     }
     const onKey = (e: KeyboardEvent): void => {
       const el = main.current
-      if (!el || !FIND_IN_CONVERSATION.match(e) || isHidden(el)) return
-      const target = e.target instanceof Node ? e.target : null
-      const idle = !target || target === document.body || target === document.documentElement
-      const fallback = lastConversation?.isConnected
-        ? lastConversation
-        : document.querySelector('main.conversation-view')
-      if (!(target && el.contains(target)) && !(idle && fallback === el)) return
+      if (!el || !FIND_IN_CONVERSATION.match(e) || !keyForConversation(el, e)) return
       e.preventDefault()
       latest.current()
     }

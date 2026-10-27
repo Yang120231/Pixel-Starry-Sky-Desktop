@@ -1,3 +1,4 @@
+import { registerOwnClaudePid, unregisterOwnClaudePid } from '@pixelsky/engine'
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises'
 import { statSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -52,6 +53,20 @@ function mergeEnv(env: Record<string, string>, extra: Record<string, string>): v
       for (const old of Object.keys(env)) if (old.toLowerCase() === key.toLowerCase()) delete env[old]
     env[key] = value
   }
+}
+/**
+ * 直接跑的程序（终端模式里的引擎）的环境变量。给了完整的 env（引擎拼好的：已滤掉 Claude 子会话标记、带上账号目录和网关）
+ * 就以它为底，不再从本进程的 env 拼：否则从 Claude Code 里启动的像素星空会把那些标记带回去，终端里的 Claude Code 就不保存记录。
+ * 终端自己会去掉的 PIXELSKY_* 从引擎的 env 里补回
+ */
+export function commandEnvironment(
+  engineEnv?: NodeJS.ProcessEnv,
+  source: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+  const env = terminalEnvironment(engineEnv ?? source)
+  for (const [key, value] of Object.entries(engineEnv ?? {}))
+    if (typeof value === 'string' && /^PIXELSKY_/i.test(key)) env[key] = value
+  return env
 }
 /** terminals.json 里缓存的上次检测结果：下次启动先用它，不等检测 */
 interface ProfileCacheEntry {
@@ -251,13 +266,15 @@ export class TerminalManager {
             }))
           : undefined,
         profiles: this.profiles.filter(p => p.custom),
-        terminals: this.records.map(r => ({
-          ...r,
-          status: 'stopped',
-          error: undefined,
-          exitCode: undefined,
-          generation: 0,
-        })),
+        terminals: this.records
+          .filter(r => !r.sessionId)
+          .map(r => ({
+            ...r,
+            status: 'stopped',
+            error: undefined,
+            exitCode: undefined,
+            generation: 0,
+          })),
       },
       null,
       2,
@@ -277,6 +294,7 @@ export class TerminalManager {
       profiles: this.profiles.map(p => ({ ...p, args: [...p.args] })),
       defaultProfileId: this.defaultId,
       terminals: this.records
+        .filter(r => !r.sessionId)
         .filter(r => !this.owners.has(r.id) || this.owners.get(r.id) === owner)
         .map(r => ({ ...r })),
       ...(process.platform === 'win32' ? { encoding: this.encoding } : {}),
@@ -329,6 +347,54 @@ export class TerminalManager {
     await this.save()
     return this.state(owner)
   }
+  /**
+   * 主进程专用：直接起命令当 pty（会话 TUI，docs/ui/tui-toggle.md §4.2）。
+   * 不进 IPC、不落盘、不占 12 上限、不出现在终端列表。
+   */
+  spawnCommand(opts: {
+    owner: number
+    cwd: string
+    command: string
+    args: string[]
+    env?: NodeJS.ProcessEnv
+    label: string
+    sessionId: string
+    projectId: string
+    projectName: string
+  }): TerminalRecord {
+    if (this.stopping) throw new Error('终端正在关闭')
+    if (typeof opts.sessionId !== 'string' || !opts.sessionId) throw new Error('会话不正确')
+    if (typeof opts.command !== 'string' || !opts.command) throw new Error('命令不正确')
+    this.checkDirectory(opts.cwd)
+    const record: TerminalRecord = {
+      id: randomUUID(),
+      projectId: opts.projectId,
+      projectName: opts.projectName,
+      cwd: opts.cwd,
+      profileId: 'session-tui',
+      profileLabel: opts.label,
+      title: opts.label,
+      titleEdited: true,
+      status: 'stopped',
+      generation: 0,
+      createdAt: Date.now(),
+      sessionId: opts.sessionId,
+    }
+    this.records.push(record)
+    this.owners.set(record.id, opts.owner)
+    // 不 save：会话终端不落盘
+    return this.startCommand(opts.owner, record, opts.command, opts.args, opts.env)
+  }
+
+  /** 按终端 id 取记录（含会话 TUI；列表里被过滤掉的也能取） */
+  get(owner: number, id: string): TerminalRecord | null {
+    try {
+      return { ...this.record(owner, id) }
+    } catch {
+      return null
+    }
+  }
+
   create(owner: number, ref: WorkspaceRef, profileId: string | undefined, requestId: string): Promise<TerminalRecord> {
     if (typeof requestId !== 'string' || !requestId || requestId.length > 160)
       return Promise.reject(new Error('终端请求不正确'))
@@ -344,7 +410,7 @@ export class TerminalManager {
     // 先等检测，再做数量和关闭检查：检查到 push 记录之间不能再有 await，否则并发的创建会一起越过上限
     await this.settle(profileId ?? this.defaultId)
     if (this.stopping) throw new Error('终端正在关闭')
-    if (this.records.length >= 12) throw new Error('最多打开 12 个终端，请先关闭部分标签')
+    if (this.records.filter(r => !r.sessionId).length >= 12) throw new Error('最多打开 12 个终端，请先关闭部分标签')
     const target = this.resolve(ref)
     const profile = this.profiles.find(p => p.id === (profileId ?? this.defaultId))
     if (!profile?.available) throw new Error('所选 Shell 不可用')
@@ -373,6 +439,97 @@ export class TerminalManager {
     } catch {}
     throw new Error('项目目录不存在')
   }
+  private startCommand(
+    owner: number,
+    record: TerminalRecord,
+    command: string,
+    args: string[],
+    extraEnv?: NodeJS.ProcessEnv,
+  ): TerminalRecord {
+    if (this.stopping) throw new Error('终端正在关闭')
+    record.generation++
+    record.status = 'starting'
+    record.error = undefined
+    record.exitCode = undefined
+    this.owners.set(record.id, owner)
+    this.update(record)
+    try {
+      this.checkDirectory(record.cwd)
+      const env = commandEnvironment(extraEnv)
+      const child = pty.spawn(command, args, {
+        name: 'xterm-256color',
+        cols: 100,
+        rows: 24,
+        cwd: record.cwd,
+        env,
+        useConpty: true,
+      })
+      let finish!: () => void
+      const done = new Promise<void>(r => {
+        finish = r
+      })
+      const run: Runtime = {
+        child,
+        record,
+        owner,
+        generation: record.generation,
+        seq: 0,
+        pending: '',
+        inflight: new Map(),
+        bytes: 0,
+        paused: false,
+        closing: false,
+        exitCodes: false,
+        ended: null,
+        done,
+        finish,
+      }
+      this.running.set(record.id, run)
+      if (record.sessionId && typeof child.pid === 'number') registerOwnClaudePid(child.pid)
+
+      const dataSub = child.onData(data => {
+        if (this.running.get(record.id) !== run || run.closing) return
+        run.pending += data
+        if (run.pending.length + run.bytes > HIGH && !run.paused) {
+          child.pause()
+          run.paused = true
+        }
+        if (run.pending.length > HARD) {
+          record.error = '终端输出超过缓冲上限，进程已停止'
+          void this.stop(run).catch(() => {})
+          return
+        }
+        if (!run.timer)
+          run.timer = setTimeout(() => {
+            run.timer = undefined
+            this.flush(run)
+          }, 12)
+      })
+      const exitSub = child.onExit(({ exitCode }) => {
+        if (this.running.get(record.id) === run) {
+          this.flush(run)
+          if (record.sessionId && typeof run.child.pid === 'number') unregisterOwnClaudePid(run.child.pid)
+          this.running.delete(record.id)
+          record.status = 'exited'
+          record.exitCode = exitCode
+          this.update(record)
+        }
+        clearTimeout(run.timer)
+        dataSub.dispose()
+        exitSub.dispose()
+        finish()
+      })
+      record.status = 'running'
+      record.lastStartedAt = Date.now()
+      this.update(record)
+    } catch (cause) {
+      record.status = 'error'
+      record.error = String(cause instanceof Error ? cause.message : cause)
+      this.update(record)
+    }
+    return { ...record }
+  }
+
   private start(owner: number, record: TerminalRecord): TerminalRecord {
     if (this.stopping) throw new Error('终端正在关闭')
     record.generation++
@@ -540,6 +697,7 @@ export class TerminalManager {
     return { ...record }
   }
   private async stop(run: Runtime): Promise<void> {
+    if (run.record.sessionId && typeof run.child.pid === 'number') unregisterOwnClaudePid(run.child.pid)
     run.closing = true
     clearTimeout(run.timer)
     if (run.paused) run.child.resume()

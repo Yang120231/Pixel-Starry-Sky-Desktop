@@ -41,6 +41,13 @@ const STDIO_DRAIN_MS = 1_000
 
 /** 像素星空自己起的 Claude Code 进程的 pid（会话进程、回退 / 旁聊的辅助进程）：判断终端里有没有开着同一个会话时要排除 */
 export const ownClaudePids = new Set<number>()
+/** 终端（TUI）pty 里的 Claude 也算自己的，live 检测不要当成外部占用（docs/ui/tui-toggle.md §3.1） */
+export function registerOwnClaudePid(pid: number): void {
+  ownClaudePids.add(pid)
+}
+export function unregisterOwnClaudePid(pid: number): void {
+  ownClaudePids.delete(pid)
+}
 
 export class ClaudeProcess {
   private readonly child: ChildProcessWithoutNullStreams

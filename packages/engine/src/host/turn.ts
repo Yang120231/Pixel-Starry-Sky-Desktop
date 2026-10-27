@@ -4,6 +4,7 @@ import type {
   ApprovalDecision,
   ContextDetailLevel,
   ContextDiagnostic,
+  EngineId,
   ExtensionLaunch,
   GoalAction,
   InterruptOptions,
@@ -17,6 +18,7 @@ import type {
 } from '@pixelsky/protocol'
 import { GOAL_NO_ENGINE, GOAL_NO_PROCESS, codedError, sourceKey, viaGateway } from '@pixelsky/protocol'
 import { queueSettings } from '../queue'
+import type { EngineAdapter, EngineSession } from '../adapter'
 import type { HostContext } from './context'
 import { mergeContext } from './branch'
 import { reconnectedCount } from './queue'
@@ -34,6 +36,7 @@ export class HostTurn {
       m.guard.isLocked(rt.snapshot.record.cwd) ||
       ctx.closing ||
       ctx.changingSessions.has(id) ||
+      rt.snapshot.record.tui ||
       rt.snapshot.record.archivedAt ||
       rt.pumping ||
       rt.stopping ||
@@ -115,80 +118,7 @@ export class HostTurn {
         rt.sessionLaunch = launch
         // launchKey 里带着当前账号，和这里取的是同一个：这个进程就用它
         rt.sessionAccount = source === null ? m.accounts.currentId(record.engine) : null
-        rt.session = adapter.createSession({
-          extensions,
-          maxRetries,
-          record: () => ({ ...m.sessions.runtime(id).snapshot.record, ...(m.sessions.runtime(id).execution ?? {}) }),
-          emit: e => m.events.onEngineEvent(id, e),
-          runs: () => rt.snapshot.runs,
-          setEngineSessionId: engineSessionId => {
-            if (rt.execution) rt.execution.engineSessionId = engineSessionId
-            // 当前引擎在 engineSessions 里的 id 一起同步（旧记录没有 engineSessions，等第一轮结束时再建）
-            const latest = rt.snapshot.record
-            const engine = rt.execution?.engine ?? latest.engine
-            const entry = latest.engineSessions?.[engine]
-            m.events.patchRecord(id, {
-              engineSessionId,
-              ...(latest.engineSessions
-                ? {
-                    engineSessions: {
-                      ...latest.engineSessions,
-                      [engine]: { ...entry, id: engineSessionId, seen: entry?.seen ?? null },
-                    },
-                  }
-                : {}),
-            })
-          },
-          setPermissionMode: permissionMode => {
-            if (rt.execution) rt.execution.permissionMode = permissionMode
-            m.events.patchRecord(id, { permissionMode })
-          },
-          setUltracode: ultracode => {
-            if (rt.execution) rt.execution.ultracode = ultracode
-            m.events.patchRecord(id, { ultracode })
-          },
-          setFast: fast => {
-            if (rt.execution) rt.execution.fast = fast
-            m.events.patchRecord(id, { fast })
-          },
-          setEffort: effort => {
-            if (rt.execution) rt.execution.effort = effort
-            m.events.patchRecord(id, { effort })
-          },
-          clearPendingRewind: () => {
-            if (rt.execution) rt.execution.pendingRewind = null
-            m.events.patchRecord(id, { pendingRewind: null })
-          },
-          clearPendingFork: () => {
-            if (rt.execution) rt.execution.pendingFork = null
-            m.events.patchRecord(id, { pendingFork: null })
-          },
-          holdGoal: goalHeldAt => {
-            if (rt.execution) rt.execution.goalHeldAt = goalHeldAt
-            m.events.patchRecord(id, { goalHeldAt })
-          },
-          lostSeed: (userItemId, sees) =>
-            m.handoff.recover(
-              id,
-              { ...m.sessions.runtime(id).snapshot.record, ...(m.sessions.runtime(id).execution ?? {}) },
-              userItemId,
-              sees,
-            ),
-          forgetSeen: () => {
-            rt.holdCursor = rt.turn?.turnId
-            const latest = m.sessions.runtime(id).snapshot.record
-            const engine = rt.execution?.engine ?? latest.engine
-            const entry = latest.engineSessions?.[engine]
-            m.events.patchRecord(id, {
-              engineSessions: {
-                ...latest.engineSessions,
-                [engine]: { ...entry, id: entry?.id ?? latest.engineSessionId, seen: null },
-              },
-            })
-          },
-          reportConfigWarning: text => m.settings.reportConfigWarning(info.id, text),
-          reportQuota: patch => m.quota.observe(id, patch),
-        })
+        rt.session = this.createEngineSession(id, adapter, { extensions, maxRetries, engineId: info.id })
         preparedExtensions = undefined
       } else {
         extensions?.dispose?.()
@@ -327,6 +257,97 @@ export class HostTurn {
         if (rt.snapshot.state === 'starting') m.events.apply(id, { type: 'status', state: 'idle' })
       }
     }
+  }
+
+  /**
+   * 给会话起一个引擎会话对象，回调把引擎报上来的变化（会话 id、权限、回退已落实…）写回记录。
+   * 发消息（pump）和切终端前落实待办（EngineHost.prepareTui）共用
+   */
+  createEngineSession(
+    id: string,
+    adapter: EngineAdapter,
+    {
+      extensions,
+      maxRetries,
+      engineId,
+    }: { extensions?: ExtensionLaunch; maxRetries?: number | null; engineId: EngineId },
+  ): EngineSession {
+    const m = this.ctx.m
+    const rt = m.sessions.runtime(id)
+    return adapter.createSession({
+      extensions,
+      maxRetries,
+      record: () => ({ ...m.sessions.runtime(id).snapshot.record, ...(m.sessions.runtime(id).execution ?? {}) }),
+      emit: e => m.events.onEngineEvent(id, e),
+      runs: () => rt.snapshot.runs,
+      setEngineSessionId: engineSessionId => {
+        if (rt.execution) rt.execution.engineSessionId = engineSessionId
+        // 当前引擎在 engineSessions 里的 id 一起同步（旧记录没有 engineSessions，等第一轮结束时再建）
+        const latest = rt.snapshot.record
+        const engine = rt.execution?.engine ?? latest.engine
+        const entry = latest.engineSessions?.[engine]
+        m.events.patchRecord(id, {
+          engineSessionId,
+          ...(latest.engineSessions
+            ? {
+                engineSessions: {
+                  ...latest.engineSessions,
+                  [engine]: { ...entry, id: engineSessionId, seen: entry?.seen ?? null },
+                },
+              }
+            : {}),
+        })
+      },
+      setPermissionMode: permissionMode => {
+        if (rt.execution) rt.execution.permissionMode = permissionMode
+        m.events.patchRecord(id, { permissionMode })
+      },
+      setUltracode: ultracode => {
+        if (rt.execution) rt.execution.ultracode = ultracode
+        m.events.patchRecord(id, { ultracode })
+      },
+      setFast: fast => {
+        if (rt.execution) rt.execution.fast = fast
+        m.events.patchRecord(id, { fast })
+      },
+      setEffort: effort => {
+        if (rt.execution) rt.execution.effort = effort
+        m.events.patchRecord(id, { effort })
+      },
+      clearPendingRewind: () => {
+        if (rt.execution) rt.execution.pendingRewind = null
+        m.events.patchRecord(id, { pendingRewind: null })
+      },
+      clearPendingFork: () => {
+        if (rt.execution) rt.execution.pendingFork = null
+        m.events.patchRecord(id, { pendingFork: null })
+      },
+      holdGoal: goalHeldAt => {
+        if (rt.execution) rt.execution.goalHeldAt = goalHeldAt
+        m.events.patchRecord(id, { goalHeldAt })
+      },
+      lostSeed: (userItemId, sees) =>
+        m.handoff.recover(
+          id,
+          { ...m.sessions.runtime(id).snapshot.record, ...(m.sessions.runtime(id).execution ?? {}) },
+          userItemId,
+          sees,
+        ),
+      forgetSeen: () => {
+        rt.holdCursor = rt.turn?.turnId
+        const latest = m.sessions.runtime(id).snapshot.record
+        const engine = rt.execution?.engine ?? latest.engine
+        const entry = latest.engineSessions?.[engine]
+        m.events.patchRecord(id, {
+          engineSessions: {
+            ...latest.engineSessions,
+            [engine]: { ...entry, id: entry?.id ?? latest.engineSessionId, seen: null },
+          },
+        })
+      },
+      reportConfigWarning: text => m.settings.reportConfigWarning(engineId, text),
+      reportQuota: patch => m.quota.observe(id, patch),
+    })
   }
 
   /**

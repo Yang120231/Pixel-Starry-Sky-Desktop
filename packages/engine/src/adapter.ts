@@ -148,6 +148,18 @@ export interface EngineSession {
   mcp?(op: McpOp): Promise<McpOpResult>
   /** quick：应用正在退出（包括更新重启），只给进程很短的时间自己退，不等它收尾（docs/release-update.md §11） */
   close(opts?: CloseOptions): Promise<void>
+  /**
+   * 起进程落实待办（回退 / 分叉 / 压缩前副本 / seed），不发消息。
+   * 切终端（TUI）前用：起一次再关，让记录文件变成终端 --resume 能接上的样子（docs/ui/tui-toggle.md §5.3）
+   */
+  warm?(): Promise<void>
+  /**
+   * 把跨引擎接力的 seed 挂到下次 spawn（injectSeed）落实；切 TUI 前由宿主在 warm 之前调用
+   * （docs/ui/tui-toggle.md §5.3「换引擎接力的 seed」）
+   */
+  queueSeed?(seed: import('./chat-log').ChatSeed): void
+  /** 还有未写入原生记录的 seed（warm / inject 失败时仍为真） */
+  hasQueuedSeed?(): boolean
 }
 
 export interface CloseOptions {
@@ -165,6 +177,16 @@ export interface RewindAnchor {
 
 /** 应用退出时给引擎进程自己退出的时间：Claude Code 空闲时关掉 stdin 约 0.6 秒就退，在忙时常常 5 秒也不退 */
 export const QUICK_CLOSE_MS = 1_000
+
+/** 终端（TUI）模式要启动的交互式进程（docs/ui/tui-toggle.md §5.2） */
+export interface TuiLaunch {
+  command: string
+  args: string[]
+  env: NodeJS.ProcessEnv
+  cwd: string
+  /** 已有或新分配的引擎会话 id（新对话 --session-id 时由宿主写入 engineSessionId） */
+  engineSessionId: string
+}
 
 export interface EngineAdapter {
   /** 检测引擎状态；结果会缓存，force 时重新检测 */
@@ -266,6 +288,14 @@ export interface EngineAdapter {
   resumed?(sleptMs: number): void
   /** 当前账号登录凭据的到期时间（写日志用，不含凭据本身）；读不到的引擎不实现 */
   loginTimes?(): Record<string, unknown>
+  /**
+   * 终端（TUI）模式：拼交互式启动命令与 env（docs/ui/tui-toggle.md §5.2）。
+   * 已有 engineSessionId 用 --resume；没有则分配并返回 engineSessionId（宿主写入记录）。一期 Claude；Codex 二期
+   */
+  tuiLaunch?(
+    record: SessionRecord,
+    extensions?: import('@pixelsky/protocol').ExtensionLaunch,
+  ): TuiLaunch | Promise<TuiLaunch>
 }
 
 /** 恢复代码的结果；files 是绝对路径 */

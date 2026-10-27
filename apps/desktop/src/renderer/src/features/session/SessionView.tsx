@@ -3,6 +3,12 @@ import { tr, translateMessage } from '../../i18n/core'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bot, GitBranch, History, MessagesSquare } from 'lucide-react'
 import { SessionHeader } from './SessionHeader'
+import { TerminalView } from '@/features/terminal/TerminalView'
+import { useTerminalStore } from '@/features/terminal/store'
+import { useOptionalTerminalUi } from '@/features/terminal/TerminalProvider'
+import { isDemoTuiTerminal } from './tuiMode'
+import { useTuiToggle } from './tuiToggle'
+import { ConfirmDialog } from '@/ui/ConfirmDialog'
 import { Transcript } from './Transcript'
 import { Composer, composerDraftKey } from './Composer'
 import { BranchBanner, BranchReadOnlyBar, BranchStartDivider, PendingMergeBar } from './branch/BranchViews'
@@ -146,6 +152,8 @@ function LiveSessionView({
 }: SessionViewProps) {
   useI18n()
   const snapshot = useSession(sessionId)
+  const terminals = useTerminalStore()
+  const record = snapshot?.record
   const composer = useComposerController(sessionId, onOpenSession, draftKey)
   const demoQueue = useDemoQueueController(composer ? null : sessionId)
   const status = useStatusBar(sessionId, draftKey)
@@ -154,6 +162,19 @@ function LiveSessionView({
   useEffect(() => setTrace(null), [sessionId])
   // 对话内搜索（Ctrl+F）：token 每按一次加一，已经打开时重新聚焦（docs/ui/content-highlight.md §2 E）
   const mainRef = useRef<HTMLElement>(null)
+  // 界面 ⇄ 终端（TUI，docs/ui/tui-toggle.md）
+  const tui = useTuiToggle(sessionId, mainRef)
+  const terminalUi = useOptionalTerminalUi()
+  const tuiMode = tui?.mode ?? 'ui'
+  const tuiTerminal =
+    tui?.terminalId && !isDemoTuiTerminal(tui.terminalId)
+      ? (terminals.terminals.find(t => t.id === tui.terminalId) ?? null)
+      : null
+  const tuiBusy = tui?.busy ?? false
+  const tuiConfirm = tui?.confirm ?? false
+  const switchTui = tui?.onChange ?? (() => {})
+  // 演示模式的假终端在 mock/ 里，经演示数据拿（真实模式不打包它）
+  const DemoTui = isDemo ? demo().tuiPanel : undefined
   const [find, setFind] = useState<number | null>(null)
   useEffect(() => setFind(null), [sessionId])
   useFindShortcut(mainRef, !!sessionId, () => setFind(n => (n ?? 0) + 1))
@@ -312,7 +333,6 @@ function LiveSessionView({
   )
   const forkedFrom = snapshot?.record.forkedFrom ?? null
   // 开分支开出的会话（docs/ui/branch-merge.md §4）：顶部横条代替「分叉自」，带过来的部分后面一行「分支从这里开始」
-  const record = snapshot?.record ?? null
   const branchStart = useMemo(() => {
     const b = record?.branch
     if (!b || !items) return null
@@ -342,9 +362,76 @@ function LiveSessionView({
                   panelOpen={panelOpen}
                   onToggleSidebar={onToggleSidebar}
                   onTogglePanel={onTogglePanel}
+                  sessionId={sessionId}
+                  tui={
+                    tui
+                      ? {
+                          mode: tui.mode,
+                          running: tui.running,
+                          disabledReason: tui.disabledReason,
+                          onChange: tui.onChange,
+                        }
+                      : null
+                  }
                 />
               )}
-              {sessionId ? (
+              {sessionId && tuiMode === 'terminal' ? (
+                <div className="relative flex min-h-0 flex-1 flex-col">
+                  {isDemoTuiTerminal(tui?.terminalId) && DemoTui ? (
+                    <DemoTui
+                      cwd={record?.cwd}
+                      engineSessionId={record?.engineSessionId}
+                      items={snapshot?.items}
+                      onBack={() => switchTui('ui')}
+                    />
+                  ) : (
+                    <>
+                      <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-1.5 text-meta text-fg-muted">
+                        <span className="min-w-0 flex-1 truncate">{tr('session.tui.bannerShort')}</span>
+                        <button
+                          type="button"
+                          className="press shrink-0 rounded px-1.5 text-accent-fg hover:bg-hover"
+                          onClick={() => switchTui('ui')}
+                        >
+                          {tr('session.tui.switchBack')}
+                        </button>
+                      </div>
+                      <div className="min-h-0 flex-1">
+                        {tuiTerminal ? (
+                          <TerminalView
+                            record={tuiTerminal}
+                            visible
+                            // 粘贴走终端面板同一套（多行先确认、超长拒绝）；搜索条长在右侧终端面板里，这里不开
+                            onPaste={(id, text) => terminalUi?.paste(id, text)}
+                            onFind={() => {}}
+                            onCycle={() => {}}
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-ui text-fg-muted">
+                            {tr('session.tui.opening')}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {tuiBusy && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-app/70 text-ui text-fg-muted">
+                      {tr('session.tui.switching')}
+                    </div>
+                  )}
+                  {tuiConfirm && tui && (
+                    <ConfirmDialog
+                      title={tr('session.tui.runningTitle')}
+                      description={null}
+                      busy={tuiBusy}
+                      confirmLabel={tr('session.tui.forceClose')}
+                      cancelLabel={tr('session.tui.stay')}
+                      onConfirm={() => tui.forceClose()}
+                      onCancel={() => tui.setConfirm(false)}
+                    />
+                  )}
+                </div>
+              ) : sessionId ? (
                 <>
                   {record?.branch && <BranchBanner record={record} />}
                   <div ref={body} className="conversation-body relative flex min-h-0 flex-1 flex-col overflow-hidden">

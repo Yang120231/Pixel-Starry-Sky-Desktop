@@ -1,13 +1,21 @@
-import { Ellipsis, PanelLeft, PanelRight } from 'lucide-react'
+import { Ellipsis, Keyboard, MessageSquare, PanelLeft, PanelRight } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { cn, IconButton, SEGMENT_ICON, SEGMENT_TRACK } from '@/ui'
+import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { isMac } from '@/features/layout/keybindings'
-import { TOGGLE_PANEL, TOGGLE_SIDEBAR, withShortcut } from '@/features/layout/shortcuts'
+import {
+  COMMAND_PALETTE,
+  TOGGLE_PANEL,
+  TOGGLE_SIDEBAR,
+  TOGGLE_TUI_MODE,
+  withShortcut,
+} from '@/features/layout/shortcuts'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useCommandPalette } from '@/features/commands/CommandPaletteProvider'
 import { MachineSwitch } from '@/features/machines/MachineSwitch'
 import { useSidebarPrefs } from '@/features/appearance/sidebar'
 import { useChannelUnreadTotal } from '@/features/channels/store'
-import { tr } from '@/i18n/core'
+import { tr, type TranslationKey } from '@/i18n/core'
 import { LayoutActionButton } from '@/features/layout/LayoutActionButton'
 import { ToolbarContext } from '@/features/layout/ToolbarContext'
 import { SessionChannelBadge } from '@/features/channels/SessionChannelBadge'
@@ -25,6 +33,16 @@ interface SessionHeaderProps {
   panelToggle?: { open: boolean; label: string; onToggle: () => void } | null
   /** 当前会话：加入了频道时标题旁显示「# 频道 · 成员名」（docs/ui/import-collab.md 第 5 项②） */
   sessionId?: string | null
+  /**
+   * 界面 ⇄ 终端（TUI）：方案 E 收进「更多」菜单（docs/ui/tui-toggle.md）；
+   * 顶栏不再放分段开关；终端模式时「更多」上有绿点
+   */
+  tui?: {
+    mode: 'ui' | 'terminal'
+    running?: boolean
+    disabledReason?: string | null
+    onChange: (mode: 'ui' | 'terminal') => void
+  } | null
 }
 
 /** 跨会话区和右面板的顶栏：标题在左，工具在右侧连续排列。
@@ -40,15 +58,61 @@ export function SessionHeader({
   onCloseFiles,
   panelToggle,
   sessionId,
+  tui,
 }: SessionHeaderProps) {
   const { text } = useI18n()
   const commands = useCommandPalette()
   const { layout } = useSidebarPrefs()
-  // 侧栏收起时看不到「频道」行的未读，改在「展开侧栏」按钮上显示一个点（docs/ui/layout-v2.md §8）
   const channelUnread = useChannelUnreadTotal()
+  const [more, setMore] = useState<{ x: number; y: number } | null>(null)
+  const moreLabel = text('更多')
+  const showMore = showActions || !!tui
+  const tuiActive = Boolean(tui?.running || tui?.mode === 'terminal')
+
+  const moreActions = useMemo((): MenuAction[] => {
+    const actions: MenuAction[] = []
+    if (tui) {
+      const disabledTitle = tui.disabledReason ? tr(tui.disabledReason as TranslationKey) : undefined
+      actions.push({
+        label: tr('session.tui.toggle'),
+        icon: Keyboard,
+        hint: TOGGLE_TUI_MODE.label,
+        children: [
+          {
+            label: tr('session.tui.ui'),
+            icon: MessageSquare,
+            checked: tui.mode === 'ui',
+            disabled: tui.mode === 'ui',
+            run: () => tui.onChange('ui'),
+          },
+          {
+            label: tr('session.tui.terminal'),
+            icon: Keyboard,
+            checked: tui.mode === 'terminal',
+            disabled: !!tui.disabledReason || tui.mode === 'terminal',
+            title: tui.mode === 'terminal' ? undefined : disabledTitle,
+            run: () => tui.onChange('terminal'),
+          },
+        ],
+      })
+      actions.push({
+        label: tr('session.tui.commandPalette'),
+        separator: true,
+        run: () => commands.open(),
+        hint: COMMAND_PALETTE.label,
+      })
+    } else {
+      actions.push({
+        label: tr('session.tui.commandPalette'),
+        run: () => commands.open(),
+        hint: COMMAND_PALETTE.label,
+      })
+    }
+    return actions
+  }, [tui, commands])
+
   return (
     <header
-      // macOS 侧边栏收起时左上角是红绿灯（index.ts 的 trafficLightPosition），让开
       className={cn(
         'session-header drag @container flex h-12 shrink-0 items-center gap-2',
         isMac && !sidebarOpen ? 'pl-20' : 'pl-4',
@@ -84,16 +148,32 @@ export function SessionHeader({
           </h1>
         )}
         {sessionId && <SessionChannelBadge sessionId={sessionId} />}
-        {showActions && (
-          // 平时透明，鼠标移到顶栏或键盘焦点到它时显示（globals.css [data-header-more]）
-          <span data-header-more className="inline-flex shrink-0">
-            <IconButton icon={Ellipsis} label={text('更多')} size={32} iconSize={16} onClick={commands.open} />
+        {showMore && (
+          <span data-header-more data-tui-active={tuiActive ? '' : undefined} className="relative inline-flex shrink-0">
+            <IconButton
+              icon={Ellipsis}
+              label={moreLabel}
+              size={32}
+              iconSize={16}
+              aria-haspopup="menu"
+              aria-expanded={more !== null}
+              onClick={e => {
+                const rect = e.currentTarget.getBoundingClientRect()
+                setMore({ x: rect.left, y: rect.bottom + 4 })
+              }}
+            />
+            {tuiActive && (
+              <span
+                className="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-[var(--terminal-ansi-2,#3d9a6a)]"
+                title={tr('session.tui.terminalActive')}
+                aria-label={tr('session.tui.terminalActive')}
+              />
+            )}
           </span>
         )}
       </div>
       <div className="header-tools no-drag ml-auto flex shrink-0 items-center gap-0.5">
         <MachineSwitch />
-        {/* 打开方式等工具和右侧面板开关收进一个细边框轨道，和「本机 | 云端」同一套样子（docs/ui/layout-v2.md §4） */}
         {(layout.header.length > 0 || panelToggle !== null) && (
           <div data-header-group className={SEGMENT_TRACK}>
             <ToolbarContext.Provider value={{ panelOpen, filesPanelOpen, onCloseFiles }}>
@@ -128,6 +208,9 @@ export function SessionHeader({
           </div>
         )}
       </div>
+      {more && (
+        <ActionMenu x={more.x} y={more.y} label={moreLabel} actions={moreActions} onClose={() => setMore(null)} />
+      )}
     </header>
   )
 }

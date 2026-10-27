@@ -201,6 +201,12 @@ export interface EngineBridge {
   /** 旁聊：单独问一次，不进主对话（§3） */
   sideQuestion(id: string, question: string, history: import('@pixelsky/protocol').SideTurn[]): Promise<string>
   cancelSideQuestion(id: string): Promise<void>
+  /** 切到终端模式（docs/ui/tui-toggle.md）：返回终端 id */
+  /** 切终端前的灰态原因；能切返回 null */
+  tuiCheck(sessionId: string): Promise<string | null>
+  tuiOpen(sessionId: string): Promise<{ terminalId: string; engineSessionId: string }>
+  /** 切回界面；引擎还在跑且未 force 时抛 tui.running */
+  tuiClose(sessionId: string, opts?: { force?: boolean }): Promise<{ added: number; mismatched: boolean }>
   /** opts.background：连同后台子智能体一起停 */
   interrupt(id: string, opts?: import('@pixelsky/protocol').InterruptOptions): Promise<void>
   /** 提醒专用：轮次已过期时返回 false，不中断或暂停下一轮。 */

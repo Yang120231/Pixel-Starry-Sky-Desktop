@@ -165,8 +165,13 @@ export class HostSessions {
 
   openSession(id: string): OpenedSession {
     const rt = this.runtime(id)
+    // 重启后还标着终端模式：当作已切回（docs/ui/tui-toggle.md §3.4）；补轮次异步做，先清标记让界面显示
+    if (rt.snapshot.record.tui && !rt.tuiLive) {
+      this.ctx.m.events.patchRecord(id, { tui: null })
+      void this.ctx.m.native.syncFromTui(id).catch(() => {})
+    }
     this.ctx.m.usage.resumeSettlements(id, rt.snapshot.items)
-    return { snapshot: rt.snapshot, seq: rt.seq }
+    return { snapshot: this.runtime(id).snapshot, seq: this.runtime(id).seq }
   }
 
   /** 正在执行的设置（含运行中改过的）；没有运行时用会话记录。不创建运行时 */

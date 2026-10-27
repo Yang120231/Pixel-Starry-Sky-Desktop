@@ -449,4 +449,43 @@ export const sessionMessages = {
   'archiveOld.toast': { zh: '已归档 {count} 个会话', en: 'Archived {count} sessions' },
   'archiveOld.undone': { zh: '已恢复 {count} 个会话', en: 'Restored {count} sessions' },
   'archiveOld.undoFailed': { zh: '有 {count} 个会话没能恢复', en: '{count} sessions could not be restored' },
+  'session.tui.toggle': { zh: '界面 / 终端', en: 'UI / Terminal' },
+  'session.tui.commandPalette': { zh: '命令面板…', en: 'Command palette…' },
+  'session.tui.ui': { zh: '界面', en: 'UI' },
+  'session.tui.terminal': { zh: '终端', en: 'Terminal' },
+  'session.tui.terminalActive': { zh: '正在终端模式', en: 'In terminal mode' },
+  'session.tui.switchBack': { zh: '切回界面', en: 'Switch back to UI' },
+  'session.tui.importResume': { zh: '从 /resume 导入', en: 'Import from /resume' },
+  'session.tui.unavailable': { zh: '终端模式不可用', en: 'Terminal mode is unavailable' },
+  'session.tui.bannerShort': {
+    zh: '终端模式下批注、回退、分叉不可用',
+    en: 'Annotations, rewind and fork unavailable in terminal mode',
+  },
+  'session.tui.switching': {
+    zh: '正在停止界面里的会话，在终端中继续…',
+    en: 'Stopping the UI session and continuing in the terminal…',
+  },
+  'session.tui.opening': { zh: '正在终端中打开会话…', en: 'Opening the session in the terminal…' },
+  'session.tui.runningTitle': {
+    zh: '终端里的 Claude Code 还在运行',
+    en: 'Claude Code is still running in the terminal',
+  },
+  'session.tui.stay': { zh: '留在终端', en: 'Stay in terminal' },
+  'session.tui.forceClose': { zh: '结束并切回', en: 'Stop and switch back' },
+  'session.tui.mismatch': {
+    zh: '终端里的会话和这里对不上了，没能自动补上',
+    en: 'The terminal session no longer matches this chat; nothing was synced',
+  },
+  'session.tui.disabledBusy': { zh: '请先停止当前任务再切换', en: 'Stop the current task before switching' },
+  'session.tui.disabledLiveTerminal': {
+    zh: '外部终端正开着这个会话',
+    en: 'An external terminal is using this session',
+  },
+  'session.tui.disabledLiveOther': { zh: '其他程序正开着这个会话', en: 'Another program is using this session' },
+  'session.tui.disabledEngine': { zh: '当前引擎不支持终端模式', en: 'This engine does not support terminal mode' },
+  'session.tui.source': { zh: '终端', en: 'Terminal' },
+  'session.tui.demoPlaceholder': {
+    zh: '演示模式：这里只示意终端切换，不会真的启动 Claude Code',
+    en: 'Demo: terminal mode is simulated; Claude Code is not launched',
+  },
 } as const

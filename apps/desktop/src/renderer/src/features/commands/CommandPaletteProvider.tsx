@@ -526,7 +526,8 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
         () => !!terminalId && terminalState().terminals.some(r => r.id === terminalId),
         t('terminal.noTerminals'),
       )
-    for (const r of terminalState().terminals)
+    // 会话 TUI 终端嵌在会话里，终端面板选不到
+    for (const r of terminalState().terminals.filter(t => !t.sessionId))
       items.push({
         id: 'terminal.select:' + r.id,
         label: t('palette.selectTerminal', { name: r.title }),

@@ -181,6 +181,51 @@ export class HostHandoff {
    * 旧记录（没有 engineSessions）当前引擎看到了全部对话，不带。
    * sees：当前模型能不能看图（modelSees 的结果），决定带不带更早消息的图片；不给按引擎能力
    */
+
+  /**
+   * 切 TUI 前：换引擎接力的 seed 是否还没写进原生记录（无 pendingRewind/Fork 标记时的边角，docs/ui/tui-toggle.md §5.3）。
+   * 有截断点时 injectSeed 本来就不写 seed，返回 null，交给回退/分叉的 warm 路径。
+   */
+  async pendingSeed(id: string): Promise<ChatSeed | null> {
+    const rt = this.ctx.m.sessions.runtime(id)
+    const record = rt.snapshot.record
+    if (!record.engineSessions) return null
+    if (record.pendingRewind || record.pendingFork) return null
+    const adapter = this.ctx.adapters[record.engine]
+    if (!adapter?.seedsHistory) return null
+    const recreate = !!record.engineSessions[record.engine]?.seen && adapter.hasNativeSession?.(record) === false
+    const seen = recreate ? null : (record.engineSessions[record.engine]?.seen ?? null)
+    const full = rt.snapshot.items
+    const at = seen === null ? -1 : full.findIndex(item => item.id === seen)
+    const delta = at >= 0 ? full.slice(at + 1) : full
+    if (!hasHandoffContent(delta)) return null
+    const sees = await this.modelSees(id, record)
+    const all = userImages(delta)
+    const room = handoffImageRoom()
+    const carry = sees
+      ? pickRecentImages(
+          all.filter(({ image }) => carriableImage(image)),
+          room,
+        )
+      : []
+    const built = buildHandoff({
+      items: delta,
+      mode: at >= 0 ? 'delta' : 'full',
+      target: record.engine,
+      conversationId: id,
+      historyTool: this.ctx.opts.historyTool?.(record) ?? false,
+      images: carry,
+      omittedImages: all.length - carry.length,
+    })
+    if (!built) return null
+    const seed = buildChatSeed(delta, built.text, undefined, {
+      carryImages: sees,
+      room,
+      fallbackImages: carry.map(c => c.image),
+    })
+    return seed ? (recreate ? { ...seed, recreated: true } : seed) : null
+  }
+
   plan(
     id: string,
     record: SessionRecord,

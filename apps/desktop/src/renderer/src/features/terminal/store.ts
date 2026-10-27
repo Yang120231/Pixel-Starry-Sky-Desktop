@@ -133,7 +133,11 @@ export function consumeTerminal(id: string, sink: (e: DataEvent) => void): () =>
   }
 }
 export async function refreshTerminals(force = false): Promise<void> {
-  if (!isDemo) set(await window.pixelsky!.terminal.state(force))
+  if (isDemo) return
+  const next = await window.pixelsky!.terminal.state(force)
+  // 会话 TUI 终端不在 state() 列表里（docs/ui/tui-toggle.md §4.2），刷新时保留已有的
+  const sessionTerms = state.terminals.filter(t => t.sessionId)
+  set({ ...next, terminals: [...next.terminals, ...sessionTerms] })
 }
 export async function terminalSetEncoding(encoding: TerminalEncoding): Promise<void> {
   if (isDemo) set({ encoding })
@@ -197,6 +201,10 @@ export async function terminalRename(id: string, title: string): Promise<void> {
 }
 export async function terminalClose(id: string, force = false): Promise<void> {
   if (!isDemo) await window.pixelsky!.terminal.close(id, force)
+  forgetTerminal(id)
+}
+/** 主进程已经关掉的终端（会话 TUI 终端由 engine:tuiClose 关）从本地状态里去掉 */
+export function forgetTerminal(id: string): void {
   pending.delete(id)
   histories.delete(id)
   notifyHistory()

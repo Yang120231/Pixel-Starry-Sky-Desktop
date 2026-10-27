@@ -37,7 +37,7 @@ import { historyEnabled, historyServer } from './history-mcp'
 import { threadsServer } from './threads-mcp'
 import { bundledPixelCli } from './pixel-cli'
 import { registerQuotaIpc } from './quota-ipc'
-import { initTerminalIpc } from '../terminal/ipc'
+import { initTerminalIpc, localTerminals } from '../terminal/ipc'
 import { initMachines } from '../machines/service'
 import { machineOf } from '../machines/identity'
 import { initArtifacts } from '../artifacts/ipc'
@@ -211,6 +211,62 @@ export async function initEngine(ctx: AppContext): Promise<void> {
     copyPath: async (projectId, copyId) => ctx.projectTools?.copyPath(projectId, copyId),
     projectTools: () => ctx.projectTools ?? undefined,
   }
+  // 会话 ⇄ 终端（TUI）（docs/ui/tui-toggle.md §4.1）：只本机，不经 Machines.invoke
+  ipc.handle('engine:tuiCheck', (_e, sessionId) => {
+    if (typeof sessionId !== 'string' || !sessionId) throw new Error('会话不正确')
+    return h.tuiBlock(sessionId)
+  })
+  ipc.handle('engine:tuiOpen', async (e, sessionId) => {
+    if (typeof sessionId !== 'string' || !sessionId) throw new Error('会话不正确')
+    const owner = e.sender.id
+    const launch = await h.prepareTui(sessionId)
+    const record = h.record(sessionId)
+    if (!record) throw new Error('会话不存在')
+    const project = h.projects().find(p => p.id === record.projectId)
+    let term
+    try {
+      term = localTerminals().spawnCommand({
+        owner,
+        cwd: launch.cwd,
+        command: launch.command,
+        args: launch.args,
+        env: launch.env,
+        label: 'Claude Code',
+        sessionId,
+        projectId: record.projectId,
+        projectName: project?.name ?? record.projectId,
+      })
+    } catch (err) {
+      // prepareTui 已经标了终端模式：起不来就撤掉，不然会话卡在没有终端的终端模式里
+      h.clearTui(sessionId)
+      throw err
+    }
+    h.setTuiTerminal(sessionId, term.id)
+    return { terminalId: term.id, engineSessionId: launch.engineSessionId }
+  })
+  ipc.handle('engine:tuiClose', async (e, sessionId, opts) => {
+    if (typeof sessionId !== 'string' || !sessionId) throw new Error('会话不正确')
+    const force = !!(opts && typeof opts === 'object' && (opts as { force?: boolean }).force)
+    const record = h.record(sessionId)
+    if (!record?.tui) return { added: 0, mismatched: false }
+    const owner = e.sender.id
+    const terminals = localTerminals()
+    const term = record.tui.terminalId ? terminals.get(owner, record.tui.terminalId) : null
+    if (term && (term.status === 'running' || term.status === 'starting') && !force) {
+      throw Object.assign(new Error('tui.running'), { code: 'tui.running' })
+    }
+    if (term) {
+      try {
+        await terminals.change(owner, term.id, false, true)
+      } catch {
+        /* already gone */
+      }
+    }
+    const sync = await h.syncFromTui(sessionId)
+    h.clearTui(sessionId)
+    return sync
+  })
+
   for (const [channel, op] of opEntries(ENGINE_OPS))
     handle(channel, (event, ...args) => op({ ...context, owner: owner(event) }, ...args))
   // 手机端（main/mobile/）的调用：同一张操作表、同一层路由，按调用方分桶

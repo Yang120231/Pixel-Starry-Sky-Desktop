@@ -1243,7 +1243,8 @@
   transition: opacity 120ms;
 }
 .session-header:hover [data-header-more],
-[data-header-more]:focus-within {
+[data-header-more]:focus-within,
+[data-header-more][data-tui-active] {
   opacity: 1;
 }
 :root[data-motion='off'] [data-header-more] {

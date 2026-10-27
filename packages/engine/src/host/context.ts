@@ -111,6 +111,11 @@ export interface TurnTrack {
 
 export interface Runtime {
   inspectingContext?: boolean
+  /**
+   * 这次运行里切到了终端、终端还开着（只在内存里）。记录上的 tui 标记会落盘：重启后标记还在、这个为假，
+   * 打开会话时才当作已切回（docs/ui/tui-toggle.md §3.4）；为真时打开会话（切标签、重连）不能清标记
+   */
+  tuiLive?: boolean
   sessionMaxRetries: number | null | undefined
   snapshot: SessionSnapshot
   /** 事件序号，每应用一个事件加一（见 OpenedSession） */
