@@ -24,6 +24,16 @@ describe('withoutCode', () => {
     expect(withoutCode('@甲 前面\n```\nx\n```\n@乙 后面')).toBe('@甲 前面\n\n@乙 后面')
     expect(withoutCode('用 `@乙` 这个写法，@甲 看看')).toBe('用  这个写法，@甲 看看')
   })
+
+  it('引用里的围栏、列表项里缩进 4 格以上的围栏、缩进 4 格的代码块都算代码', () => {
+    expect(withoutCode('> 看这段\n> ~~~js\n> // @乙\n> ~~~\n\n@甲')).not.toContain('@乙')
+    expect(withoutCode('- 第一步\n\n    ```js\n    // @乙\n    ```\n\n@甲')).not.toContain('@乙')
+    expect(withoutCode('例子：\n\n    // @乙 改一下\n\n@甲 看看')).toBe('例子：\n\n\n\n@甲 看看')
+  })
+
+  it('段落的续行缩进 4 格不是代码：@ 仍要认', () => {
+    expect(withoutCode('先看这里\n    @乙 改一下')).toContain('@乙')
+  })
 })
 
 describe('拆流程的提示词（docs/ui/channels-pipeline.md §12 第 2 条）', () => {

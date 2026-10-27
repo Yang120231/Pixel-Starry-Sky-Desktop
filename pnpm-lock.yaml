@@ -171,6 +171,9 @@ importers:
       lucide-react:
         specifier: ^1.52.0
         version: 1.52.0(@types/react@19.3.0)(react@19.3.0)
+      mdast-util-from-markdown:
+        specifier: ^2.1.0
+        version: 2.1.0
       mermaid:
         specifier: ^11.17.2
         version: 11.17.2

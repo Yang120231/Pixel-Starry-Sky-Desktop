@@ -1,5 +1,6 @@
 // 协作频道派活的提示词和结果摘取（docs/ui/channels-phase-b.md §4.2、§5.2）。纯函数，不碰磁盘和引擎。
 import { codexPlainText } from '@pixelsky/protocol'
+import { fromMarkdown } from 'mdast-util-from-markdown'
 import type { Locale } from '../../../shared/i18n/messages'
 import type { ChannelMessage, ChannelTaskStatus } from '../../../shared/types/channels'
 import { excerpt, splitMentions, type Mentionable } from '../../../shared/channels/mentions'
@@ -174,25 +175,21 @@ export function historyLines(
 }
 
 /**
- * 去掉代码块和行内代码：AI 回复里代码中的 @ 不算派活。围栏照 Markdown（和界面显示一致）：结束围栏单独一行、
- * 同一种字符、不比开头短，代码里字符串含 ``` / ~~~ 不算结束；没闭合的算到末尾。代码块的位置留一个空行，前后仍分两段
+ * 去掉代码块和行内代码：AI 回复里代码中的 @ 不算派活。按 Markdown 解析（和界面显示一致）：围栏、缩进代码块，
+ * 引用和列表里的也算；没闭合的围栏算到末尾。代码块的位置留一个空行，前后仍分两段
  */
 export function withoutCode(text: string): string {
-  const kept: string[] = []
-  let close: RegExp | null = null
-  for (const line of text.split('\n')) {
-    if (close) {
-      if (close.test(line)) close = null
-      continue
-    }
-    const open = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
-    // 反引号围栏的信息串里再有反引号：是行内代码，不是围栏
-    if (open && !(open[1][0] === '`' && open[2].includes('`'))) {
-      close = new RegExp(`^ {0,3}${open[1][0]}{${open[1].length},}[ \\t]*$`)
-      kept.push('')
-    } else kept.push(line)
+  const ranges: [number, number][] = []
+  type Node = { type: string; position?: { start: { offset?: number }; end: { offset?: number } }; children?: Node[] }
+  const walk = (node: Node): void => {
+    if ((node.type === 'code' || node.type === 'inlineCode') && node.position)
+      ranges.push([node.position.start.offset!, node.position.end.offset!])
+    else node.children?.forEach(walk)
   }
-  return kept.join('\n').replace(/`[^`\n]*`/g, '')
+  walk(fromMarkdown(text))
+  // 从后往前删，前面的位置不变
+  for (const [start, end] of ranges.reverse()) text = text.slice(0, start) + text.slice(end)
+  return text
 }
 
 /** AI 互相派活时交接的内容：谁、做完了哪项活、他的回复、改了哪些文件 */
