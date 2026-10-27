@@ -139,3 +139,41 @@ describe('ApprovalStack', () => {
     expect(count(render(three.map(r => ({ ...r, alwaysScopes: [] }))), 'data-approval-always')).toBe(0)
   })
 })
+
+describe('计划卡（docs/ui/plan-review.md）', () => {
+  const plan: ApprovalRequest = {
+    requestId: 'plan',
+    itemId: 'item-plan',
+    kind: 'plan',
+    title: '计划已就绪，要开始执行吗？',
+    plan: '# 缩放惯性\n\n## 目标\n冻结缩放协议\n\n## 步骤\n1. 核对事件',
+    alwaysScopes: [],
+  }
+  const renderPlan = (compact?: (plan: string) => Promise<void>): string =>
+    renderToStaticMarkup(
+      <I18nProvider>
+        <ApprovalStack
+          sessionId="s1"
+          pending={[plan]}
+          cwd={CWD}
+          bounds={{ current: null }}
+          onAnswer={() => undefined}
+          onEscape={() => undefined}
+          planActions={{ compact }}
+        />
+      </I18nProvider>,
+    )
+
+  it('分段可批注、有整体意见输入框和放大按钮；没写意见时主按钮是开始执行', () => {
+    const html = renderPlan()
+    expect(count(html, 'data-plan-section=')).toBe(3)
+    expect(html).toContain('放大审阅')
+    expect(html).toContain('整体意见（可选）')
+    expect(html.indexOf('开始执行')).toBeLessThan(html.indexOf('继续完善计划'))
+  })
+
+  it('引擎能压缩时才有「压缩上下文后执行」', () => {
+    expect(renderPlan()).not.toContain('压缩上下文后执行')
+    expect(renderPlan(async () => undefined)).toContain('压缩上下文后执行')
+  })
+})

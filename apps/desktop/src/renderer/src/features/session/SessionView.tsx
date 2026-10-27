@@ -1,5 +1,5 @@
 import { useI18n } from '@/i18n/I18nProvider'
-import { tr } from '../../i18n/core'
+import { tr, translateMessage } from '../../i18n/core'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bot, GitBranch, History, MessagesSquare } from 'lucide-react'
 import { SessionHeader } from './SessionHeader'
@@ -12,6 +12,7 @@ import { WelcomeView } from './WelcomeView'
 import { hasConversation } from './conversation'
 import { LiveTranscript } from './live/LiveTranscript'
 import { ApprovalStack } from './live/approvals/ApprovalStack'
+import type { PlanActions } from './live/PlanReview'
 import { ApprovalWaitContext } from './live/approvals/focus'
 import { focusComposer } from './composerTarget'
 import { AgentTracePanel } from './live/AgentTracePanel'
@@ -43,7 +44,7 @@ import { openTurnComment, turnOfItem } from './turnComments'
 import { paneActions } from '@/features/panes/store'
 import { isDemo, sessionDiff } from '@/data'
 import { demo } from '@/data/demo'
-import { cn } from '@/ui'
+import { cn, useToast } from '@/ui'
 import { ENGINES } from '@pixelsky/protocol'
 import {
   bridge,
@@ -256,6 +257,38 @@ function LiveSessionView({
   latest.current = snapshot
   const composerRef = useRef(composer)
   composerRef.current = composer
+  const toast = useToast()
+  // 计划卡要会话层做的事（docs/ui/plan-review.md §3）
+  const planActions: PlanActions | undefined = composer
+    ? {
+        // 「压缩上下文后执行」：卡片已经打回了计划；离开「只规划」，排上 /compact 和「按计划执行」，按顺序跑
+        compact: snapshot?.flags.compactAvailable
+          ? async plan => {
+              const c = composerRef.current
+              if (!c) return
+              try {
+                if (c.permissionMode === 'plan')
+                  c.setPermissionMode(c.permissionModes.includes('ask') ? 'ask' : c.defaultPermissionMode)
+                await c.submit('/compact')
+                await c.submit(`${tr('plan.runApproved')}\n\n${plan}`)
+              } catch (e) {
+                toast(translateMessage((e as Error).message))
+              }
+            }
+          : undefined,
+        // 像素星空打回计划时只回「继续完善」、不带话（它会问要改什么）：意见作为下一条消息发
+        feedback:
+          snapshot?.record.engine === 'pixel'
+            ? async message => {
+                try {
+                  await composerRef.current?.submit(message)
+                } catch (e) {
+                  toast(translateMessage((e as Error).message))
+                }
+              }
+            : undefined,
+      }
+    : undefined
   const canHandoff = !!composer
   const turnComments = useMemo<TurnCommentsValue | null>(
     () =>
@@ -433,6 +466,7 @@ function LiveSessionView({
                           bridge ? bridge.answer(sessionId, req.requestId, d) : demoAnswer(sessionId, req.requestId, d)
                         }
                         onEscape={() => focusComposer(composerDraftKey(draftKey, composer))}
+                        planActions={planActions}
                       />
                     )}
                     {branch.undo && (

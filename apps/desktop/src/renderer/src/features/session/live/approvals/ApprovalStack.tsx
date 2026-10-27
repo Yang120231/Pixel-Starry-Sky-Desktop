@@ -32,6 +32,7 @@ import { Button, DiffStat, Popover, Spinner, cn } from '@/ui'
 import { settledResizeObserver } from '@/features/panes/motion'
 import { FullAccessConfirm } from '../../FullAccessConfirm'
 import { ApprovalBody, ApprovalCard, SCOPE_INFO } from '../ApprovalCard'
+import type { PlanActions } from '../PlanReview'
 import {
   allowAllDecisions,
   allowOnce,
@@ -97,6 +98,7 @@ export function ApprovalStack({
   bounds,
   onAnswer,
   onEscape,
+  planActions,
 }: {
   sessionId: string
   pending: readonly ApprovalRequest[]
@@ -106,6 +108,8 @@ export function ApprovalStack({
   onAnswer: Answer
   /** 列表里按 Esc：回到输入框 */
   onEscape: () => void
+  /** 计划卡的「压缩上下文后执行」、意见转发（docs/ui/plan-review.md） */
+  planActions?: PlanActions
 }) {
   useI18n()
   const box = useRef<HTMLDivElement>(null)
@@ -159,7 +163,13 @@ export function ApprovalStack({
       style={{ maxHeight }}
     >
       {solo.map(r => (
-        <ApprovalCard key={r.requestId} request={r} onAnswer={d => onAnswer(r, d)} onEscape={onEscape} />
+        <ApprovalCard
+          key={r.requestId}
+          request={r}
+          onAnswer={d => onAnswer(r, d)}
+          onEscape={onEscape}
+          planActions={planActions}
+        />
       ))}
       {listShown &&
         (showList ? (
@@ -170,6 +180,7 @@ export function ApprovalStack({
             onAnswer={onAnswer}
             onEscape={onEscape}
             onCollapse={solo.length > 0 ? () => setMoreOpen(false) : undefined}
+            planActions={planActions}
           />
         ) : (
           <MoreBar requests={list} cwd={cwd} onAnswer={onAnswer} onExpand={() => setMoreOpen(true)} />
@@ -265,6 +276,7 @@ export function ApprovalList({
   onAnswer,
   onEscape,
   onCollapse,
+  planActions,
 }: {
   sessionId: string
   requests: readonly ApprovalRequest[]
@@ -273,6 +285,7 @@ export function ApprovalList({
   onEscape: () => void
   /** 有提问在上面时可以收起成一行 */
   onCollapse?: () => void
+  planActions?: PlanActions
 }) {
   useI18n()
   const listRef = useRef<HTMLDivElement>(null)
@@ -429,7 +442,15 @@ export function ApprovalList({
   const live = requests.filter(r => !doneHere.has(r.requestId))
   const single =
     live.length === 1 && shown.length === 1 && failed.size === 0 && !batch && sending.size === 0 && queued.size === 0
-  if (single) return <ApprovalCard request={live[0]} onAnswer={d => onAnswer(live[0], d)} onEscape={onEscape} />
+  if (single)
+    return (
+      <ApprovalCard
+        request={live[0]}
+        onAnswer={d => onAnswer(live[0], d)}
+        onEscape={onEscape}
+        planActions={planActions}
+      />
+    )
 
   if (shown.length === 0) return null
   const entries = layoutApprovals(shown)

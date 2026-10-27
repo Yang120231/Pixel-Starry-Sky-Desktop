@@ -13,18 +13,19 @@ import {
 } from './questionModel'
 import { tr, translateMessage } from '../../../i18n/core'
 // 审批卡片：引擎等你决定时固定显示在输入框上方（docs/engines.md §5.5）
-import { useState, type KeyboardEvent } from 'react'
+import { useMemo, useState, type KeyboardEvent } from 'react'
 import {
   ChevronDown,
   FilePen,
   ListChecks,
+  Maximize2,
   MessageCircleQuestion,
   SquareTerminal,
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
 import type { AlwaysScope, ApprovalDecision, ApprovalRequest, CommandWrapper, Question } from '@pixelsky/protocol'
-import { Button, DiffStat, Popover, cn } from '@/ui'
+import { Button, DiffStat, IconButton, Popover, cn } from '@/ui'
 import { isTypingTarget } from '@/ui/menuDigit'
 import { DiffView } from '@/ui/code/DiffView'
 import { CommandText } from '@/ui/code/CommandText'
@@ -32,6 +33,8 @@ import { Markdown } from '@/ui/markdown/Markdown'
 import { FullAccessConfirm } from '../FullAccessConfirm'
 import { hasWrapperExtra, shellDisplayName } from './commandWrapper'
 import { alwaysKeyScope, approvalShortcut, digitQuestion, questionShortcut } from './approvals/cardKeys'
+import { PlanReview, usePlanDraft, type PlanActions } from './PlanReview'
+import { noteCount, planEnterAction, refineMessage, splitPlan } from './planReviewModel'
 
 const ICON: Record<ApprovalRequest['kind'], LucideIcon> = {
   command: SquareTerminal,
@@ -258,8 +261,10 @@ export function ApprovalCard({
   request,
   onAnswer,
   onEscape,
+  planActions,
 }: {
   request: ApprovalRequest
+  planActions?: PlanActions
   /** Esc：把焦点还给输入框（不拒绝） */
   onEscape?: () => void
   /** 返回 Promise 时等它结果：失败了卡片恢复可点并显示原因，不会卡住 */
@@ -281,17 +286,38 @@ export function ApprovalCard({
     /* 等待用户填好 */
   }
 
-  const answer = (d: ApprovalDecision): void => {
+  // 计划卡：分段、意见草稿、全屏审阅（docs/ui/plan-review.md）
+  const [planOpen, setPlanOpen] = useState(false)
+  const [planDraft, setPlanDraft, clearPlanDraft] = usePlanDraft(request.requestId)
+  const planSections = useMemo(() => splitPlan(request.plan ?? ''), [request.plan])
+  const planNotes = noteCount(planDraft)
+  const planShrinks = request.kind === 'plan' && !!request.plan
+
+  const answer = (d: ApprovalDecision, then?: () => Promise<unknown>): void => {
     if (sent) return
     setSent(true)
     setFailure(null)
     void Promise.resolve()
       .then(() => onAnswer(d))
+      .then(() => {
+        if (request.kind === 'plan') clearPlanDraft()
+        return then?.()
+      })
       .catch((e: unknown) => {
         setSent(false)
         setFailure(e instanceof Error ? e.message : String(e))
       })
   }
+  const refinePlan = (): void => {
+    const message = refineMessage(planSections, planDraft)
+    const feedback = planActions?.feedback
+    if (!message) answer({ type: 'deny' })
+    else answer({ type: 'deny', message }, feedback && (() => feedback(message)))
+  }
+  const compact = planActions?.compact
+  const compactPlan = compact
+    ? () => answer({ type: 'deny', message: tr('plan.compactDeny') }, () => compact(request.plan ?? ''))
+    : undefined
 
   const questions = request.questions ?? []
   const draft = (q: Question): QuestionDraft => drafts[q.question] ?? EMPTY_DRAFT
@@ -314,6 +340,48 @@ export function ApprovalCard({
           'Escape',
         ].join(' ')
 
+  // 计划卡的按钮：卡片底部和全屏审阅共用。写了意见时主按钮换成「带意见继续完善」（docs/ui/plan-review.md §2.1）
+  const startButton = (variant: 'primary' | 'outline') => (
+    <Button
+      variant={variant}
+      disabled={sent}
+      title={planNotes > 0 ? tr('approvals.keys.startPlan') : withKeys(tr('approvals.keys.startPlan'), [mod, 'Enter'])}
+      onClick={() => answer({ type: 'allow' })}
+    >
+      {tr('session.live.ApprovalCard.startExecution')}
+    </Button>
+  )
+  const compactButton = (variant: 'outline' | 'ghost') =>
+    compactPlan && (
+      <Button variant={variant} disabled={sent} title={tr('plan.compactRunHint')} onClick={compactPlan}>
+        {tr('plan.compactRun')}
+      </Button>
+    )
+  const refineButton = (variant: 'primary' | 'ghost') => (
+    <Button
+      variant={variant}
+      disabled={sent}
+      title={withKeys(tr('approvals.keys.refinePlan'), [mod, planNotes > 0 ? 'Enter' : '⌫'])}
+      onClick={refinePlan}
+    >
+      {planNotes > 0 ? tr('plan.refineWithNotes', { n: planNotes }) : tr('session.live.ApprovalCard.refinePlan')}
+    </Button>
+  )
+  const planButtons =
+    planNotes > 0 ? (
+      <>
+        {refineButton('primary')}
+        {startButton('outline')}
+        {compactButton('ghost')}
+      </>
+    ) : (
+      <>
+        {startButton('primary')}
+        {compactButton('outline')}
+        {refineButton('ghost')}
+      </>
+    )
+
   // 键盘：提问卡 1–9 选项 / Enter 下一题 / Ctrl+Enter 提交；其余卡 Ctrl/⌘+Enter 允许一次、Ctrl/⌘+⌫ 拒绝、Esc 回输入框（和列表卡一致）
   const onKeyDown = (e: KeyboardEvent<HTMLElement>): void => {
     if (sent || confirmingAll || e.defaultPrevented) return
@@ -323,6 +391,33 @@ export function ApprovalCard({
     // 按住 Enter 不放：浏览器每次连发都会点一下焦点所在的按钮（提交回答、切换选项、允许），这里拦下
     if (native.repeat && e.key === 'Enter' && !typing) {
       e.preventDefault()
+      return
+    }
+    // 计划卡：Ctrl/⌘+Shift+F 放大 / 还原审阅
+    if (
+      request.kind === 'plan' &&
+      request.plan &&
+      (e.ctrlKey || e.metaKey) &&
+      e.shiftKey &&
+      e.key.toLowerCase() === 'f'
+    ) {
+      e.preventDefault()
+      setPlanOpen(v => !v)
+      return
+    }
+    // 计划卡：Ctrl/⌘+Enter 跟着主按钮走（写了意见就是带意见继续完善，不会把意见丢掉去开始执行）
+    if (
+      request.kind === 'plan' &&
+      e.key === 'Enter' &&
+      (e.ctrlKey || e.metaKey) &&
+      !e.shiftKey &&
+      !e.altKey &&
+      !native.isComposing
+    ) {
+      e.preventDefault()
+      const action = planEnterAction({ notes: planNotes, inPlanInput: !!target.closest('[data-plan-input]') })
+      if (action === 'refine') refinePlan()
+      else if (action === 'start') answer({ type: 'allow' })
       return
     }
     if (request.kind === 'question') {
@@ -373,12 +468,17 @@ export function ApprovalCard({
     else if (result.type === 'allow')
       answer(request.formSchema !== undefined ? { type: 'form', content: formContent! } : { type: 'allow' })
     else if (result.type === 'always') answer({ type: 'allow_always', scope: result.scope })
+    else if (request.kind === 'plan') refinePlan()
     else answer({ type: 'deny' })
   }
 
   return (
     <section
-      className="pop-in shrink-0 rounded-xl border border-line-strong bg-surface shadow-menu outline-none"
+      // 计划卡在审批区里放不下时整张卡收缩（计划正文先让出高度），底部按钮一直看得见
+      className={cn(
+        'pop-in rounded-xl border border-line-strong bg-surface shadow-menu outline-none',
+        planShrinks ? 'flex min-h-0 flex-col' : 'shrink-0',
+      )}
       aria-live="polite"
       aria-keyshortcuts={shortcutsAttr}
       onKeyDown={onKeyDown}
@@ -389,11 +489,23 @@ export function ApprovalCard({
         <Icon size={16} strokeWidth={1.5} className="shrink-0 text-fg-secondary" />
         <span className="min-w-0 flex-1 truncate">{translateMessage(request.title)}</span>
         <span className="shrink-0 text-meta font-normal text-fg-faint">
-          {tr('session.live.ApprovalCard.waitingForYourDecision')}
+          {request.kind === 'plan' && planNotes > 0
+            ? tr('plan.notes', { n: planNotes })
+            : tr('session.live.ApprovalCard.waitingForYourDecision')}
         </span>
+        {request.kind === 'plan' && request.plan && (
+          <IconButton
+            icon={Maximize2}
+            label={`${tr('plan.expand')} · ${mod}+Shift+F`}
+            size={24}
+            iconSize={14}
+            className="-my-1 shrink-0"
+            onClick={() => setPlanOpen(true)}
+          />
+        )}
       </header>
 
-      <div className="px-4 pb-3">
+      <div className={cn('px-4 pb-3', planShrinks && 'flex min-h-0 flex-col')}>
         {request.formSchema !== undefined && (
           <label className="mb-3 flex flex-col gap-2 text-meta text-fg-muted">
             {tr('codex.mcpInput')}
@@ -406,11 +518,21 @@ export function ApprovalCard({
         )}
         <ApprovalBody request={request} />
 
-        {request.kind === 'plan' && (
-          <div data-approval-plan className={cn(BODY, 'rounded-lg border border-line bg-wall-tint px-4 py-3')}>
-            <Markdown text={request.plan || tr('session.live.ApprovalCard.noPlanContent')} />
-          </div>
-        )}
+        {request.kind === 'plan' &&
+          (request.plan ? (
+            <PlanReview
+              editing={{ sections: planSections, draft: planDraft, setDraft: setPlanDraft }}
+              keys={`${mod}+Enter`}
+              open={planOpen}
+              onClose={() => setPlanOpen(false)}
+              actions={planButtons}
+              title={planSections.find(s => s.title)?.title ?? translateMessage(request.title)}
+            />
+          ) : (
+            <div data-approval-plan className={cn(BODY, 'rounded-lg border border-line bg-wall-tint px-4 py-3')}>
+              <Markdown text={tr('session.live.ApprovalCard.noPlanContent')} />
+            </div>
+          ))}
 
         {request.kind === 'question' && (
           <div className={cn(BODY, 'flex flex-col gap-3')}>
@@ -563,24 +685,7 @@ export function ApprovalCard({
               </span>
             </>
           ) : request.kind === 'plan' ? (
-            <>
-              <Button
-                variant="primary"
-                disabled={sent}
-                title={withKeys(tr('approvals.keys.startPlan'), [mod, 'Enter'])}
-                onClick={() => answer({ type: 'allow' })}
-              >
-                {tr('session.live.ApprovalCard.startExecution')}{' '}
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={sent}
-                title={withKeys(tr('approvals.keys.refinePlan'), [mod, '⌫'])}
-                onClick={() => answer({ type: 'deny' })}
-              >
-                {tr('session.live.ApprovalCard.refinePlan')}{' '}
-              </Button>
-            </>
+            planButtons
           ) : (
             <>
               <Button
