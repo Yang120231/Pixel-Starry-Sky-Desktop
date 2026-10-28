@@ -279,6 +279,18 @@ export const channelMessages = {
   },
   'channels.agent.source.providerGone': { zh: '这个自定义接口已经删了', en: 'This custom API has been removed' },
   'channels.agent.source.noModels': { zh: '这个来源没有能选的模型', en: 'No models available from this source' },
+  'channels.agent.route': { zh: '线路', en: 'Route' },
+  'channels.agent.route.facts': {
+    zh: '按官方价的 {rate} 倍扣费 · 这条线路有 {count} 个模型',
+    en: 'Billed at {rate}× the official price · {count} models on this route',
+  },
+  'channels.agent.route.swap': { zh: '没有 {model}，会换成 {next}', en: 'No {model}; switches to {next}' },
+  'channels.agent.route.swapped': {
+    zh: '这条线路没有 {model}，模型已换成 {next}',
+    en: 'This route has no {model}, so the model was switched to {next}',
+  },
+  'channels.agent.route.undo': { zh: '撤销', en: 'Undo' },
+  'channels.agent.route.noModels': { zh: '没有这个引擎能用的模型', en: 'No models for this engine' },
   'channels.agent.permission': { zh: '权限', en: 'Permissions' },
   'channels.agent.effort': { zh: '推理强度', en: 'Effort' },
   'channels.agent.fast': { zh: 'Fast 模式', en: 'Fast mode' },

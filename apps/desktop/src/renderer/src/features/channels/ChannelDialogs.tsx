@@ -21,12 +21,16 @@ import { RelayRulesEditor } from './RelayRules'
 import { AlertRulesEditor } from './AlertRules'
 import { DIGEST_HOUR, alertRulesOf, type ChannelAlertRules } from '../../../../shared/channels/alerts'
 import { MemberTools } from './MemberTools'
-import { usePlatformCatalog } from '@/features/account/platform'
+import { formatMultiplier, groupProblem, usePlatformCatalog } from '@/features/account/platform'
 import { useProviders } from '@/features/account/providers'
 import { channelLabel } from '@/features/model-channels/channelLabels'
 import {
   modelChoices,
   modelForSource,
+  pickRoute,
+  platformRoutesFor,
+  resolveRoute,
+  routeModelsFor,
   settingsForSource,
   sourceKeyOf,
   sourceOptions,
@@ -449,6 +453,9 @@ export function AgentDialog({
   const [copyId, setCopyId] = useState<string>(editing?.copyId ?? '')
   const [model, setModel] = useState<string>(editing?.settings.model ?? '')
   const [source, setSource] = useState<SourceKey>(sourceKeyOf(editing?.settings))
+  // 平台线路：记的是用户选的那条，实际用哪条按模型对齐（resolveRoute）；swap 是换线路时顺手换掉的模型，可以撤销
+  const [groupId, setGroupId] = useState<string | null>(editing?.settings.platform?.groupId ?? null)
+  const [swap, setSwap] = useState<{ groupId: string | null; model: string; to: string } | null>(null)
   const [permission, setPermission] = useState<PermissionMode | ''>(editing?.settings.permissionMode ?? '')
   // 推理强度那几项（docs/ui/channels-pipeline.md 第 19 项）：'' / follow = 跟随引擎设置里的默认
   const [effort, setEffort] = useState<Effort | ''>(editing?.settings.effort ?? '')
@@ -505,6 +512,31 @@ export function AgentDialog({
     setSource(key)
     setModel(modelForSource(engine, key, model, sourceCtx, ownModels))
   }
+  // 线路（只有额度来源是像素星空平台时显示）：列出这个引擎能用的全部线路，没有当前模型的写明会换成哪个
+  const routeId = source === 'platform' ? resolveRoute(engine, platform.groups, groupId, model).groupId : null
+  const route = platform.groups.find(g => g.id === routeId)
+  const routeOptions: SelectOption<string>[] = platformRoutesFor(engine, platform.groups).map(g => {
+    const models = routeModelsFor(engine, g)
+    return {
+      value: g.id,
+      label: g.name,
+      hint: formatMultiplier(g.rate_multiplier),
+      disabled: models.length === 0,
+      description: !models.length
+        ? (groupProblem(g, null) ?? tr('channels.agent.route.noModels'))
+        : model && !models.includes(model)
+          ? tr('channels.agent.route.swap', { model, next: models[0] })
+          : g.description || undefined,
+    }
+  })
+  const pickGroup = (id: string): void => {
+    const next = pickRoute(engine, platform.groups, id, model)
+    if (!next) return
+    setSwap(next.model !== model ? { groupId: routeId, model, to: next.model } : null)
+    setGroupId(next.groupId)
+    setModel(next.model)
+  }
+  const swapped = swap && route && swap.to === model ? swap : null
   const permissionOptions: SelectOption<PermissionMode | ''>[] = [
     { value: '', label: tr('channels.agent.default') },
     ...PERMISSION_MODES.map(m => ({ value: m, label: PERMISSION_INFO[m].label, hint: PERMISSION_INFO[m].hint })),
@@ -551,7 +583,7 @@ export function AgentDialog({
         projectId,
         copyId: copyId || null,
         settings: {
-          ...settingsForSource(engine, source, model, sourceCtx),
+          ...settingsForSource(engine, source, model, sourceCtx, routeId),
           ...(effortValue ? { effort: effortValue } : {}),
           ...(hasFast && toggleValue(fast) !== undefined ? { fast: toggleValue(fast) } : {}),
           ...(hasUltracode && toggleValue(ultracode) !== undefined ? { ultracode: toggleValue(ultracode) } : {}),
@@ -683,6 +715,44 @@ export function AgentDialog({
                 )}
               </div>
             </div>
+            {source === 'platform' && routeOptions.length > 0 && (
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <span className="text-meta font-medium text-fg-muted">{tr('channels.agent.route')}</span>
+                <Select
+                  label={tr('channels.agent.route')}
+                  value={routeId ?? ''}
+                  options={routeOptions}
+                  onChange={pickGroup}
+                />
+                {swapped ? (
+                  <p className="flex items-center gap-2 text-meta text-warn">
+                    <span className="min-w-0 flex-1">
+                      {tr('channels.agent.route.swapped', { model: swapped.model, next: swapped.to })}
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 font-medium text-accent-fg hover:underline"
+                      onClick={() => {
+                        setGroupId(swapped.groupId)
+                        setModel(swapped.model)
+                        setSwap(null)
+                      }}
+                    >
+                      {tr('channels.agent.route.undo')}
+                    </button>
+                  </p>
+                ) : (
+                  route && (
+                    <p className="text-meta text-fg-faint">
+                      {tr('channels.agent.route.facts', {
+                        rate: Number(route.rate_multiplier.toFixed(3)),
+                        count: routeModelsFor(engine, route).length,
+                      })}
+                    </p>
+                  )
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
               <div className="flex min-w-0 flex-col gap-1.5">
                 <span className="text-meta font-medium text-fg-muted">{tr('channels.agent.permission')}</span>

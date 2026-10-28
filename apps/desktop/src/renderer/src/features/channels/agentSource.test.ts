@@ -10,7 +10,10 @@ import type { ProviderView } from '../../../../shared/types/providers'
 import {
   modelChoices,
   modelForSource,
+  pickRoute,
   platformModelsFor,
+  platformRoutesFor,
+  resolveRoute,
   settingsForSource,
   sourceKeyOf,
   sourceOptions,
@@ -111,5 +114,30 @@ describe('存进成员配置的设置', () => {
     expect(() => settingsForSource('claude', 'platform', 'claude-opus-5-5', { ...ctx, email: null })).toThrow()
     expect(() => settingsForSource('claude', 'platform', 'x', { ...ctx, groups: [groups[2]] })).toThrow()
     expect(() => settingsForSource('claude', 'custom:gone', 'm', ctx)).toThrow()
+  })
+})
+
+describe('平台线路', () => {
+  it('只列这个引擎能用的线路，倍率低的在前', () => {
+    const list = [groups[1], groups[2], groups[0]]
+    expect(platformRoutesFor('claude', list).map(g => g.id)).toEqual(['g-claude-cheap', 'g-claude'])
+  })
+  it('选了线路：线路有这个模型就用它，没有就换到有这个模型、倍率最低的线路', () => {
+    expect(resolveRoute('claude', groups, 'g-claude', 'claude-sonnet-5-5').groupId).toBe('g-claude')
+    expect(resolveRoute('claude', groups, null, 'claude-sonnet-5-5').groupId).toBe('g-claude-cheap')
+    expect(resolveRoute('claude', groups, 'g-claude-cheap', 'claude-opus-5-5').groupId).toBe('g-claude')
+  })
+  it('换到没有当前模型的线路：模型换成线路的第一个；线路用不了返回 null', () => {
+    expect(pickRoute('claude', groups, 'g-claude-cheap', 'claude-opus-5-5')).toEqual({
+      groupId: 'g-claude-cheap',
+      model: 'claude-sonnet-5-5',
+    })
+    expect(pickRoute('claude', groups, 'g-claude', 'claude-opus-5-5')?.model).toBe('claude-opus-5-5')
+    expect(pickRoute('claude', groups, 'g-gpt', 'claude-opus-5-5')).toBeNull()
+  })
+  it('存设置时用选的线路', () => {
+    expect(settingsForSource('claude', 'platform', 'claude-sonnet-5-5', ctx, 'g-claude').platform?.groupId).toBe(
+      'g-claude',
+    )
   })
 })
