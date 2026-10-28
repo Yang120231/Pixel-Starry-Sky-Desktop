@@ -1178,6 +1178,10 @@ describe('@ 派活先出计划', () => {
     await c.flowAction(ch, { type: 'answers', messageId, answers: ['管理软件', '资产管理'] })
     await settle()
     expect(flowOf(c, ch).status).toBe('planning')
+    // 回答作为你的一条消息留在频道里，计划卡记下它
+    const reply = c.messages(ch).messages.find(x => x.id === flowOf(c, ch).answersId) as ChannelTextMessage
+    expect(reply).toMatchObject({ authorId: SELF_ID, text: '1. 管理软件\n2. 资产管理' })
+    expect(tasks(c, ch)).toHaveLength(1)
     expect(lastTo(s).text).toContain('1. 哪种数据中心？')
     expect(lastTo(s).text).toContain('回答: 管理软件')
     await expect(c.flowAction(ch, { type: 'answers', messageId, answers: ['a', 'b'] })).rejects.toThrow('没在等你回答')
