@@ -388,6 +388,15 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     },
   },
   { section: 'appearance', title: '缓存未命中提醒', keywords: '缓存 命中率 提醒 停止' },
+  {
+    section: 'appearance',
+    get title() {
+      return tr('portTip.setting.title')
+    },
+    get keywords() {
+      return tr('portTip.setting.keywords')
+    },
+  },
   { section: 'appearance', title: '界面字体', keywords: '字体 font' },
   { section: 'appearance', title: '代码字体', keywords: '等宽 字体 mono' },
   { section: 'appearance', title: '字号', keywords: '文字大小 放大 缩小 字体大小' },

@@ -48,6 +48,7 @@ import { ModeTransitionSettings } from './ModeTransitionSettings'
 import { GitOpenStyleSettings } from './GitOpenStyleSettings'
 import { MessageActionsSettings } from './MessageActionsSettings'
 import { FullAccessStripSettings } from './FullAccessStripSettings'
+import { PortTipSettings } from './PortTipSettings'
 import { CacheMissSettings } from './CacheMissSettings'
 import { WallpaperSettings } from './WallpaperSettings'
 import type { PaneFocusMotion } from '@/features/appearance/paneFocusMotion'
@@ -654,6 +655,7 @@ function AppearanceSection() {
       <MessageActionsSettings />
       <FullAccessStripSettings />
       <CacheMissSettings />
+      <PortTipSettings />
 
       <GroupTitle>{tr('settings.SettingsDialog.fonts')}</GroupTitle>
       <FontSettings />
