@@ -24,7 +24,7 @@ import { agentActivity, RECENT_STEPS } from '@/features/session/live/agentActivi
 import { GateActions } from './GateActions'
 import { StartDialog } from './StartDialog'
 import { formatCardCost, formatTokens, costHint } from '@/features/usage/format'
-import { scheduleToInput } from './model'
+import { scheduleToInput, type FlowPart } from './model'
 import { channelActions, useChannels } from './store'
 
 const NUMBERS = '①②③④⑤⑥⑦⑧⑨'
@@ -956,7 +956,7 @@ function plannerTrace(task: ChannelTask | undefined): { done: string[]; now: str
   return { done, now: activity.line.text }
 }
 
-/** 流程标题就是你刚发的那句（还没由拟计划的成员起短标题）：卡片就在那句下面，不再抄一遍 */
+/** 流程标题就是你刚发的那句（还没由拟计划的成员起短标题）：卡头不抄这句，写谁在拟 */
 const titleIsRequest = (flow: ChannelFlow): boolean =>
   !!flow.planner && flow.planner.request.replace(/\s+/g, ' ').includes(flow.title)
 
@@ -971,6 +971,7 @@ export function ChannelFlowCard({
   readOnly = false,
   highlight = false,
   attached = false,
+  part = 'whole',
   onOpenSession,
 }: {
   message: ChannelTextMessage
@@ -979,8 +980,10 @@ export function ChannelFlowCard({
   /** 归档的频道只读 */
   readOnly?: boolean
   highlight?: boolean
-  /** 挂在派活那条消息下面（靠作者那一侧） */
+  /** 放在拟计划的成员那条消息里（头像、名字在外面），不再自己占一行 */
   attached?: boolean
+  /** 你回答了问题时时间线拆成两行：questions 只显示问过的问题（只读、能收起），plan 是之后的计划 / 进度 */
+  part?: FlowPart
   /** 打开拟计划那项活的会话 */
   onOpenSession?: (sessionId: string) => void
 }) {
@@ -1018,6 +1021,14 @@ export function ChannelFlowCard({
   const trace = planning ? plannerTrace(plannerTask) : { done: [], now: null }
   const showTitle = !titleIsRequest(flow)
   const summary = plannerSummary(flow)
+  const questionsPart = part === 'questions'
+  // 回答过的问题默认展开，能收起
+  const [collapsed, setCollapsed] = useState(false)
+  const headTitle = (
+    <span className="min-w-0 truncate text-ui font-semibold text-fg">
+      {showTitle ? flow.title : tr('channels.plan.planner', { name: planner?.name ?? '?' })}
+    </span>
+  )
 
   const pill = planning ? (
     <Pill tone="bg-accent-soft text-accent-fg" spin={plannerTask?.status !== 'queued'}>
@@ -1045,13 +1056,32 @@ export function ChannelFlowCard({
     </Pill>
   )
 
-  // 手写的草稿没有卡头：草稿编辑器自己写提示
-  const header = planPhase ? (
+  // 手写的草稿没有卡头：草稿编辑器自己写提示。谁在拟写在卡外面的作者行，卡头写计划的标题
+  const header = questionsPart ? (
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-x-2 gap-y-1 bg-subtle/60 px-3 py-2 text-meta',
+        !collapsed && 'border-b border-line-subtle',
+      )}
+    >
+      {headTitle}
+      <Pill tone="bg-subtle text-fg-muted">{tr('channels.plan.readOnly')}</Pill>
+      <span className="flex-1" />
+      <Pill tone="bg-accent-soft text-accent-fg">
+        {tr('channels.plan.answered', { n: flow.questions?.length ?? 0 })}
+      </Pill>
+      <button
+        type="button"
+        className={cn(LINK, 'font-medium text-accent-fg')}
+        aria-expanded={!collapsed}
+        onClick={() => setCollapsed(c => !c)}
+      >
+        {tr(collapsed ? 'channels.plan.expand' : 'channels.plan.collapse')}
+      </button>
+    </div>
+  ) : planPhase ? (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line-subtle bg-subtle/60 px-3 py-2 text-meta">
-      <span className="flex min-w-0 items-center gap-1.5 font-semibold text-fg">
-        <MemberAvatar member={planner} size={18} />
-        <span className="truncate">{tr('channels.plan.planner', { name: planner?.name ?? '?' })}</span>
-      </span>
+      {headTitle}
       {summary && <span className="min-w-0 truncate text-fg-faint">{summary}</span>}
       <Pill tone="bg-subtle text-fg-muted">{tr('channels.plan.readOnly')}</Pill>
       <span className="flex-1" />
@@ -1104,9 +1134,12 @@ export function ChannelFlowCard({
     </div>
   ) : null
 
-  const body = planning ? (
+  const body = questionsPart ? (
+    collapsed ? null : (
+      <QuestionsForm key={flow.questions?.length ?? 0} message={message} flow={flow} readOnly />
+    )
+  ) : planning ? (
     <div className="flex flex-col gap-2">
-      {showTitle && <span className="text-ui font-semibold text-fg">{flow.title}</span>}
       {flow.brief && <BriefSection message={message} brief={flow.brief} membersById={membersById} editable={false} />}
       <div className="flex flex-col gap-0.5 text-meta text-fg-muted" data-flow-trace>
         {trace.done.map((t, i) => (
@@ -1135,10 +1168,7 @@ export function ChannelFlowCard({
       <p className="text-meta text-fg-faint">{tr('channels.plan.note')}</p>
     </div>
   ) : unanswered > 0 ? (
-    <div className="flex flex-col gap-2">
-      {showTitle && <span className="text-ui font-semibold text-fg">{flow.title}</span>}
-      <QuestionsForm key={flow.questions!.length} message={message} flow={flow} readOnly={readOnly} />
-    </div>
+    <QuestionsForm key={flow.questions!.length} message={message} flow={flow} readOnly={readOnly} />
   ) : flow.status === 'draft' ? (
     <DraftEditor
       key={flow.rev ?? 0}
@@ -1273,16 +1303,16 @@ export function ChannelFlowCard({
     <article
       aria-label={tr('channels.flow.label', { title: flow.title })}
       data-flow-status={flow.status}
-      data-channel-message={attached ? message.id : undefined}
+      data-channel-message={attached ? (questionsPart ? `${message.id}:questions` : message.id) : undefined}
       className={cn(
         'overflow-hidden rounded-xl border border-line-card bg-surface text-left shadow-sm',
-        attached ? 'mt-1.5 w-[620px] max-w-full' : 'max-w-[620px]',
+        attached ? 'w-[620px] max-w-full rounded-tl-md' : 'max-w-[620px]',
         flow.status === 'paused' && 'border-warn/40',
         highlight && 'search-hit',
       )}
     >
       {header}
-      <div className="p-3">{body}</div>
+      {body && <div className="p-3">{body}</div>}
     </article>
   )
   return attached ? (

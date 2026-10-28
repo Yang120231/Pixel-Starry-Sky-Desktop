@@ -11,12 +11,13 @@ import type {
   ChannelTask,
   ChannelTextMessage,
 } from '@/data/types'
-import { buildTimeline, tasksWithResult } from './model'
+import { buildTimeline, tasksWithResult, type FlowPart } from './model'
 import { formatClock, formatDay } from './format'
 import { isSelfAuthor, MessageGroup, ThreadRow, type Quotable } from './ChannelMessage'
 import { threadStats } from '../../../../shared/channels/threads'
 import { ChannelTaskCard, type TaskCardActions } from './ChannelTaskCard'
 import { ChannelFlowCard } from './ChannelFlowCard'
+import { PlannerHandoff, PlannerRow } from './PlannerRow'
 import { channelActions, useChannels } from './store'
 
 /** 离底部这么近时，新消息到来自动跟到底部 */
@@ -242,10 +243,11 @@ export function ChannelTimeline({
     />
   )
 
-  const flowCard = (message: ChannelTextMessage, attached: boolean) => (
+  const flowCard = (message: ChannelTextMessage, attached: boolean, part: FlowPart = 'whole') => (
     <ChannelFlowCard
       key={message.id}
       message={message}
+      part={part}
       membersById={membersById}
       channelMembers={channelMembers}
       readOnly={!!channel.archivedAt || channel.scope !== 'local'}
@@ -324,7 +326,14 @@ export function ChannelTimeline({
             case 'task':
               return taskChip(row.message, false)
             case 'flow':
-              return flowCard(row.message, false)
+              // 拟计划的流程是拟计划的成员在说话：放在左边它的头像下面；手写的流程照常单独一张卡
+              return row.message.flow?.planner ? (
+                <PlannerRow key={row.key} message={row.message} part={row.part} raw={row.raw} membersById={membersById}>
+                  {flowCard(row.message, true, row.part)}
+                </PlannerRow>
+              ) : (
+                flowCard(row.message, false)
+              )
             case 'group':
               return (
                 <MessageGroup
@@ -336,7 +345,9 @@ export function ChannelTimeline({
                       ? m => (
                           <>
                             {row.tasks?.[m.id]?.map(task => taskChip(task, true))}
-                            {row.flows?.[m.id]?.map(flow => flowCard(flow, true))}
+                            {row.flows?.[m.id]?.map(flow => (
+                              <PlannerHandoff key={flow.id} flow={flow} membersById={membersById} onJump={jump} />
+                            ))}
                           </>
                         )
                       : undefined

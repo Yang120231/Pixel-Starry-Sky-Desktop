@@ -123,7 +123,7 @@ function Folded({ text, fade = 'from-surface' }: { text: string; fade?: string }
 }
 
 /** 气泡上方的作者行：名字、（你）、AI 标签、模型 · 机器；时间在分隔线和悬停里 */
-function AuthorLine({ member }: { member: ChannelMember | undefined }) {
+export function AuthorLine({ member }: { member: ChannelMember | undefined }) {
   useI18n()
   const meta = agentMeta(member)
   return (

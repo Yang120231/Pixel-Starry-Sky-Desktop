@@ -18,6 +18,7 @@ import {
   parseMentions,
   sharedDirAgents,
   splitMentions,
+  stripPlanJson,
   unreadTotal,
 } from './model'
 import { isReservedMentionName } from '../../../../shared/channels/mentions'
@@ -109,7 +110,7 @@ describe('频道时间线', () => {
     ])
     expect(rows.map(r => (r.kind === 'flow' ? r.key : r.kind))).toEqual(['day', 'manual'])
   })
-  it('拟计划的流程卡挂在你刚发的那条消息下面；它的拟计划任务卡收进流程卡，要你处理时照常显示', () => {
+  it('拟计划的流程卡单独一行（拟计划的成员那边），你那条消息下面记一笔；拟计划任务卡收进流程卡，要你处理时照常显示', () => {
     const flow = {
       title: 't',
       status: 'planning' as const,
@@ -139,18 +140,21 @@ describe('频道时间线', () => {
     expect(rows.map(r => (r.kind === 'group' ? r.items.map(i => i.id).join('+') : r.key))).toEqual([
       `day-${DAY1}`,
       'a1',
+      'f1',
       'step',
       'a2',
     ])
     const group = rows[1]
     expect(group.kind === 'group' && group.flows?.a1?.map(f => f.id)).toEqual(['f1'])
+    const card = rows[2]
+    expect(card.kind === 'flow' && card.part).toBe('whole')
     // 拟计划的活等你确认：任务卡照常显示
     const waiting = buildTimeline([
       text('a1', 'me', DAY1 + min(600)),
       text('f1', 'me', DAY1 + min(600), { flow }),
       task('plan', '', 'waiting'),
     ])
-    expect(waiting.map(r => r.key)).toEqual([`day-${DAY1}`, 'a1', 'plan'])
+    expect(waiting.map(r => r.key)).toEqual([`day-${DAY1}`, 'a1', 'f1', 'plan'])
     // 前面不是同一个人刚发的消息：流程卡照常单独一行，拟计划的任务卡照样收进去
     const alone = buildTimeline([
       text('b1', 'fe', DAY1 + min(600)),
@@ -158,6 +162,81 @@ describe('频道时间线', () => {
       task('plan', '', 'running'),
     ])
     expect(alone.map(r => r.key)).toEqual([`day-${DAY1}`, 'b1', 'f1'])
+  })
+  it('回答了问题：原位置是问题，你那条回答后面是计划；回答那条不在时间线上时不拆', () => {
+    const flow = {
+      title: 't',
+      status: 'draft' as const,
+      steps: [],
+      maxRejects: 3,
+      planner: { memberId: 'fe', request: 'r', taskId: 'plan', mention: true },
+      questions: [{ q: 'q1', options: ['x'], answer: 'x' }],
+      answersId: 'ans',
+    }
+    const rows = buildTimeline([
+      text('a1', 'me', DAY1 + min(600)),
+      text('f1', 'me', DAY1 + min(600), { flow }),
+      text('ans', 'me', DAY1 + min(603)),
+      text('a2', 'me', DAY1 + min(604)),
+    ])
+    expect(
+      rows.map(r =>
+        r.kind === 'group' ? r.items.map(i => i.id).join('+') : r.kind === 'flow' ? `${r.key}/${r.part}` : r.key,
+      ),
+    ).toEqual([`day-${DAY1}`, 'a1', 'f1/questions', 'ans', 'f1:plan/plan', 'a2'])
+    // 旧数据：没记回答那条（或不在这页）就一整张
+    const old = buildTimeline([text('a1', 'me', DAY1 + min(600)), text('f1', 'me', DAY1 + min(600), { flow })])
+    expect(old.map(r => (r.kind === 'flow' ? r.part : r.kind))).toEqual(['day', 'group', 'whole'])
+    // 问题还没都答（又问了一轮）：不拆
+    const again = buildTimeline([
+      text('f1', 'me', DAY1 + min(600), { flow: { ...flow, questions: [{ q: 'q2', options: [] }] } }),
+      text('ans', 'me', DAY1 + min(603)),
+    ])
+    expect(again.map(r => (r.kind === 'flow' ? r.part : r.kind))).toEqual(['day', 'whole', 'group'])
+  })
+  it('拟计划的成员回复里的计划 JSON 不显示、收进流程卡；只剩 JSON 的整条不显示，别的回复照常', () => {
+    const flow = {
+      title: 't',
+      status: 'draft' as const,
+      steps: [],
+      maxRejects: 3,
+      planner: { memberId: 'fe', request: 'r', taskId: 'plan', mention: true },
+    }
+    const json = '{"summary":"s","title":"t","steps":[]}'
+    const fence = '```'
+    const rows = buildTimeline([
+      text('f1', 'me', DAY1 + min(600), { flow }),
+      {
+        kind: 'task',
+        id: 'plan',
+        channelId: 'c',
+        at: DAY1 + min(600),
+        authorId: 'me',
+        assigneeId: 'fe',
+        title: 'plan',
+        status: 'done',
+        flow: { messageId: 'f1', stepId: '' },
+      },
+      text('r1', 'fe', DAY1 + min(601), { taskId: 'plan', text: json }),
+      text('r2', 'fe', DAY1 + min(602), { taskId: 'plan', text: `改了第 2 步\n${fence}json\n${json}\n${fence}` }),
+      text('r3', 'fe', DAY1 + min(603), { taskId: 'plan', text: '这个直接回答就行' }),
+      text('r4', 'fe', DAY1 + min(604), { taskId: 'other', text: json }),
+    ])
+    const groups = rows.flatMap(r => (r.kind === 'group' ? r.items : []))
+    expect(groups.map(m => [m.id, m.text])).toEqual([
+      ['r2', '改了第 2 步'],
+      ['r3', '这个直接回答就行'],
+      ['r4', json],
+    ])
+    const card = rows.find(r => r.kind === 'flow')
+    expect(card?.kind === 'flow' && card.raw?.length).toBe(2)
+  })
+  it('认出回复里的计划 JSON：代码块、整段、夹在话中间；别的 JSON 不动', () => {
+    const plan = '{"questions":[{"q":"a","options":[]}]}'
+    expect(stripPlanJson(plan)).toEqual({ text: '', found: true })
+    expect(stripPlanJson('计划如下：\n```json\n' + plan + '\n```')).toEqual({ text: '', found: true })
+    expect(stripPlanJson('先问几件事 ' + plan + ' 谢谢')).toEqual({ text: '先问几件事  谢谢', found: true })
+    expect(stripPlanJson('```json\n{"a":1}\n```').found).toBe(false)
   })
   it('只在讨论串里的消息不上主时间线，也不打断前后的分组', () => {
     const rows = buildTimeline([
