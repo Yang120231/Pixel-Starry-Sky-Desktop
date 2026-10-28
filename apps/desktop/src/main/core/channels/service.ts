@@ -2584,11 +2584,13 @@ export class Channels {
     if (!m) return
     if (!stepId) {
       // 拆流程的活：交回的步骤成为草稿；没交回就是空草稿，你自己写
-      const steps = run.done?.steps
       if (m.flow.status !== 'planning' || m.flow.planner?.taskId !== run.taskId) return
+      // 没调用 task_done 但把计划写在了回复里：照样认
+      const done = run.done ?? (finish.status === 'done' ? this.planFromReply(run, m.flow) : null)
+      const steps = done?.steps
       // 牵头自动拆、头一回就没交回步骤：它直接回答了（回复照常发在卡片下），流程不留草稿；
       // 已经有提案时（接着商量）没交回就是这次不用改，提案留着
-      const questions = run.done?.questions
+      const questions = done?.questions
       if (
         (m.flow.planner.auto || m.flow.planner.mention) &&
         finish.status === 'done' &&
@@ -2600,9 +2602,12 @@ export class Channels {
       )
         this.updateFlow(run.channelId, messageId, f => ({ ...f, status: 'stopped' }))
       else {
-        const brief = run.done?.brief
+        const brief = done?.brief
+        const title = done?.title
         this.updateFlow(run.channelId, messageId, f => ({
           ...f,
+          // 拟计划的成员起的短标题（不再拿你的原话截断当标题）
+          ...(title ? { title } : {}),
           // 后面还排着你接着说的话：等它们也改完再回到草稿
           status: more ? 'planning' : 'draft',
           ...(questions?.length ? { questions } : {}),
@@ -2774,22 +2779,7 @@ export class Channels {
     if (open.length) done.open = open
     if (!ref.stepId) {
       if (flow.status !== 'planning') throw new Error('流程已经不在拆分中了')
-      const byName = (name: string): string | null =>
-        c.memberIds.map(id => this.member(id)).find(m => m && m.name.toLowerCase() === name.toLowerCase())?.id ?? null
-      const questions = cleanQuestions(args.questions)
-      if (questions.length && args.steps === undefined) {
-        // 先问、只问一轮：问过了就按回答交完整计划
-        if (flow.questions?.length)
-          throw new Error('已经问过一轮了：按用户的回答用 steps 和 brief 交出完整计划，不要再问')
-        done.questions = questions
-      } else {
-        const steps = planSteps(args.steps, byName)
-        const problem = draftProblem(steps, this.flowMemberCheck(c))
-        if (problem) throw new Error(`${problem}。改好再调用 task_done`)
-        done.steps = steps
-        const brief = cleanBrief(args.brief, SELF_ID)
-        if (brief) done.brief = brief
-      }
+      Object.assign(done, this.planDelivery(c, flow, args))
     } else if (step?.kind === 'review') {
       if (args.verdict !== 'pass' && args.verdict !== 'reject')
         throw new Error('审查步骤要写 verdict：pass（通过）或 reject（打回）')
@@ -2804,6 +2794,65 @@ export class Channels {
     const note = dropped.length ? `（这些路径不在工作区里，没有记下：${dropped.join('、')}）` : ''
     if (!ref.stepId && done.questions) return '问题已交给用户，答完会发给你。可以结束这一轮了。'
     return ref.stepId ? `已交付，可以结束这一轮了。${note}` : '拆好的流程已交回，等用户确认后开始。可以结束这一轮了。'
+  }
+
+  /** 拟计划的成员交回的（task_done，或写在回复里的同样 JSON）：先问就只有 questions，否则是步骤、要点和短标题；不合格抛错 */
+  private planDelivery(
+    c: StoredChannel,
+    flow: ChannelFlow,
+    args: Record<string, unknown>,
+  ): Pick<NonNullable<TaskRun['done']>, 'questions' | 'steps' | 'brief' | 'title'> {
+    const out: Pick<NonNullable<TaskRun['done']>, 'questions' | 'steps' | 'brief' | 'title'> = {}
+    const title = typeof args.title === 'string' ? args.title.replace(/\s+/g, ' ').trim().slice(0, FLOW_TITLE_MAX) : ''
+    if (title) out.title = title
+    const questions = cleanQuestions(args.questions)
+    if (questions.length && args.steps === undefined) {
+      // 先问、只问一轮：问过了就按回答交完整计划
+      if (flow.questions?.length)
+        throw new Error('已经问过一轮了：按用户的回答用 steps 和 brief 交出完整计划，不要再问')
+      out.questions = questions
+      return out
+    }
+    const byName = (name: string): string | null =>
+      c.memberIds.map(id => this.member(id)).find(m => m && m.name.toLowerCase() === name.toLowerCase())?.id ?? null
+    const steps = planSteps(args.steps, byName)
+    const problem = draftProblem(steps, this.flowMemberCheck(c))
+    if (problem) throw new Error(`${problem}。改好再调用 task_done`)
+    out.steps = steps
+    const brief = cleanBrief(args.brief, SELF_ID)
+    if (brief) out.brief = brief
+    return out
+  }
+
+  /**
+   * 拟计划的成员没调用 task_done、把同样的 JSON 写在回复里（有的引擎在计划模式里拿不到频道工具）：
+   * 从回复里认出来（```json 代码块，或回复本身就是一个 JSON 对象），按 task_done 一样校验；认不出、不合格是 null
+   */
+  private planFromReply(run: TaskRun, flow: ChannelFlow): NonNullable<TaskRun['done']> | null {
+    const reply = run.reply?.trim()
+    if (!reply) return null
+    const fenced = [...reply.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map(m => m[1].trim())
+    const bare = reply.slice(reply.indexOf('{'), reply.lastIndexOf('}') + 1)
+    for (const text of [...fenced.reverse(), bare]) {
+      if (!text.startsWith('{')) continue
+      let args: Record<string, unknown>
+      try {
+        args = JSON.parse(text) as Record<string, unknown>
+      } catch {
+        continue
+      }
+      if (!args || typeof args !== 'object' || (args.steps === undefined && args.questions === undefined)) continue
+      const c = this.store.channels.get(run.channelId)
+      if (!c) return null
+      try {
+        const summary = typeof args.summary === 'string' && args.summary.trim() ? args.summary.trim() : '计划'
+        return { summary: summary.slice(0, 2000), files: [], ...this.planDelivery(c, flow, args) }
+      } catch (e) {
+        this.deps.log?.('回复里的计划不合格', e)
+        return null
+      }
+    }
+    return null
   }
 
   /** task_done 的文件（第 10 项）：统一成相对这一步工作区的路径；工作区外的、带 .. 的去掉 */
@@ -3258,17 +3307,29 @@ export class Channels {
 
   /** 被 @ 的成员先拟计划（和牵头拆同一条路）：出的是草稿，点开工才派活；只是问题时它直接回答 */
   private async mentionPlan(c: StoredChannel, m: ChannelTextMessage, memberId: string): Promise<void> {
+    // 只发了「@GPT」：需求在你前面刚说的几句里（「我想设计一个数据中心」→「@GPT」），一起交给它
+    const own = this.titleWithoutMentions(c, m.text)
+    const before = own === m.text.trim() || !own ? this.recentOwnLines(c, m) : []
+    const request = [...before, m.text].join('\n')
+    const title = own && own !== m.text.trim() ? own : before.join(' ') || own
     try {
-      await this.flowAction(
-        c.id,
-        { type: 'create', title: this.titleWithoutMentions(c, m.text), planner: { memberId, request: m.text } },
-        false,
-        true,
-        m,
-      )
+      await this.flowAction(c.id, { type: 'create', title, planner: { memberId, request } }, false, true, m)
     } catch (e) {
       this.deps.log?.('先出计划失败', e)
     }
+  }
+
+  /** 同一个人紧挨着这条之前说的几句（10 分钟内、最多 3 条、不在讨论串里、中间没别人插话） */
+  private recentOwnLines(c: StoredChannel, m: ChannelTextMessage): string[] {
+    const list = this.store.messages.get(c.id) ?? []
+    const out: string[] = []
+    for (let i = list.findIndex(x => x.id === m.id) - 1; i >= 0 && out.length < 3; i--) {
+      const x = list[i]
+      if (x.kind === 'event') continue
+      if (x.kind !== 'message' || x.authorId !== m.authorId || x.threadId || x.flow || m.at - x.at > 10 * 60_000) break
+      if (x.text.trim()) out.unshift(x.text.trim())
+    }
+    return out
   }
 
   /** 牵头成员拆这条需求：和「让成员拆」同一条路，拆出的是草稿，你确认后才开始；只是问题时它直接回答 */

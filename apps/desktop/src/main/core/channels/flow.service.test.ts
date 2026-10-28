@@ -1279,6 +1279,42 @@ describe('@ 派活先出计划', () => {
     expect(task().request?.requestId).toBe('r2')
   })
 
+  it('拿不到 task_done 时把 JSON 写在回复里也认（计划模式里的 Codex）；短标题替换原话', async () => {
+    const { c, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '我想设计一个数据中心', clientId: 'p0' })
+    await c.post(ch, { text: '@画师', clientId: 'p1' })
+    await settle()
+    // 只发了 @：前面那句一起交给它，也拿来当标题
+    expect(flowOf(c, ch)).toMatchObject({ title: '我想设计一个数据中心', status: 'planning' })
+    const s = tasks(c, ch)[0].sessionId!
+    expect(lastTo(s).text).toContain('我想设计一个数据中心')
+    await endTurn(
+      c,
+      s,
+      '当前环境没有 task_done 工具。\n```json\n{"summary":"先问","questions":[{"q":"哪种数据中心？","options":["游戏内","机房"]}]}\n```',
+    )
+    expect(flowOf(c, ch)).toMatchObject({
+      status: 'draft',
+      questions: [{ q: '哪种数据中心？', options: ['游戏内', '机房'] }],
+    })
+    const messageId = c.messages(ch).messages.find(m => m.kind === 'message' && m.flow)!.id
+    await c.flowAction(ch, { type: 'answers', messageId, answers: ['机房'] })
+    await settle()
+    // 不合格的（成员名字不对）不认，草稿也不留空步骤
+    await endTurn(c, s, '{"summary":"计划","steps":[{"title":"x","member":"没这个人"}]}')
+    expect(flowOf(c, ch).steps).toHaveLength(0)
+  })
+
+  it('task_done 带短标题：计划卡标题换成它', async () => {
+    const { c, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 两个任务，一个是检查为什么不亮灯，另一个是加字节显示', clientId: 'p1' })
+    await settle()
+    const s = tasks(c, ch)[0].sessionId!
+    c.toolDone(s, { summary: '好了', title: '不亮灯 + 字节显示', steps: [{ title: '查原因', member: '画师' }] })
+    await endTurn(c, s, '好了')
+    expect(flowOf(c, ch)).toMatchObject({ status: 'draft', title: '不亮灯 + 字节显示' })
+  })
+
   it('带截图 @ 也先出计划：图片跟着交给拟计划的成员', async () => {
     const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
     const image = {
