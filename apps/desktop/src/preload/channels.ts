@@ -48,6 +48,8 @@ export interface ChannelsBridge {
       relayRules?: RelayRules
       /** 牵头成员（docs/ui/channels-pipeline.md §8.3）：null 不启用 */
       lead?: string | null
+      /** @ 一个 AI 派新活时先出计划 */
+      planFirst?: boolean
       /** 每天定时运行的流程（docs/ui/channels-pipeline.md §10.3）：整个列表一起存 */
       schedules?: FlowScheduleInput[]
       /** 主动提醒的规则开关、每日简报几点发（docs/ui/channels-collab-v2.md §6） */

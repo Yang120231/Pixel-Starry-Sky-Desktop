@@ -173,6 +173,7 @@ export function ChannelDialog({
   const [memberQuery, setMemberQuery] = useState('')
   const [relay, setRelay] = useState(channel?.relay === true)
   const [lead, setLead] = useState(channel?.lead ?? '')
+  const [planFirst, setPlanFirst] = useState(channel?.planFirst !== false)
   const channelMembers = useChannels(s => s.members)
   const leadOptions = channelMembers.filter(
     m => m.kind === 'agent' && m.machineId === 'local' && channel?.memberIds.includes(m.id),
@@ -193,6 +194,7 @@ export function ChannelDialog({
     notes !== (channel?.notes ?? '') ||
     relay !== (channel?.relay === true) ||
     lead !== (channel?.lead ?? '') ||
+    planFirst !== (channel?.planFirst !== false) ||
     JSON.stringify(rules) !== JSON.stringify(savedRules) ||
     JSON.stringify(alerts) !== JSON.stringify(savedAlerts) ||
     digestHour !== (channel?.digestHour ?? DIGEST_HOUR) ||
@@ -218,6 +220,7 @@ export function ChannelDialog({
                 alerts,
                 digestHour,
                 ...(lead !== (channel.lead ?? '') ? { lead: lead || null } : {}),
+                ...(planFirst !== (channel.planFirst !== false) ? { planFirst } : {}),
               },
         )
       : channelActions.createChannel(teamId ? { ...input, teamId } : { ...input, memberIds: members }).then(id =>
@@ -291,6 +294,21 @@ export function ChannelDialog({
             </label>
           )}
           {!inTeam && relay && <RelayRulesEditor value={rules} onChange={setRules} />}
+          {!inTeam && channel && (
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                data-channel-plan-first
+                className="mt-0.5"
+                checked={planFirst}
+                onChange={e => setPlanFirst(e.target.checked)}
+              />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-list text-fg">{tr('channels.dialog.planFirst')}</span>
+                <span className="text-meta text-fg-muted">{tr('channels.dialog.planFirstHint')}</span>
+              </span>
+            </label>
+          )}
           {!inTeam && channel && (
             <Field
               label={tr('channels.dialog.lead')}

@@ -60,6 +60,8 @@ async function open(extra: Partial<ChannelsDeps> = {}): Promise<Channels> {
     now: () => ++now,
     channelTools: true,
     alertTimer: false,
+    // @ 派活先出计划另有测试打开；这里沿用直接派活
+    planFirst: false,
     ...extra,
   })
   opened.push(c)
@@ -1132,5 +1134,140 @@ describe('分工提案和问用户', () => {
     expect(stepOf(c, ch, 's1').status).toBe('running')
     expect(lastTo(s1).text).toContain('0.5 秒')
     expect(flowOf(c, ch).brief?.facts.map(f => f.v)).toEqual(['8 秒', '0.5 秒'])
+  })
+})
+
+describe('@ 派活先出计划', () => {
+  it('@ 一个 AI：它先一次问完，答完一次出完整计划；不派活；问过就不再问', async () => {
+    const { c, a, b, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 帮我设计一个数据中心', clientId: 'p1' })
+    await settle()
+    const flows = () => c.messages(ch).messages.filter((m): m is ChannelTextMessage => m.kind === 'message' && !!m.flow)
+    expect(flows()).toHaveLength(1)
+    expect(flows()[0].flow).toMatchObject({
+      title: '帮我设计一个数据中心',
+      status: 'planning',
+      planner: { memberId: a, mention: true },
+    })
+    // 没有直接派活：只有拟计划那一张卡
+    expect(tasks(c, ch)).toHaveLength(1)
+    const s = tasks(c, ch)[0].sessionId!
+    expect(lastTo(s).text).toContain('用户点名把这件事交给你')
+    expect(lastTo(s).text).toContain('questions')
+    const messageId = flows()[0].id
+
+    expect(
+      c.toolDone(s, {
+        summary: '先问两件事',
+        questions: [
+          { q: '哪种数据中心？', options: ['游戏内', '机房', '管理软件', '多余的', '再多余'] },
+          { q: '主要解决什么问题？' },
+        ],
+      }),
+    ).toContain('问题已交给用户')
+    await endTurn(c, s, '先问两件事')
+    expect(flowOf(c, ch)).toMatchObject({ status: 'draft', steps: [] })
+    expect(flowOf(c, ch).questions).toEqual([
+      { q: '哪种数据中心？', options: ['游戏内', '机房', '管理软件', '多余的'] },
+      { q: '主要解决什么问题？', options: [] },
+    ])
+    await expect(c.flowAction(ch, { type: 'start', messageId })).rejects.toThrow()
+    await expect(c.flowAction(ch, { type: 'answers', messageId, answers: ['管理软件'] })).rejects.toThrow(
+      '每个问题都要回答',
+    )
+    await c.flowAction(ch, { type: 'answers', messageId, answers: ['管理软件', '资产管理'] })
+    await settle()
+    expect(flowOf(c, ch).status).toBe('planning')
+    expect(lastTo(s).text).toContain('1. 哪种数据中心？')
+    expect(lastTo(s).text).toContain('回答: 管理软件')
+    await expect(c.flowAction(ch, { type: 'answers', messageId, answers: ['a', 'b'] })).rejects.toThrow('没在等你回答')
+
+    expect(() => c.toolDone(s, { summary: '再问', questions: [{ q: '再问一个？' }] })).toThrow('已经问过一轮了')
+    c.toolDone(s, {
+      summary: '计划好了',
+      steps: [
+        { title: '定数据模型和接口', member: '画师', effort: 'high' },
+        { title: '写后端', member: '程序员', deps: [1], effort: '超强' },
+      ],
+      brief: {
+        goal: '数据中心管理软件',
+        facts: [
+          { k: '类型', v: '管理软件' },
+          { k: '技术栈', v: 'React + FastAPI', suggested: true },
+        ],
+      },
+    })
+    await endTurn(c, s, '计划好了')
+    const f = flowOf(c, ch)
+    expect(f).toMatchObject({ status: 'draft', rev: 1 })
+    expect(f.steps[0].settings).toEqual({ effort: 'high' })
+    expect(f.steps[1].settings ?? null).toBeNull()
+    expect(f.brief?.facts).toEqual([
+      { k: '类型', v: '管理软件', by: SELF_ID },
+      { k: '技术栈', v: 'React + FastAPI', by: a, suggested: true },
+    ])
+    expect(tasks(c, ch).some(t => t.assigneeId === b)).toBe(false)
+  })
+
+  it('换拟计划的成员、模型和推理强度：停掉正在拟的那一轮，由新的接手（带上回答），新会话按设置开', async () => {
+    const { c, a, b, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 帮我设计一个数据中心', clientId: 'p1' })
+    await settle()
+    const messageId = c.messages(ch).messages.find(m => m.kind === 'message' && m.flow)!.id
+    const first = tasks(c, ch)[0]
+    await expect(c.flowAction(ch, { type: 'replan', messageId, memberId: 'nobody' })).rejects.toThrow('不在频道里')
+    await c.flowAction(ch, {
+      type: 'replan',
+      messageId,
+      memberId: b,
+      settings: { model: 'big', effort: 'xhigh', junk: 1 },
+    })
+    await settle()
+    expect(flowOf(c, ch)).toMatchObject({
+      status: 'planning',
+      planner: { memberId: b, mention: true, settings: { model: 'big', effort: 'xhigh' } },
+    })
+    const second = tasks(c, ch).at(-1)!
+    expect(second.id).not.toBe(first.id)
+    expect(second.assigneeId).toBe(b)
+    expect(second.title).toContain('出计划')
+    const created = calls.filter(x => x.channel === 'engine:createSession').at(-1)!.args[0] as Record<string, unknown>
+    expect(created).toMatchObject({ model: 'big', effort: 'xhigh' })
+    // 旧的那一轮迟到的交付不算数
+    expect(() => c.toolDone(first.sessionId!, { summary: 'x', steps: [{ title: 'x', member: '画师' }] })).toThrow()
+
+    // 新的先问、答完再换人：交接里带上回答
+    const s2 = second.sessionId!
+    c.toolDone(s2, { summary: '问', questions: [{ q: '哪种？' }] })
+    await endTurn(c, s2, '问')
+    await c.flowAction(ch, { type: 'answers', messageId, answers: ['管理软件'] })
+    await settle()
+    await c.flowAction(ch, { type: 'replan', messageId, memberId: a })
+    await settle()
+    expect(lastTo(tasks(c, ch).at(-1)!.sessionId!).text).toContain('哪种？：管理软件')
+  })
+
+  it('不先出计划的情况：频道关了、带附件、@ 了两个、在讨论串里；只是问题时它直接回答，流程不留', async () => {
+    const { c, a, b, ch } = await setup({ planFirst: true })
+    const flows = () => c.messages(ch).messages.filter(m => m.kind === 'message' && m.flow)
+    await c.post(ch, { text: '@画师 @程序员 一起看看', clientId: 'p1' })
+    await settle()
+    expect(flows()).toHaveLength(0)
+    expect(tasks(c, ch).map(t => t.assigneeId)).toEqual([a, b])
+    for (const t of tasks(c, ch)) await endTurn(c, t.sessionId!, '看了')
+
+    await c.post(ch, { text: '@画师 这个函数是干嘛的', clientId: 'p2' })
+    await settle()
+    expect(flows()).toHaveLength(1)
+    const s = tasks(c, ch).at(-1)!.sessionId!
+    await endTurn(c, s, '它是算价格的。')
+    expect(flowOf(c, ch).status).toBe('stopped')
+
+    await c.update(ch, { planFirst: false })
+    expect(c.state().channels.find(x => x.id === ch)?.planFirst).toBe(false)
+    await c.post(ch, { text: '@画师 直接改一下', clientId: 'p3' })
+    await settle()
+    expect(flows()).toHaveLength(1)
+    expect(tasks(c, ch).at(-1)?.title).toContain('直接改一下')
   })
 })

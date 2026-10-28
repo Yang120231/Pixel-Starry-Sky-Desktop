@@ -80,7 +80,7 @@ export interface TaskRun {
   /** 流程里的一步：流程卡消息 id、步骤 id（拆流程的活是空串） */
   flow?: { messageId: string; stepId: string }
   /** 这一轮调过 task_done（第一次算数） */
-  done?: FlowResult & { steps?: FlowStep[]; brief?: FlowBrief }
+  done?: FlowResult & { steps?: FlowStep[]; brief?: FlowBrief; questions?: { q: string; options: string[] }[] }
   /** 问了别的成员、还在等回答 */
   ask?: { to: string; question: string; at: number }
   /** 等的回答在这一轮还没结束时就到了：这一轮结束后接着发 */

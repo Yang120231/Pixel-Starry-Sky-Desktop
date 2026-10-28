@@ -533,6 +533,10 @@ export function flowPlanPrompt(input: {
   members: { name: string; role: string }[]
   /** 牵头成员按用户不带 @ 的消息自动拆的：只是问题、一步能做完时直接回答 */
   auto?: boolean
+  /** 用户 @ 它派的活：先出计划，一个人能做完的计划可以只有一步给它自己 */
+  mention?: boolean
+  /** 换人接手时：前一个成员拆到哪了、用户答过什么 */
+  handover?: string
 }): string {
   const sep = en(input.locale) ? ': ' : '：'
   const list = input.members.map(m => `- ${m.name}${m.role ? `${sep}${m.role}` : ''}`).join('\n')
@@ -541,10 +545,16 @@ export function flowPlanPrompt(input: {
       `In the channel #${input.channel}, the user wants this done by several AI members as a flow:\n${input.request}`,
       `Members you can use:\n${list}`,
       'Split it into at most 9 steps. Each step: title (what to do), member (exact name), deps (numbers of the steps that must be delivered first, counting from 1), kind ("work"; "review" with target = the step number it reviews; or "summary" for the final wrap-up). Steps that do not depend on each other run in parallel. If the work spans several layers (say the main process and the UI), first add a step that defines the shared interfaces and types, and make the others depend on it. Steps that run at the same time should not change the same files; put anything they share into that earlier step. Do not do the work yourself.',
-      'Also fill brief: goal (one line), facts (what the user already said, as {k, v} pairs: item and decision; only what people said, not your guesses), open (what still has to be decided before work starts, as {q, required}; required = it changes the result and cannot be inferred; put your suggested default in q, for example "Duration (suggest 8 s)"). Ask only what really matters, at most 6.',
-      'When the split is ready, call task_done with summary (one line), steps and brief. Nobody starts yet: the user and others in the channel can keep talking to refine it, and they start it when ready.',
+      'Ask first, all at once: if something changes the result and cannot be inferred, call task_done once with summary and questions (at most 6, each {q, options}: 2-4 short options where possible) and no steps. The answers will be sent to you. Ask only what really matters; if nothing, skip this.',
+      'Then deliver the complete plan in one go, without asking again: steps (each may also have effort: "low" | "medium" | "high" | "xhigh", the reasoning effort that step needs; think hard on interfaces and reviews, less on mechanical work) and brief: goal (one line), facts (what was decided, {k, v}; things you decided for the user get suggested: true, e.g. acceptance criteria or tech stack nobody named). Leave open empty. Nobody starts yet: the user can edit it or ask for changes, and starts it when ready.',
       input.auto
         ? 'You are the lead of this channel and the user did not name anyone. If this is just a question, or one member can finish it in one go, do not call task_done: answer directly in your reply.'
+        : '',
+      input.mention
+        ? 'The user named you for this. Plan it before doing anything; if you can do it alone, a one-step plan assigned to yourself is fine. If it is only a question that needs no changes, answer directly and do not call task_done.'
+        : '',
+      input.handover
+        ? `You are taking over from another member. Where they got to:\n${input.handover}\nKeep the user's answers and decisions; deliver the complete plan.`
         : '',
     ]
       .filter(Boolean)
@@ -553,10 +563,16 @@ export function flowPlanPrompt(input: {
     `用户想在频道 #${input.channel} 里让几个 AI 成员按流程做这件事：\n${input.request}`,
     `能用的成员：\n${list}`,
     '把它拆成最多 9 步。每一步写：title（做什么）、member（成员名字，原样写）、deps（要先交付的步骤序号，从 1 数）、kind（"work" 干活；"review" 审查，target 写审第几步；"summary" 最后汇总）。互相不依赖的步骤会同时做。跨好几层的活（比如主进程和界面都要改），先安排一步定共用的接口和类型，其余步骤依赖它；同时做的步骤不要改同一批文件，要共用的东西放进前面那一步。不要自己动手做这件事。',
-    '同时写 brief：goal（一句话目标）、facts（用户已经说过的，{k, v}：哪一项、定了什么；只写人说过的，不写你的猜测）、open（开工前还要人定的，{q, required}；required 表示影响结果又推不出来；q 里带上你建议的默认值，比如「持续时间（建议 8 秒）」）。只问真正要紧的，最多 6 个。',
-    '拆好后调用 task_done：summary 写一句话，steps 写上面的步骤，brief 写要点。现在不会开工：用户和频道里的人还会接着补充、改，确认后才开始。',
+    '先问、一次问完：有影响结果、又推不出来的事要用户定时，先只调用一次 task_done，写 summary 和 questions（最多 6 个，每个 {q, options}，尽量给 2–4 个简短选项），不写 steps。用户答完会发给你。只问真正要紧的，没有就跳过这一步。',
+    '然后一次交出完整计划，不要再追问：steps（每一步可以带 effort："low" | "medium" | "high" | "xhigh"，这一步需要的推理强度；定接口、审查要想得深，照着写的活用低一些）和 brief：goal（一句话目标）、facts（定下来的，{k, v}；你替用户定的标 suggested: true，比如没人提的验收标准、技术栈），open 留空。现在不会开工：用户可以直接改、或说要改哪里，确认后才开始。',
     input.auto
       ? '你是这个频道的牵头成员，用户没有点名交给谁。如果这只是个问题，或者一个成员一次就能做完，不要调用 task_done，直接在回复里回答。'
+      : '',
+    input.mention
+      ? '用户点名把这件事交给你。先拟计划，不要动手；你一个人能做完的，计划可以只有一步、交给你自己。如果只是个问题、不用改东西，直接在回复里回答，不要调用 task_done。'
+      : '',
+    input.handover
+      ? `你接手另一个成员拟的计划。它做到这里：\n${input.handover}\n保留用户的回答和定下的东西，交出完整计划。`
       : '',
   ]
     .filter(Boolean)
@@ -590,7 +606,7 @@ export function flowRefinePrompt(input: {
         : '',
       `Current steps:\n${steps || '(none)'}`,
       brief ? `Current ${brief}` : '',
-      'If this adds details, changes the plan or answers your questions, update it: call task_done again with the complete steps and brief (facts gets what was just decided, remove answered items from open). Then reply in one or two lines with what changed. If it does not change the proposal (just chat or a question), only reply; do not call task_done. Do not start the work.',
+      'If this adds details or asks for changes, update the plan: call task_done again with the complete steps and brief (facts gets what was just decided). Change only what they asked for and keep the rest, including edits they made on the card. Do not ask new questions. Then reply in one or two lines with what changed. If it does not change the proposal (just chat or a question), only reply; do not call task_done. Do not start the work.',
     ]
       .filter(Boolean)
       .join('\n\n')
@@ -599,10 +615,18 @@ export function flowRefinePrompt(input: {
     input.attached ? '（还带了图片或文件，这里看不到；需要的话在回复里说）' : '',
     `现在的步骤：\n${steps || '（还没有）'}`,
     brief ? `现在的${brief}` : '',
-    '如果这是在补充细节、改主意或回答你的问题，就更新提案：再调用一次 task_done，交回完整的 steps 和 brief（刚定下的写进 facts，答过的从 open 里去掉），然后在回复里用一两句说改了什么。如果和提案无关（闲聊、提问），只在回复里回答，不要调用 task_done。不要开始干活。',
+    '如果这是在补充细节或要你改，就更新计划：再调用一次 task_done，交回完整的 steps 和 brief（刚定下的写进 facts）。只改用户要改的，其余照旧，包括用户在卡上改过的分工；不要再提新问题。然后在回复里用一两句说改了什么。如果和计划无关（闲聊、提问），只在回复里回答，不要调用 task_done。不要开始干活。',
   ]
     .filter(Boolean)
     .join('\n\n')
+}
+
+/** 用户一次答完了拟计划时问的问题：接着一次交出完整计划 */
+export function flowAnswersPrompt(locale: Locale, items: { q: string; a: string }[]): string {
+  const list = items.map((x, i) => `${i + 1}. ${x.q}\n   ${en(locale) ? 'Answer' : '回答'}: ${x.a}`).join('\n')
+  return en(locale)
+    ? `The user answered your questions:\n${list}\n\nNow deliver the complete plan in one go with task_done (steps and brief, facts include these answers). Do not ask again.`
+    : `用户回答了你的问题：\n${list}\n\n现在用 task_done 一次交出完整计划（steps 和 brief，facts 里带上这些回答）。不要再问。`
 }
 
 /** 别的成员问过来的问题（发给被问的成员） */

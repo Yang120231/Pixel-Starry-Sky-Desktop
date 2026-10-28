@@ -87,7 +87,7 @@ const TOOLS = [
   {
     name: 'task_done',
     description:
-      '流程里的一步确实做完了：交付这一步（摘要、改了哪些文件），流程才会往下走。审查步骤要写 verdict（pass 通过 / reject 打回）、打回时 issues 列出问题；让你拆流程的活用 steps 交回拆好的步骤、brief 交回要点。只有流程里的活能用，一轮只算第一次。',
+      '流程里的一步确实做完了：交付这一步（摘要、改了哪些文件），流程才会往下走。审查步骤要写 verdict（pass 通过 / reject 打回）、打回时 issues 列出问题；让你拆流程的活：要先问用户就只交 questions（一次问完），否则用 steps 交回拆好的步骤、brief 交回要点。只有流程里的活能用，一轮只算第一次。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -111,6 +111,11 @@ const TOOLS = [
               deps: { type: 'array', items: { type: 'integer' }, description: '要先交付的步骤序号（从 1 数）' },
               kind: { type: 'string', enum: ['work', 'review', 'summary'] },
               target: { type: 'integer', description: 'review：审第几步' },
+              effort: {
+                type: 'string',
+                enum: ['low', 'medium', 'high', 'xhigh'],
+                description: '这一步建议的推理强度',
+              },
             },
             required: ['title', 'member'],
           },
@@ -127,6 +132,7 @@ const TOOLS = [
                 properties: {
                   k: { type: 'string', description: '哪一项' },
                   v: { type: 'string', description: '定了什么' },
+                  suggested: { type: 'boolean', description: '是你替用户定的' },
                 },
                 required: ['k', 'v'],
               },
@@ -142,6 +148,18 @@ const TOOLS = [
                 required: ['q'],
               },
             },
+          },
+        },
+        questions: {
+          type: 'array',
+          description: '拆流程时先问用户（不写 steps）：一次问完，最多 6 个',
+          items: {
+            type: 'object',
+            properties: {
+              q: { type: 'string', description: '要用户定什么' },
+              options: { type: 'array', items: { type: 'string' }, description: '2–4 个简短选项，可不填' },
+            },
+            required: ['q'],
           },
         },
       },

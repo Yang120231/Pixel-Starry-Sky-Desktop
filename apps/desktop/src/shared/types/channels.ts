@@ -211,6 +211,8 @@ export interface Channel {
   relayRules?: RelayRules
   /** 牵头成员（docs/ui/channels-pipeline.md §8.3）：不带 @ 的需求交给它拆成流程；null / 没写是不启用 */
   lead?: string | null
+  /** @ 一个 AI 派新活时先让它出计划，商量好、点开工才动手；没写按默认（开） */
+  planFirst?: boolean
   /** 每天定时运行的流程（§10.3），只有本机频道 */
   schedules?: FlowSchedule[]
   /** 主动提醒的规则开关（docs/ui/channels-collab-v2.md §6）；没写的按默认（shared/channels/alerts.ts） */
@@ -366,7 +368,8 @@ export type FlowScheduleInput = Pick<FlowSchedule, 'title' | 'hour' | 'steps' | 
 /** 分工提案的要点：聊出来定下的（by 是谁说的：成员 id 或 SELF_ID）和开工前还要人定的（required 没定完不能开工） */
 export interface FlowBrief {
   goal: string
-  facts: { k: string; v: string; by: string }[]
+  /** suggested：拟计划的 AI 替你定的（界面标「建议」），by 是它 */
+  facts: { k: string; v: string; by: string; suggested?: boolean }[]
   open: { q: string; required: boolean }[]
 }
 
@@ -381,7 +384,18 @@ export interface ChannelFlow {
   /** 审查最多打回几次，超了停下 */
   maxRejects: number
   /** 拆流程的成员和要求（status 是 planning 时）；auto：牵头成员按你不带 @ 的消息自动拆的（§8.3） */
-  planner?: { memberId: string; request: string; taskId: string | null; auto?: boolean } | null
+  planner?: {
+    memberId: string
+    request: string
+    taskId: string | null
+    auto?: boolean
+    /** 你 @ 它派的活：先出计划（planFirst） */
+    mention?: boolean
+    /** 拟计划这一轮用的模型、推理强度（在流程卡上换的）；不写跟随成员 */
+    settings?: FlowStepSettings | null
+  } | null
+  /** 拟计划的成员开工前一次问完的问题；answer 是你的回答（都答了才接着出计划） */
+  questions?: { q: string; options: string[]; answer?: string }[] | null
   /** 成员之间问过的问题（算进接力规则） */
   asks?: { from: string; to: string; at: number }[]
   /** 护栏（第 13 项）；没写 = 不限（第二批之前的流程） */
@@ -418,6 +432,10 @@ export type FlowAction =
   | { type: 'start' | 'pause' | 'resume' | 'stop' | 'discard'; messageId: string }
   /** 人工关卡：通过，或打回（note 必填：要改什么） */
   | { type: 'gate'; messageId: string; stepId: string; decision: 'approve' | 'reject'; note?: string }
+  /** 回答拟计划的成员一次问完的问题（按顺序，每个都要答） */
+  | { type: 'answers'; messageId: string; answers: string[] }
+  /** 换拟计划的成员、模型、推理强度：由它重新出计划（开工前） */
+  | { type: 'replan'; messageId: string; memberId: string; settings?: FlowStepSettings | null }
   /** 回答一步用 user_ask 问你的问题 */
   | { type: 'answer'; messageId: string; stepId: string; text: string }
 
