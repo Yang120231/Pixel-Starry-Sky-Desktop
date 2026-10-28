@@ -151,6 +151,13 @@ import { TeamExecutor } from './team/executor'
 import type { AgentRegistration, TeamMessage } from './team/api'
 
 export const SELF_ID = 'you'
+
+/** 频道工具 MCP 服务的名字（main/channels/channel-mcp.ts 的 CHANNEL_SERVER_NAME；core 不反向依赖那边） */
+const CHANNEL_TOOLS = 'pixelsky_channel'
+
+/** 审批请求是不是在用频道自己的工具（Claude 叫 mcp__pixelsky_channel__task_done，别的引擎名字里也带服务名） */
+const channelToolRequest = (r: { kind: string; toolName?: string; title?: string }): boolean =>
+  r.kind === 'tool' && [r.toolName, r.title].some(x => typeof x === 'string' && x.includes(CHANNEL_TOOLS))
 const NAME_MAX = 40
 const INSTRUCTIONS_MAX = 2000
 const TOPIC_MAX = 200
@@ -3951,6 +3958,19 @@ export class Channels {
       for (const run of [...this.store.runs.values()])
         if (run.phase === 'sent' && run.sessionId === event.sessionId) {
           this.seen.set(run.taskId, this.now())
+          const ev = event.event
+          if (ev.type === 'approval_request' && !run.team && channelToolRequest(ev.request)) {
+            // 频道自己的工具（交计划、问人、在串里写一句）只在频道里留记录、不碰文件：直接放行，不弹给你；
+            // 计划模式里引擎会把非只读工具都拦下来问，这里兜底。放行失败才照常显示「等你确认」
+            void this.deps
+              .call('engine:answer', [event.sessionId, ev.request.requestId, { type: 'allow' }])
+              .catch(e => {
+                this.deps.log?.('自动放行频道工具失败', e)
+                const latest = this.store.runs.get(run.taskId)
+                if (latest?.phase === 'sent') this.apply(latest, trackEvent(latest, ev, this.now()))
+              })
+            continue
+          }
           this.apply(run, trackEvent(run, event.event, this.now()))
           const latest = this.store.runs.get(run.taskId)
           if (latest && !latest.team) this.conflictCheck(latest, event)

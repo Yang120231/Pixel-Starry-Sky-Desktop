@@ -20,6 +20,8 @@ export const CHANNEL_SERVER_NAME = 'pixelsky_channel'
 
 /** 发消息、派活的工具：不是只读，但只在频道里留记录，不用每次等用户批准 */
 const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
+/** 流程里交付、提问的工具：只在频道里记一笔、不碰工作区，标成只读，拟计划的会话在计划模式里也能直接用 */
+const RECORD = { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false }
 
 const TOOLS = [
   {
@@ -165,7 +167,7 @@ const TOOLS = [
       },
       required: ['summary'],
     },
-    annotations: WRITE,
+    annotations: RECORD,
   },
   {
     name: 'member_ask',
@@ -179,7 +181,7 @@ const TOOLS = [
       },
       required: ['member', 'question'],
     },
-    annotations: WRITE,
+    annotations: RECORD,
   },
   {
     name: 'user_ask',
@@ -192,7 +194,7 @@ const TOOLS = [
       },
       required: ['question'],
     },
-    annotations: WRITE,
+    annotations: RECORD,
   },
 ].map(tool => ({ ...tool, annotations: { title: tool.name, ...tool.annotations } }))
 
