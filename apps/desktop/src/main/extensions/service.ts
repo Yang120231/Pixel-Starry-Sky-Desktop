@@ -13,7 +13,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { delimiter, dirname, join, relative, resolve } from 'node:path'
+import { basename, delimiter, dirname, join, relative, resolve } from 'node:path'
 import {
   contentVersion,
   digest,
@@ -591,9 +591,12 @@ export class ExtensionService {
   ): ExtensionLaunch {
     project = realpathSync(project)
     const env = { ...this.runtimeEnv(project), ...extraEnv }
+    // 插件按 Claude 插件的格式装（适用引擎固定是 Claude）：它附带的技能是通用的 SKILL.md，Codex / 像素星空也照样给
     const entries = effective(
         this.config.entries.filter(
-          e => (e.engines ?? ['claude']).includes(engine) && (!only || e.kind === 'cli' || only.has(e.id)),
+          e =>
+            (e.kind === 'plugin' || (e.engines ?? ['claude']).includes(engine)) &&
+            (!only || e.kind === 'cli' || only.has(e.id)),
         ),
         project,
       ),
@@ -604,8 +607,13 @@ export class ExtensionService {
     for (const e of entries) {
       if (e.path && (e.kind === 'plugin' || e.kind === 'skill')) {
         if (engine === 'claude') pluginDirs.push(e.path)
-        else if (e.kind === 'skill')
-          skillRoots.push(...e.components.filter(c => c.kind === 'skill' && c.path).map(c => dirname(c.path!)))
+        else
+          skillRoots.push(
+            ...e.components
+              // 插件里只认技能目录（SKILL.md）；commands/*.md、钩子、子代理是 Claude 专有的，别的引擎不给
+              .filter(c => c.kind === 'skill' && c.path && (e.kind === 'skill' || basename(c.path) === 'SKILL.md'))
+              .map(c => dirname(c.path!)),
+          )
       }
       if (e.kind === 'mcp') {
         const c = expandedMcp(this.secrets.resolve(e.id, e.mcp!), env)
