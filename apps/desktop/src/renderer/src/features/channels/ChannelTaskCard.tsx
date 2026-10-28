@@ -531,7 +531,8 @@ export function ChannelTaskCard({
         )}
       >
         {chip}
-        {thread}
+        {/* 讨论串入口不让状态条挤窄（不然「在串里讨论」会一个字一行竖着排），长的是状态条自己截断 */}
+        {thread && <div className="max-w-[45%] shrink-0 whitespace-nowrap">{thread}</div>}
       </div>
       {expanded && article(false)}
     </div>
