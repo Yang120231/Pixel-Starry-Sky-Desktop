@@ -11,7 +11,6 @@ import { usePlatformCatalog } from '@/features/account/platform'
 import { useProviders } from '@/features/account/providers'
 import type { AgentMember, ChannelMember, ChannelTextMessage } from '@/data/types'
 import type { ChannelFlow, FlowStepSettings } from '../../../../shared/types/channels'
-import { MemberAvatar } from './ChannelMessage'
 import { modelChoices, sourceKeyOf } from './agentSource'
 import { useFlowRun } from './ChannelFlowCard'
 
@@ -34,14 +33,11 @@ export function QuestionsForm({
   return (
     <section
       aria-label={tr('channels.plan.questions', { n: questions.length })}
-      className="mt-2 flex flex-col rounded-md border border-l-2 border-line border-l-warn px-3 py-2"
+      className="flex flex-col"
       data-flow-questions
     >
-      <span className="text-meta font-semibold text-warn">
-        {tr('channels.plan.questions', { n: questions.length })}
-      </span>
       {questions.map((q, i) => (
-        <div key={i} className={cn('flex flex-col gap-1.5 py-2', i > 0 && 'border-t border-dashed border-line')}>
+        <div key={i} className={cn('flex flex-col gap-1.5 pb-2', i > 0 && 'border-t border-dashed border-line pt-2')}>
           <span className="text-ui text-fg">
             <span className="mr-1 font-semibold text-warn">{i + 1}.</span>
             {q.q}
@@ -96,18 +92,22 @@ export function QuestionsForm({
   )
 }
 
-/** 卡片头上的「由谁拟计划 · 模型 · 推理」：开工前点「换」换人、换模型和推理强度，由新的重新出计划 */
+/** 拟计划这一轮用的模型 · 推理强度（没换过的跟随成员，不写） */
+export function plannerSummary(flow: ChannelFlow): string {
+  const s = flow.planner?.settings
+  return [s?.model, s?.effort && effortLabel(s.effort)].filter(Boolean).join(' · ')
+}
+
+/** 卡头上的「换」：开工前换人、换模型和推理强度，由新的重新出计划（谁在拟、用什么模型写在卡头别处） */
 export function PlannerSwitch({
   message,
   flow,
   agents,
-  membersById,
   readOnly,
 }: {
   message: ChannelTextMessage
   flow: ChannelFlow
   agents: readonly ChannelMember[]
-  membersById: ReadonlyMap<string, ChannelMember>
   readOnly: boolean
 }) {
   useI18n()
@@ -115,40 +115,30 @@ export function PlannerSwitch({
   const [open, setOpen] = useState(false)
   const anchor = useRef<HTMLButtonElement>(null)
   const planner = flow.planner!
-  const member = membersById.get(planner.memberId)
   const [who, setWho] = useState(planner.memberId)
   const [settings, setSettings] = useState<FlowStepSettings>(planner.settings ?? {})
   const target = agents.find(a => a.id === who && a.kind === 'agent') as AgentMember | undefined
-  const summary = [planner.settings?.model, planner.settings?.effort && effortLabel(planner.settings.effort)]
-    .filter(Boolean)
-    .join(' · ')
-  const canSwitch = !readOnly && (flow.status === 'draft' || flow.status === 'planning')
+  if (readOnly || (flow.status !== 'draft' && flow.status !== 'planning')) return null
   return (
-    <span className="flex min-w-0 items-center gap-1.5 text-meta text-fg-muted" data-flow-planner>
-      <MemberAvatar member={member} size={16} />
-      <span className="truncate">
-        {tr('channels.plan.by', { name: member?.name ?? '?' })}
-        {summary && ` · ${summary}`}
-      </span>
-      {canSwitch && (
-        <button
-          ref={anchor}
-          type="button"
-          onClick={() => {
-            setWho(planner.memberId)
-            setSettings(planner.settings ?? {})
-            setOpen(o => !o)
-          }}
-          className="shrink-0 font-medium text-accent-fg hover:underline"
-        >
-          {tr('channels.plan.switch')}
-        </button>
-      )}
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        data-flow-planner
+        onClick={() => {
+          setWho(planner.memberId)
+          setSettings(planner.settings ?? {})
+          setOpen(o => !o)
+        }}
+        className="shrink-0 rounded px-1 text-meta font-medium text-accent-fg hover:bg-hover"
+      >
+        {tr('channels.plan.switch')}
+      </button>
       <Popover
         open={open}
         onClose={() => setOpen(false)}
         anchor={anchor}
-        align="start"
+        align="end"
         role="dialog"
         className="w-72 p-3"
       >
@@ -180,7 +170,7 @@ export function PlannerSwitch({
           </Button>
         </div>
       </Popover>
-    </span>
+    </>
   )
 }
 

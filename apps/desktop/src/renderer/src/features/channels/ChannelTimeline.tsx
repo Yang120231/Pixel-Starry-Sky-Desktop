@@ -3,7 +3,14 @@ import { tr, translateMessage } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Hash, Info, UserMinus, UserPlus, Users } from 'lucide-react'
 import { Spinner, useToast } from '@/ui'
-import type { Channel, ChannelEvent, ChannelMember, ChannelMessage, ChannelTask } from '@/data/types'
+import type {
+  Channel,
+  ChannelEvent,
+  ChannelMember,
+  ChannelMessage,
+  ChannelTask,
+  ChannelTextMessage,
+} from '@/data/types'
 import { buildTimeline, tasksWithResult } from './model'
 import { formatClock, formatDay } from './format'
 import { isSelfAuthor, MessageGroup, ThreadRow, type Quotable } from './ChannelMessage'
@@ -137,7 +144,21 @@ export function ChannelTimeline({
       })
   }
   const name = (id: string | null | undefined) => (id ? membersById.get(id)?.name : undefined) ?? '?'
-  const working = channelMembers.filter(m => m.kind === 'agent' && m.status === 'running')
+  // 正在拟计划的成员：进度写在流程卡里，底部不再说一遍
+  const planning = useMemo(() => {
+    const list: ChannelTask[] = []
+    for (const m of messages)
+      if (m.kind === 'task' && m.flow?.stepId === '' && (m.status === 'running' || m.status === 'waiting')) list.push(m)
+    return list
+  }, [messages])
+  const working = channelMembers.filter(
+    m =>
+      m.kind === 'agent' &&
+      m.status === 'running' &&
+      !planning.some(
+        t => t.assigneeId === m.id && (t.title === m.task || (!!t.sessionId && t.sessionId === m.sessionId)),
+      ),
+  )
   const now = Date.now()
 
   // 换频道：有新消息分隔线就停在它附近，否则到底部
@@ -221,6 +242,19 @@ export function ChannelTimeline({
     />
   )
 
+  const flowCard = (message: ChannelTextMessage, attached: boolean) => (
+    <ChannelFlowCard
+      key={message.id}
+      message={message}
+      membersById={membersById}
+      channelMembers={channelMembers}
+      readOnly={!!channel.archivedAt || channel.scope !== 'local'}
+      highlight={highlight === message.id}
+      attached={attached}
+      onOpenSession={channel.scope === 'local' ? taskActions.onOpenSession : undefined}
+    />
+  )
+
   return (
     <div
       ref={scroller}
@@ -290,23 +324,23 @@ export function ChannelTimeline({
             case 'task':
               return taskChip(row.message, false)
             case 'flow':
-              return (
-                <ChannelFlowCard
-                  key={row.key}
-                  message={row.message}
-                  membersById={membersById}
-                  channelMembers={channelMembers}
-                  readOnly={!!channel.archivedAt || channel.scope !== 'local'}
-                  highlight={highlight === row.message.id}
-                />
-              )
+              return flowCard(row.message, false)
             case 'group':
               return (
                 <MessageGroup
                   key={row.key}
                   items={row.items}
                   selfId={selfId}
-                  renderBelow={row.tasks ? m => row.tasks?.[m.id]?.map(task => taskChip(task, true)) : undefined}
+                  renderBelow={
+                    row.tasks || row.flows
+                      ? m => (
+                          <>
+                            {row.tasks?.[m.id]?.map(task => taskChip(task, true))}
+                            {row.flows?.[m.id]?.map(flow => flowCard(flow, true))}
+                          </>
+                        )
+                      : undefined
+                  }
                   membersById={membersById}
                   channelMembers={channelMembers}
                   messagesById={messagesById}

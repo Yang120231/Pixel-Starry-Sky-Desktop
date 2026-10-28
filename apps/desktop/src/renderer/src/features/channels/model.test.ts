@@ -109,6 +109,56 @@ describe('频道时间线', () => {
     ])
     expect(rows.map(r => (r.kind === 'flow' ? r.key : r.kind))).toEqual(['day', 'manual'])
   })
+  it('拟计划的流程卡挂在你刚发的那条消息下面；它的拟计划任务卡收进流程卡，要你处理时照常显示', () => {
+    const flow = {
+      title: 't',
+      status: 'planning' as const,
+      steps: [],
+      maxRejects: 3,
+      planner: { memberId: 'fe', request: 'r', taskId: 'plan', mention: true },
+    }
+    const task = (id: string, stepId: string, status: 'running' | 'waiting') => ({
+      kind: 'task' as const,
+      id,
+      channelId: 'c',
+      at: DAY1 + min(601),
+      authorId: 'me',
+      assigneeId: 'fe',
+      title: id,
+      status,
+      sourceMessageId: 'f1',
+      flow: { messageId: 'f1', stepId },
+    })
+    const rows = buildTimeline([
+      text('a1', 'me', DAY1 + min(600)),
+      text('f1', 'me', DAY1 + min(600), { flow }),
+      task('plan', '', 'running'),
+      task('step', 's1', 'running'),
+      text('a2', 'me', DAY1 + min(602)),
+    ])
+    expect(rows.map(r => (r.kind === 'group' ? r.items.map(i => i.id).join('+') : r.key))).toEqual([
+      `day-${DAY1}`,
+      'a1',
+      'step',
+      'a2',
+    ])
+    const group = rows[1]
+    expect(group.kind === 'group' && group.flows?.a1?.map(f => f.id)).toEqual(['f1'])
+    // 拟计划的活等你确认：任务卡照常显示
+    const waiting = buildTimeline([
+      text('a1', 'me', DAY1 + min(600)),
+      text('f1', 'me', DAY1 + min(600), { flow }),
+      task('plan', '', 'waiting'),
+    ])
+    expect(waiting.map(r => r.key)).toEqual([`day-${DAY1}`, 'a1', 'plan'])
+    // 前面不是同一个人刚发的消息：流程卡照常单独一行，拟计划的任务卡照样收进去
+    const alone = buildTimeline([
+      text('b1', 'fe', DAY1 + min(600)),
+      text('f1', 'me', DAY1 + min(600), { flow }),
+      task('plan', '', 'running'),
+    ])
+    expect(alone.map(r => r.key)).toEqual([`day-${DAY1}`, 'b1', 'f1'])
+  })
   it('只在讨论串里的消息不上主时间线，也不打断前后的分组', () => {
     const rows = buildTimeline([
       text('a1', 'me', DAY1 + min(600)),

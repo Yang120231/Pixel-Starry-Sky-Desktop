@@ -1,7 +1,7 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
-import { Fragment, useEffect, useRef, useState } from 'react'
-import { Plus, Settings2, Workflow, X } from 'lucide-react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Check, Plus, Settings2, Workflow, X } from 'lucide-react'
 import type { Effort } from '@pixelsky/protocol'
 import { Button, cn, IconButton, Popover, Segmented, Select, Spinner, useToast, type SelectOption } from '@/ui'
 import { useEngineState } from '@/features/engine'
@@ -18,7 +18,9 @@ import type {
   FlowStepSettings,
 } from '../../../../shared/types/channels'
 import { MemberAvatar } from './ChannelMessage'
-import { PlannerSwitch, QuestionsForm } from './PlanParts'
+import { PlannerSwitch, plannerSummary, QuestionsForm } from './PlanParts'
+import { taskActivity } from './taskActivity'
+import { agentActivity, RECENT_STEPS } from '@/features/session/live/agentActivity'
 import { GateActions } from './GateActions'
 import { StartDialog } from './StartDialog'
 import { formatCardCost, formatTokens, costHint } from '@/features/usage/format'
@@ -551,9 +553,6 @@ function DraftEditor({
     <>
       <p className="mb-1 flex items-center gap-1.5 text-meta text-fg-muted">
         <Workflow size={13} strokeWidth={1.75} className="shrink-0" />
-        {flow.planner && (
-          <span className="shrink-0 font-semibold text-fg">{tr('channels.flow.proposal', { n: flow.rev ?? 1 })}</span>
-        )}
         <span className="min-w-0">{tr(flow.planner ? 'channels.flow.proposalHint' : 'channels.flow.draftHint')}</span>
       </p>
       <input
@@ -930,13 +929,49 @@ const STEP_TONE: Record<FlowStep['status'], string> = {
   stopped: 'bg-subtle text-fg-faint',
 }
 
-/** 流程卡（docs/ui/channels-pipeline.md §4.5）：规划中 / 草稿 / 运行中的步骤列表 */
+/** 卡头上的小标签 */
+function Pill({ tone, spin, children }: { tone: string; spin?: boolean; children: ReactNode }) {
+  return (
+    <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-px text-meta font-medium', tone)}>
+      {spin && <Spinner size={10} />}
+      {children}
+    </span>
+  )
+}
+
+const LINK = 'shrink-0 rounded px-1 text-meta text-fg-muted hover:bg-hover hover:text-fg disabled:opacity-50'
+
+/** 拟计划的成员在干什么：前面几步打勾，最新的一行在转圈（和任务卡「正在做什么」同一套说法） */
+function plannerTrace(task: ChannelTask | undefined): { done: string[]; now: string | null } {
+  const activity = task ? taskActivity(task) : null
+  if (!activity) return { done: [], now: null }
+  const current = activity.line.kind === 'step' ? activity.line.stepId : undefined
+  const done = activity.steps
+    .filter(s => s.id !== current)
+    .slice(-RECENT_STEPS)
+    .flatMap(s => {
+      const text = agentActivity({ state: 'running' }, [s])?.text
+      return text ? [text] : []
+    })
+  return { done, now: activity.line.text }
+}
+
+/** 流程标题就是你刚发的那句（还没由拟计划的成员起短标题）：卡片就在那句下面，不再抄一遍 */
+const titleIsRequest = (flow: ChannelFlow): boolean =>
+  !!flow.planner && flow.planner.request.replace(/\s+/g, ' ').includes(flow.title)
+
+/**
+ * 流程卡（docs/ui/channels-pipeline.md §4.5）：一个计划一张卡。卡头写谁在拟、模型、计划模式和现在的阶段，
+ * 换人 / 停止 / 打开会话都在卡头；拟计划的进度、要你定的问题、草稿、开工后的步骤都在卡里换内容
+ */
 export function ChannelFlowCard({
   message,
   membersById,
   channelMembers,
   readOnly = false,
   highlight = false,
+  attached = false,
+  onOpenSession,
 }: {
   message: ChannelTextMessage
   membersById: Members
@@ -944,6 +979,10 @@ export function ChannelFlowCard({
   /** 归档的频道只读 */
   readOnly?: boolean
   highlight?: boolean
+  /** 挂在派活那条消息下面（靠作者那一侧） */
+  attached?: boolean
+  /** 打开拟计划那项活的会话 */
+  onOpenSession?: (sessionId: string) => void
 }) {
   useI18n()
   const flow = message.flow!
@@ -957,237 +996,300 @@ export function ChannelFlowCard({
   const taskOf = new Map<string, ChannelTask>()
   for (const m of channelMessages ?? []) if (m.kind === 'task') taskOf.set(m.id, m)
   const tasks = flow.steps.flatMap(s => (s.taskId && taskOf.get(s.taskId) ? [taskOf.get(s.taskId)!] : []))
+  const plannerTask = flow.planner?.taskId ? taskOf.get(flow.planner.taskId) : undefined
+  const planning = flow.status === 'planning'
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     if (flow.status !== 'running') return
     const t = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(t)
   }, [flow.status])
-  const total = flow.status === 'draft' || flow.status === 'planning' ? '' : flowTotal(flow, tasks, now)
+  const total = flow.status === 'draft' || planning ? '' : flowTotal(flow, tasks, now)
   const flowUsage =
-    flow.status === 'draft' || flow.status === 'planning'
+    flow.status === 'draft' || planning
       ? null
       : usageText(sumUsage(flow.steps.flatMap(s => (s.usage ? [s.usage] : []))))
-  const tone =
-    flow.status === 'paused'
-      ? 'bg-subtle text-warn'
-      : flow.status === 'running'
-        ? 'bg-accent-soft text-accent-fg'
-        : flow.status === 'done'
-          ? 'bg-subtle text-success'
-          : 'bg-subtle text-fg-muted'
-  return (
-    <div className="conversation-message mt-3 pl-10" data-channel-message={message.id}>
-      <article
-        aria-label={tr('channels.flow.label', { title: flow.title })}
-        data-flow-status={flow.status}
-        className={cn(
-          'max-w-[640px] rounded-lg border border-line-card bg-surface p-3 shadow-sm',
-          flow.status === 'paused' && 'border-warn/40',
-          highlight && 'search-hit',
+  // 计划阶段（拟计划中 / 问你 / 草稿）：卡头写拟计划的成员；开工后写流程标题
+  const planPhase = !!flow.planner && (planning || flow.status === 'draft')
+  const unanswered = flow.status === 'draft' ? (flow.questions ?? []).filter(q => !q.answer).length : 0
+  const delivered = flow.steps.filter(s => s.status === 'delivered').length
+  const sessionId = plannerTask?.sessionId
+  const openSession = sessionId && onOpenSession ? () => onOpenSession(sessionId) : null
+  const trace = planning ? plannerTrace(plannerTask) : { done: [], now: null }
+  const showTitle = !titleIsRequest(flow)
+  const summary = plannerSummary(flow)
+
+  const pill = planning ? (
+    <Pill tone="bg-accent-soft text-accent-fg" spin={plannerTask?.status !== 'queued'}>
+      {plannerTask?.status === 'queued' ? tr('channels.task.queued') : tr('channels.plan.phase.planning')}
+    </Pill>
+  ) : unanswered > 0 ? (
+    <Pill tone="bg-warn/12 text-warn">{tr('channels.plan.phase.asking', { n: unanswered })}</Pill>
+  ) : flow.status === 'draft' ? (
+    <Pill tone="bg-accent-soft text-accent-fg">{tr('channels.plan.phase.draft', { n: flow.rev ?? 1 })}</Pill>
+  ) : flow.status === 'running' ? (
+    <Pill tone="bg-accent-soft text-accent-fg" spin>
+      {tr('channels.plan.phase.running', { done: delivered, total: flow.steps.length })}
+    </Pill>
+  ) : (
+    <Pill
+      tone={
+        flow.status === 'paused'
+          ? 'bg-warn/12 text-warn'
+          : flow.status === 'done'
+            ? 'bg-success/12 text-success'
+            : 'bg-subtle text-fg-muted'
+      }
+    >
+      {tr(`channels.flow.status.${flow.status}`)}
+    </Pill>
+  )
+
+  // 手写的草稿没有卡头：草稿编辑器自己写提示
+  const header = planPhase ? (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line-subtle bg-subtle/60 px-3 py-2 text-meta">
+      <span className="flex min-w-0 items-center gap-1.5 font-semibold text-fg">
+        <MemberAvatar member={planner} size={18} />
+        <span className="truncate">{tr('channels.plan.planner', { name: planner?.name ?? '?' })}</span>
+      </span>
+      {summary && <span className="min-w-0 truncate text-fg-faint">{summary}</span>}
+      <Pill tone="bg-subtle text-fg-muted">{tr('channels.plan.readOnly')}</Pill>
+      <span className="flex-1" />
+      {pill}
+      <span className="flex items-center gap-0.5">
+        <PlannerSwitch message={message} flow={flow} agents={agents} readOnly={readOnly} />
+        {planning && !readOnly && (
+          <button type="button" className={LINK} disabled={busy} onClick={() => act('discard')}>
+            {tr('channels.flow.stop')}
+          </button>
         )}
-      >
-        {flow.planner && (flow.status === 'draft' || flow.status === 'planning') && (
-          <div className="mb-1.5">
-            <PlannerSwitch
-              message={message}
-              flow={flow}
-              agents={agents}
-              membersById={membersById}
-              readOnly={readOnly}
-            />
-          </div>
+        {openSession && (
+          <button type="button" className={LINK} onClick={openSession}>
+            {tr('channels.openSession')}
+          </button>
         )}
-        {flow.status === 'draft' && flow.questions?.some(q => !q.answer) ? (
-          <>
-            <span className="text-ui font-semibold text-fg">{flow.title}</span>
-            <QuestionsForm key={flow.questions.length} message={message} flow={flow} readOnly={readOnly} />
-          </>
-        ) : flow.status === 'draft' ? (
-          <DraftEditor
-            key={flow.rev ?? 0}
-            message={message}
-            flow={flow}
-            agents={agents}
-            membersById={membersById}
-            readOnly={readOnly}
-          />
-        ) : (
-          <>
-            <div className="flex items-center gap-2 text-meta">
-              <Workflow size={14} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
-              <span className="min-w-0 flex-1 truncate text-ui font-semibold text-fg">{flow.title}</span>
-              {flow.planner?.auto && (
-                <span className="max-w-40 shrink-0 truncate text-fg-faint">
-                  {tr('channels.flow.autoPlan', { name: planner?.name ?? '?' })}
-                </span>
-              )}
-              <span className={cn('shrink-0 rounded-md px-1.5 py-0.5', tone)}>
-                {tr(`channels.flow.status.${flow.status}`)}
-              </span>
-            </div>
-            {flow.status === 'paused' && flow.paused && (
-              <p className="mt-1 text-meta text-warn">
-                {tr(
-                  flow.paused.reason === 'limit' && flow.paused.limit
-                    ? `channels.flow.pause.limit.${flow.paused.limit}`
-                    : `channels.flow.pause.${flow.paused.reason}`,
-                )}
-              </p>
-            )}
-            {flow.brief && flow.status === 'planning' && (
-              <BriefSection message={message} brief={flow.brief} membersById={membersById} editable={false} />
-            )}
-            {flow.brief && flow.status !== 'planning' && (
-              <details className="mt-2 text-meta text-fg-muted">
-                <summary className="cursor-pointer select-none">
-                  {tr('channels.flow.brief.show', { n: flow.brief.facts.length })}
-                </summary>
-                <BriefSection message={message} brief={flow.brief} membersById={membersById} editable={false} />
-              </details>
-            )}
-            {flow.status === 'planning' ? (
-              <div className="mt-2 flex items-center gap-2 text-ui text-fg-muted">
-                <Spinner size={13} />
-                <span className="min-w-0 flex-1 truncate">
-                  {tr(flow.steps.length ? 'channels.flow.refining' : 'channels.flow.planning', {
+      </span>
+    </div>
+  ) : flow.status !== 'draft' ? (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line-subtle bg-subtle/60 px-3 py-2 text-meta">
+      <Workflow size={14} strokeWidth={1.75} className="shrink-0 text-fg-muted" />
+      <span className="min-w-0 flex-1 truncate text-ui font-semibold text-fg">{flow.title}</span>
+      {flow.planner?.auto && (
+        <span className="max-w-40 shrink-0 truncate text-fg-faint">
+          {tr('channels.flow.autoPlan', { name: planner?.name ?? '?' })}
+        </span>
+      )}
+      {pill}
+      {!readOnly && (flow.status === 'running' || flow.status === 'paused') && (
+        <span className="flex items-center gap-0.5">
+          {flow.status === 'running' ? (
+            <button type="button" className={LINK} disabled={busy} onClick={() => act('pause')}>
+              {tr('channels.flow.pause')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={cn(LINK, 'font-medium text-accent-fg')}
+              disabled={busy}
+              onClick={() => act('resume')}
+            >
+              {tr(flow.paused?.reason === 'limit' ? 'channels.flow.resumeLimit' : 'channels.flow.resume')}
+            </button>
+          )}
+          <button type="button" className={LINK} disabled={busy} onClick={() => act('stop')}>
+            {tr('channels.flow.stop')}
+          </button>
+        </span>
+      )}
+    </div>
+  ) : null
+
+  const body = planning ? (
+    <div className="flex flex-col gap-2">
+      {showTitle && <span className="text-ui font-semibold text-fg">{flow.title}</span>}
+      {flow.brief && <BriefSection message={message} brief={flow.brief} membersById={membersById} editable={false} />}
+      <div className="flex flex-col gap-0.5 text-meta text-fg-muted" data-flow-trace>
+        {trace.done.map((t, i) => (
+          <span key={i} className="flex min-w-0 items-center gap-2">
+            <Check size={12} strokeWidth={2} className="shrink-0 text-success" />
+            <span className="min-w-0 truncate">{t}</span>
+          </span>
+        ))}
+        <span className="flex min-w-0 items-center gap-2 text-fg">
+          <Spinner size={11} />
+          <span className="min-w-0 truncate">
+            {trace.now ??
+              (plannerTask?.status === 'queued'
+                ? tr('channels.task.queued')
+                : tr(flow.steps.length ? 'channels.flow.refining' : 'channels.plan.reading', {
                     name: planner?.name ?? '?',
-                  })}
+                  }))}
+          </span>
+          {plannerTask?.progress && (
+            <span className="shrink-0 text-fg-faint tabular-nums">
+              {tr('channels.task.progress', { done: plannerTask.progress.done, total: plannerTask.progress.total })}
+            </span>
+          )}
+        </span>
+      </div>
+      <p className="text-meta text-fg-faint">{tr('channels.plan.note')}</p>
+    </div>
+  ) : unanswered > 0 ? (
+    <div className="flex flex-col gap-2">
+      {showTitle && <span className="text-ui font-semibold text-fg">{flow.title}</span>}
+      <QuestionsForm key={flow.questions!.length} message={message} flow={flow} readOnly={readOnly} />
+    </div>
+  ) : flow.status === 'draft' ? (
+    <DraftEditor
+      key={flow.rev ?? 0}
+      message={message}
+      flow={flow}
+      agents={agents}
+      membersById={membersById}
+      readOnly={readOnly}
+    />
+  ) : (
+    <>
+      {flow.status === 'paused' && flow.paused && (
+        <p className="mb-1 text-meta text-warn">
+          {tr(
+            flow.paused.reason === 'limit' && flow.paused.limit
+              ? `channels.flow.pause.limit.${flow.paused.limit}`
+              : `channels.flow.pause.${flow.paused.reason}`,
+          )}
+        </p>
+      )}
+      {flow.brief && (
+        <details className="mb-1 text-meta text-fg-muted">
+          <summary className="cursor-pointer select-none">
+            {tr('channels.flow.brief.show', { n: flow.brief.facts.length })}
+          </summary>
+          <BriefSection message={message} brief={flow.brief} membersById={membersById} editable={false} />
+        </details>
+      )}
+      <ol className="flex flex-col">
+        {flow.steps.map((s, i) => {
+          const st = stepStatus(flow, s, membersById)
+          const member = membersById.get(s.memberId)
+          return (
+            <li key={s.id}>
+              <button
+                type="button"
+                disabled={!s.taskId}
+                aria-label={tr('channels.flow.step.open', { n: i + 1 })}
+                onClick={() => s.taskId && void channelActions.focusMessage(message.channelId, s.taskId)}
+                className="flex w-full min-w-0 flex-col gap-0.5 rounded-md px-1.5 py-1.5 text-left enabled:hover:bg-hover"
+              >
+                <span className="flex w-full min-w-0 items-center gap-2">
+                  <span className="w-5 shrink-0 text-center text-ui text-fg-muted">{num(i)}</span>
+                  <span className="min-w-0 flex-1 truncate text-ui text-fg">{s.title}</span>
+                  <MemberAvatar member={member} size={18} />
+                  <span className="max-w-24 shrink-0 truncate text-meta text-fg-muted">{member?.name ?? '?'}</span>
+                  <span
+                    className={cn(
+                      'inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-meta',
+                      STEP_TONE[s.status],
+                    )}
+                  >
+                    {st.running && <Spinner size={10} />}
+                    {st.text}
+                  </span>
                 </span>
-                {!readOnly && (
-                  <Button className="h-7 px-2.5" disabled={busy} onClick={() => act('discard')}>
-                    {tr('channels.flow.cancel')}
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <ol className="mt-2 flex flex-col">
-                {flow.steps.map((s, i) => {
-                  const st = stepStatus(flow, s, membersById)
-                  const member = membersById.get(s.memberId)
+                {(() => {
+                  const stats = stepStats(s, s.taskId ? taskOf.get(s.taskId) : undefined, now)
+                  const usage = usageText(s.usage)
+                  const line = [stats, usage?.text].filter(Boolean).join(' · ')
                   return (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        disabled={!s.taskId}
-                        aria-label={tr('channels.flow.step.open', { n: i + 1 })}
-                        onClick={() => s.taskId && void channelActions.focusMessage(message.channelId, s.taskId)}
-                        className="flex w-full min-w-0 flex-col gap-0.5 rounded-md px-1.5 py-1.5 text-left enabled:hover:bg-hover"
-                      >
-                        <span className="flex w-full min-w-0 items-center gap-2">
-                          <span className="w-5 shrink-0 text-center text-ui text-fg-muted">{num(i)}</span>
-                          <span className="min-w-0 flex-1 truncate text-ui text-fg">{s.title}</span>
-                          <MemberAvatar member={member} size={18} />
-                          <span className="max-w-24 shrink-0 truncate text-meta text-fg-muted">
-                            {member?.name ?? '?'}
-                          </span>
-                          <span
-                            className={cn(
-                              'inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-meta',
-                              STEP_TONE[s.status],
-                            )}
-                          >
-                            {st.running && <Spinner size={10} />}
-                            {st.text}
-                          </span>
-                        </span>
-                        {(() => {
-                          const stats = stepStats(s, s.taskId ? taskOf.get(s.taskId) : undefined, now)
-                          const usage = usageText(s.usage)
-                          const line = [stats, usage?.text].filter(Boolean).join(' · ')
-                          return (
-                            line && (
-                              <span className="truncate pl-7 text-meta text-fg-faint" title={usage?.title || undefined}>
-                                {line}
-                              </span>
-                            )
-                          )
-                        })()}
-                        {s.copy && (
-                          <span className="truncate pl-7 text-meta text-fg-faint">
-                            {tr('channels.flow.copy', { branch: s.copy.branch })}
-                          </span>
-                        )}
-                        {(s.status === 'delivered' || s.status === 'gated') && s.result?.summary && (
-                          <span className="truncate pl-7 text-meta text-fg-faint">{s.result.summary}</span>
-                        )}
-                        {!!s.overlap?.length && (
-                          <span
-                            className="truncate pl-7 text-meta text-warn"
-                            title={s.overlap.map(o => o.path).join('\n')}
-                          >
-                            {tr('channels.flow.overlap', {
-                              steps: [...new Set(s.overlap.flatMap(o => o.steps))]
-                                .map(id => NUMBERS[flow.steps.findIndex(x => x.id === id)] ?? '?')
-                                .join(tr('channels.composer.nameSep')),
-                              files: s.overlap.map(o => o.path).join(tr('channels.composer.nameSep')),
-                            })}
-                          </span>
-                        )}
-                        {(s.status === 'delivered' || s.status === 'gated') && !!s.result?.open?.length && (
-                          <span className="truncate pl-7 text-meta text-warn" title={s.result.open.join('\n')}>
-                            {tr('channels.flow.open', { items: s.result.open.join(tr('channels.flow.openSep')) })}
-                          </span>
-                        )}
-                      </button>
-                      {s.question && !readOnly && (flow.status === 'running' || flow.status === 'paused') && (
-                        <AnswerBox
-                          question={s.question.text}
-                          asker={member?.name ?? '?'}
-                          disabled={busy}
-                          onAnswer={text => void run({ type: 'answer', messageId: message.id, stepId: s.id, text })}
-                        />
-                      )}
-                      {s.status === 'gated' && !readOnly && (flow.status === 'running' || flow.status === 'paused') && (
-                        <div
-                          className="flex items-center justify-end gap-1.5 pt-0.5 pr-1.5 pb-1.5 pl-8"
-                          data-flow-gate={s.id}
-                        >
-                          <GateActions
-                            disabled={busy}
-                            onApprove={() => gate(s.id, 'approve')}
-                            onReject={note => gate(s.id, 'reject', note)}
-                          />
-                        </div>
-                      )}
-                    </li>
+                    line && (
+                      <span className="truncate pl-7 text-meta text-fg-faint" title={usage?.title || undefined}>
+                        {line}
+                      </span>
+                    )
                   )
-                })}
-              </ol>
-            )}
-            {total && <p className="mt-1.5 px-1.5 text-meta text-fg-faint">{total}</p>}
-            {flowUsage && (
-              <p className="mt-1 px-1.5 text-meta text-fg-faint" title={flowUsage.title || undefined}>
-                {flowUsage.text} · {tr('channels.flow.usage.noPlan')}
-              </p>
-            )}
-            {!readOnly && (flow.status === 'running' || flow.status === 'paused') && (
-              <div className="mt-2 flex items-center justify-end gap-2">
-                {flow.limits && (
-                  <span className="mr-auto text-meta text-fg-faint">
-                    {tr('channels.flow.limitsShown', {
-                      rounds: limitText('Rounds', flow.limits.rounds),
-                      minutes: limitText('Minutes', flow.limits.minutes),
-                    }) + (flow.limits.costUsd ? ` · ${limitText('Cost', flow.limits.costUsd)}` : '')}
+                })()}
+                {s.copy && (
+                  <span className="truncate pl-7 text-meta text-fg-faint">
+                    {tr('channels.flow.copy', { branch: s.copy.branch })}
                   </span>
                 )}
-                {flow.status === 'running' ? (
-                  <Button className="h-7 px-2.5" disabled={busy} onClick={() => act('pause')}>
-                    {tr('channels.flow.pause')}
-                  </Button>
-                ) : (
-                  <Button variant="primary" className="h-7 px-2.5" disabled={busy} onClick={() => act('resume')}>
-                    {tr(flow.paused?.reason === 'limit' ? 'channels.flow.resumeLimit' : 'channels.flow.resume')}
-                  </Button>
+                {(s.status === 'delivered' || s.status === 'gated') && s.result?.summary && (
+                  <span className="truncate pl-7 text-meta text-fg-faint">{s.result.summary}</span>
                 )}
-                <Button className="h-7 px-2.5" disabled={busy} onClick={() => act('stop')}>
-                  {tr('channels.flow.stop')}
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-      </article>
+                {!!s.overlap?.length && (
+                  <span className="truncate pl-7 text-meta text-warn" title={s.overlap.map(o => o.path).join('\n')}>
+                    {tr('channels.flow.overlap', {
+                      steps: [...new Set(s.overlap.flatMap(o => o.steps))]
+                        .map(id => NUMBERS[flow.steps.findIndex(x => x.id === id)] ?? '?')
+                        .join(tr('channels.composer.nameSep')),
+                      files: s.overlap.map(o => o.path).join(tr('channels.composer.nameSep')),
+                    })}
+                  </span>
+                )}
+                {(s.status === 'delivered' || s.status === 'gated') && !!s.result?.open?.length && (
+                  <span className="truncate pl-7 text-meta text-warn" title={s.result.open.join('\n')}>
+                    {tr('channels.flow.open', { items: s.result.open.join(tr('channels.flow.openSep')) })}
+                  </span>
+                )}
+              </button>
+              {s.question && !readOnly && (flow.status === 'running' || flow.status === 'paused') && (
+                <AnswerBox
+                  question={s.question.text}
+                  asker={member?.name ?? '?'}
+                  disabled={busy}
+                  onAnswer={text => void run({ type: 'answer', messageId: message.id, stepId: s.id, text })}
+                />
+              )}
+              {s.status === 'gated' && !readOnly && (flow.status === 'running' || flow.status === 'paused') && (
+                <div className="flex items-center justify-end gap-1.5 pt-0.5 pr-1.5 pb-1.5 pl-8" data-flow-gate={s.id}>
+                  <GateActions
+                    disabled={busy}
+                    onApprove={() => gate(s.id, 'approve')}
+                    onReject={note => gate(s.id, 'reject', note)}
+                  />
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+      {total && <p className="mt-1.5 px-1.5 text-meta text-fg-faint">{total}</p>}
+      {flowUsage && (
+        <p className="mt-1 px-1.5 text-meta text-fg-faint" title={flowUsage.title || undefined}>
+          {flowUsage.text} · {tr('channels.flow.usage.noPlan')}
+        </p>
+      )}
+      {flow.limits && (flow.status === 'running' || flow.status === 'paused') && (
+        <p className="mt-1 px-1.5 text-meta text-fg-faint">
+          {tr('channels.flow.limitsShown', {
+            rounds: limitText('Rounds', flow.limits.rounds),
+            minutes: limitText('Minutes', flow.limits.minutes),
+          }) + (flow.limits.costUsd ? ` · ${limitText('Cost', flow.limits.costUsd)}` : '')}
+        </p>
+      )}
+    </>
+  )
+
+  const card = (
+    <article
+      aria-label={tr('channels.flow.label', { title: flow.title })}
+      data-flow-status={flow.status}
+      data-channel-message={attached ? message.id : undefined}
+      className={cn(
+        'overflow-hidden rounded-xl border border-line-card bg-surface text-left shadow-sm',
+        attached ? 'mt-1.5 w-[620px] max-w-full' : 'max-w-[620px]',
+        flow.status === 'paused' && 'border-warn/40',
+        highlight && 'search-hit',
+      )}
+    >
+      {header}
+      <div className="p-3">{body}</div>
+    </article>
+  )
+  return attached ? (
+    card
+  ) : (
+    <div className="conversation-message mt-3 pl-10" data-channel-message={message.id}>
+      {card}
     </div>
   )
 }
