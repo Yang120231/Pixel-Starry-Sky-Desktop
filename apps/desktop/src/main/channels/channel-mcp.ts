@@ -94,6 +94,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         summary: { type: 'string', minLength: 1, description: '一两句话：做了什么、结论是什么' },
+        title: { type: 'string', description: '拆流程时：给计划起的短名字（20 字以内），不要照抄需求原话' },
         files: { type: 'array', items: { type: 'string' }, description: '你改了哪些文件（相对路径），可不填' },
         open: {
           type: 'array',

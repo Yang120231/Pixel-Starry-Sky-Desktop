@@ -547,7 +547,8 @@ export function flowPlanPrompt(input: {
       'You are in plan mode (read-only): look, do not change anything. Deliver through task_done; do not call ExitPlanMode or ask to leave plan mode.',
       'Split it into at most 9 steps. Each step: title (what to do), member (exact name), deps (numbers of the steps that must be delivered first, counting from 1), kind ("work"; "review" with target = the step number it reviews; or "summary" for the final wrap-up). Steps that do not depend on each other run in parallel. If the work spans several layers (say the main process and the UI), first add a step that defines the shared interfaces and types, and make the others depend on it. Steps that run at the same time should not change the same files; put anything they share into that earlier step. Do not do the work yourself.',
       'Ask first, all at once: if something changes the result and cannot be inferred, call task_done once with summary and questions (at most 6, each {q, options}: 2-4 short options where possible) and no steps. The answers will be sent to you. Ask only what really matters; if nothing, skip this.',
-      'Then deliver the complete plan in one go, without asking again: steps (each may also have effort: "low" | "medium" | "high" | "xhigh", the reasoning effort that step needs; think hard on interfaces and reviews, less on mechanical work) and brief: goal (one line), facts (what was decided, {k, v}; things you decided for the user get suggested: true, e.g. acceptance criteria or tech stack nobody named). Leave open empty. Nobody starts yet: the user can edit it or ask for changes, and starts it when ready.',
+      'Then deliver the complete plan in one go, without asking again: steps (each may also have effort: "low" | "medium" | "high" | "xhigh", the reasoning effort that step needs; think hard on interfaces and reviews, less on mechanical work) and brief: goal (one line), facts (what was decided, {k, v}; things you decided for the user get suggested: true, e.g. acceptance criteria or tech stack nobody named). Leave open empty. Also give title: a short name for the plan (at most 20 characters), not a copy of the request. Nobody starts yet: the user can edit it or ask for changes, and starts it when ready.',
+      'If the task_done tool is not available to you, put exactly the same JSON (summary, title, questions or steps and brief) in a ```json block at the end of your reply instead; the app reads it from there.',
       input.auto
         ? 'You are the lead of this channel and the user did not name anyone. If this is just a question, or one member can finish it in one go, do not call task_done: answer directly in your reply.'
         : '',
@@ -566,7 +567,8 @@ export function flowPlanPrompt(input: {
     '你现在在计划模式（只读）：只看不改。计划用 task_done 交，不要调用 ExitPlanMode，也不要申请退出计划模式。',
     '把它拆成最多 9 步。每一步写：title（做什么）、member（成员名字，原样写）、deps（要先交付的步骤序号，从 1 数）、kind（"work" 干活；"review" 审查，target 写审第几步；"summary" 最后汇总）。互相不依赖的步骤会同时做。跨好几层的活（比如主进程和界面都要改），先安排一步定共用的接口和类型，其余步骤依赖它；同时做的步骤不要改同一批文件，要共用的东西放进前面那一步。不要自己动手做这件事。',
     '先问、一次问完：有影响结果、又推不出来的事要用户定时，先只调用一次 task_done，写 summary 和 questions（最多 6 个，每个 {q, options}，尽量给 2–4 个简短选项），不写 steps。用户答完会发给你。只问真正要紧的，没有就跳过这一步。',
-    '然后一次交出完整计划，不要再追问：steps（每一步可以带 effort："low" | "medium" | "high" | "xhigh"，这一步需要的推理强度；定接口、审查要想得深，照着写的活用低一些）和 brief：goal（一句话目标）、facts（定下来的，{k, v}；你替用户定的标 suggested: true，比如没人提的验收标准、技术栈），open 留空。现在不会开工：用户可以直接改、或说要改哪里，确认后才开始。',
+    '然后一次交出完整计划，不要再追问：steps（每一步可以带 effort："low" | "medium" | "high" | "xhigh"，这一步需要的推理强度；定接口、审查要想得深，照着写的活用低一些）和 brief：goal（一句话目标）、facts（定下来的，{k, v}；你替用户定的标 suggested: true，比如没人提的验收标准、技术栈），open 留空。再写 title：给计划起个短名字（20 字以内），不要照抄用户的原话。现在不会开工：用户可以直接改、或说要改哪里，确认后才开始。',
+    '如果你这边没有 task_done 工具，就把一模一样的 JSON（summary、title、questions 或 steps 和 brief）放在回复最后的 ```json 代码块里，软件会从那里读取。',
     input.auto
       ? '你是这个频道的牵头成员，用户没有点名交给谁。如果这只是个问题，或者一个成员一次就能做完，不要调用 task_done，直接在回复里回答。'
       : '',
