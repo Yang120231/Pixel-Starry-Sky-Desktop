@@ -396,6 +396,8 @@ export interface ChannelFlow {
   } | null
   /** 拟计划的成员开工前一次问完的问题；answer 是你的回答（都答了才接着出计划） */
   questions?: { q: string; options: string[]; answer?: string }[] | null
+  /** 你回答这些问题时在频道里发的那条消息（「1. …」）：界面把之后的计划排在它后面 */
+  answersId?: string | null
   /** 成员之间问过的问题（算进接力规则） */
   asks?: { from: string; to: string; at: number }[]
   /** 护栏（第 13 项）；没写 = 不限（第二批之前的流程） */

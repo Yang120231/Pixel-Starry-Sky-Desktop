@@ -3493,10 +3493,24 @@ export class Channels {
           typeof list[i] === 'string' ? list[i].trim().slice(0, RELAY_REQUEST_CHARS) : '',
         )
         if (answers.some(x => !x)) throw new Error('每个问题都要回答')
+        // 你的回答也作为你的一条消息留在频道里（不走发消息那条路：不派活、不交给牵头）
+        const reply: ChannelTextMessage = {
+          kind: 'message',
+          id: randomUUID(),
+          channelId,
+          at: this.now(),
+          authorId: SELF_ID,
+          text: answers.map((x, i) => `${i + 1}. ${x}`).join('\n'),
+          format: 'plain',
+          mentions: [],
+        }
+        await this.store.append(reply)
+        this.pushMessage(reply)
         this.updateFlow(channelId, messageId, x => ({
           ...x,
           status: 'planning',
           questions: qs.map((q, i) => ({ ...q, answer: answers[i] })),
+          answersId: reply.id,
         }))
         this.flowRound(
           f.planner.taskId,
