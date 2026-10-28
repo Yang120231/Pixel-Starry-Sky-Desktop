@@ -58,6 +58,8 @@ export function Select<V extends string>({
   const typeahead = useRef({ text: '', at: 0 })
   const activeIndex = Math.min(active, options.length - 1)
   const current = selected >= 0 ? options[selected] : null
+  // 带说明的选项会折成两行：行高按内容撑开、按实际高度算菜单位置（不然说明会叠到下一项上）
+  const tall = fitContent || options.some(o => o.description)
 
   const show = (): void => {
     if (disabled || options.length === 0) return
@@ -119,10 +121,10 @@ export function Select<V extends string>({
         window.innerWidth - 16,
       )
       // Measure wrapped rows at their final width before deciding whether to flip.
-      if (fitContent && menu.current) menu.current.style.width = `${width}px`
+      if (tall && menu.current) menu.current.style.width = `${width}px`
       const height = Math.min(
         320,
-        fitContent ? (menu.current?.scrollHeight ?? options.length * ROW + 8) : options.length * ROW + 8,
+        tall ? (menu.current?.scrollHeight ?? options.length * ROW + 8) : options.length * ROW + 8,
       )
       const below = window.innerHeight - r.bottom - 12
       const above = r.top - 12
@@ -137,13 +139,13 @@ export function Select<V extends string>({
     }
     place()
     const observer = new ResizeObserver(place)
-    if (fitContent && menu.current) for (const row of menu.current.children) observer.observe(row)
+    if (tall && menu.current) for (const row of menu.current.children) observer.observe(row)
     window.addEventListener('resize', place)
     return () => {
       window.removeEventListener('resize', place)
       observer.disconnect()
     }
-  }, [open, options, fitContent])
+  }, [open, options, fitContent, tall])
 
   useEffect(() => {
     if (open) scrollInPane(menu.current?.querySelector(`[data-index="${activeIndex}"]`), 'nearest')
@@ -273,7 +275,7 @@ export function Select<V extends string>({
                 onClick={() => choose(i)}
                 className={cn(
                   'flex items-center gap-2 rounded-md px-2.5 text-ui',
-                  fitContent ? 'min-h-8 py-1.5' : 'h-8',
+                  tall ? 'min-h-8 py-1.5' : 'h-8',
                   o.disabled ? 'cursor-default text-fg-faint' : 'cursor-pointer',
                   !o.disabled && (i === activeIndex ? 'bg-selected text-fg' : 'text-fg-secondary'),
                   i === selected && 'font-medium text-fg',
@@ -291,7 +293,7 @@ export function Select<V extends string>({
                     {o.label}
                   </span>
                   {o.description && (
-                    <span className="block whitespace-normal break-words text-label text-fg-muted">
+                    <span className="line-clamp-2 whitespace-normal break-words text-label text-fg-muted">
                       {o.description}
                     </span>
                   )}
