@@ -53,6 +53,7 @@ describe('频道工具 MCP（docs/ui/channels-collab-v2.md §1）', () => {
       'task_handover',
       'task_done',
       'member_ask',
+      'user_ask',
     ])
     expect(tools.find(t => t.name === 'channel_read')?.annotations?.readOnlyHint).toBe(true)
     const text = (r: unknown) => (r as { content: { text: string }[] }).content[0].text

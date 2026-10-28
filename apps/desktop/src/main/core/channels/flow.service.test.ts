@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineEvent, HostEvent, ProjectRecord, SessionSummary, UsageRecord } from '@pixelsky/protocol'
 import type { AgentInput, ChannelFlow, ChannelTask, ChannelTextMessage } from '../../../shared/types/channels'
 import { ChannelStore } from './store'
-import { Channels, type ChannelsDeps } from './service'
+import { Channels, SELF_ID, type ChannelsDeps } from './service'
 
 const projects: ProjectRecord[] = [{ id: 'p1', name: 'pixel-web', path: 'D:/web' } as ProjectRecord]
 
@@ -668,8 +668,12 @@ describe('流程第三批（docs/ui/channels-pipeline.md §8）', () => {
     const s = tasks(c, ch)[0].sessionId!
     expect(lastTo(s).text).toContain('你是这个频道的牵头成员')
 
-    // 只是问题：不调 task_done 直接回答，流程不留草稿
+    // 拆的时候接着说的（p4）排在这一轮后面，交给牵头一起看
     await endTurn(c, s, '两步验证用短信验证码就行。')
+    expect(flows()[0].flow?.status).toBe('planning')
+    expect(lastTo(s).text).toContain('顺便把注册页也改了吧谢谢')
+    // 只是问题：不调 task_done 直接回答，流程不留草稿
+    await endTurn(c, s, '注册页也一样。')
     expect(flows()[0].flow?.status).toBe('stopped')
 
     // 有 @ 的照常派活，不交给牵头
@@ -993,5 +997,140 @@ describe('频道问题修复第二轮复审', () => {
     await settle()
     expect(sends()).toHaveLength(1)
     expect(sends()[0].clientMessageId).toContain('-2')
+  })
+})
+
+describe('分工提案和问用户', () => {
+  it('提案带要点；草稿期间不带 @ 的话交给牵头改、不派活；必答没定不能开工；要点写进步骤提示词', async () => {
+    const { c, a, b, ch } = await setup()
+    await c.update(ch, { lead: a })
+    await c.post(ch, { text: '做个新法术万剑归宗：飞剑环绕自己自动攻击', clientId: 'p1' })
+    await settle()
+    const plan = tasks(c, ch)[0]
+    const s = plan.sessionId!
+    expect(lastTo(s).text).toContain('brief')
+    c.toolDone(s, {
+      summary: '拆好了',
+      steps: [
+        { title: '定数值', member: '画师' },
+        { title: '实现', member: '程序员', deps: [1] },
+      ],
+      brief: {
+        goal: '万剑归宗',
+        facts: [{ k: '效果', v: '飞剑环绕', by: '画师' }],
+        open: [
+          { q: '持续时间（建议 8 秒）', required: true },
+          { q: '特效谁出', required: false },
+        ],
+      },
+    })
+    await endTurn(c, s, '拆好了')
+    const messageId = c.messages(ch).messages.find(m => m.kind === 'message' && m.flow)!.id
+    // 成员交回的「谁定的」不认，记成你
+    expect(flowOf(c, ch)).toMatchObject({
+      status: 'draft',
+      rev: 1,
+      brief: { goal: '万剑归宗', facts: [{ k: '效果', v: '飞剑环绕', by: SELF_ID }] },
+    })
+    await expect(c.flowAction(ch, { type: 'start', messageId })).rejects.toThrow('还有要先定的：持续时间（建议 8 秒）')
+
+    // 接着说：不另开流程、不派活，交给牵头改
+    const before = sends().length
+    await c.post(ch, { text: '持续 8 秒，特效小李出', clientId: 'p2' })
+    await settle()
+    expect(c.messages(ch).messages.filter(m => m.kind === 'message' && m.flow)).toHaveLength(1)
+    expect(tasks(c, ch)).toHaveLength(1)
+    expect(flowOf(c, ch).status).toBe('planning')
+    expect(sends().length).toBe(before + 1)
+    expect(lastTo(s).text).toContain('持续 8 秒，特效小李出')
+    expect(lastTo(s).text).toContain('1. 定数值 · 画师')
+    await expect(c.flowAction(ch, { type: 'start', messageId })).rejects.toThrow('只有草稿能开始')
+    c.toolDone(s, {
+      summary: '改好了',
+      steps: [
+        { title: '定数值', member: '画师' },
+        { title: '实现', member: '程序员', deps: [1] },
+      ],
+      brief: {
+        goal: '万剑归宗',
+        facts: [
+          { k: '效果', v: '飞剑环绕' },
+          { k: '持续时间', v: '8 秒' },
+        ],
+        open: [{ q: '攻击间隔', required: true }],
+      },
+    })
+    await endTurn(c, s, '改好了')
+    expect(flowOf(c, ch)).toMatchObject({ status: 'draft', rev: 2 })
+    expect(flowOf(c, ch).brief?.facts.map(f => f.k)).toEqual(['效果', '持续时间'])
+
+    // 只是闲聊：牵头不交回，提案原样留着（不会像头一回那样被当成直接回答而停掉）
+    await c.post(ch, { text: '辛苦了，这个提案挺好', clientId: 'p3' })
+    await settle()
+    await endTurn(c, s, '不客气')
+    expect(flowOf(c, ch)).toMatchObject({ status: 'draft', rev: 2 })
+    expect(flowOf(c, ch).steps).toHaveLength(2)
+
+    // @ 的照常直接派
+    await c.post(ch, { text: '@程序员 先看看现有的法术代码', clientId: 'p4' })
+    await settle()
+    expect(tasks(c, ch).at(-1)?.assigneeId).toBe(b)
+    expect(flowOf(c, ch).status).toBe('draft')
+
+    // 剩下的交给 AI 定（必答改成非必答）：能开工，要点写进步骤提示词
+    await c.flowAction(ch, {
+      type: 'update',
+      messageId,
+      brief: { ...flowOf(c, ch).brief!, open: [{ q: '攻击间隔', required: false }] },
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    expect(lastTo(s1).text).toContain('频道里大家定下来的要点')
+    expect(lastTo(s1).text).toContain('- 持续时间：8 秒')
+    expect(lastTo(s1).text).toContain('还没定的（按合理默认值定，交付时写明你定了什么）：攻击间隔')
+    expect(lastTo(s1).text).toContain('user_ask')
+  })
+
+  it('user_ask：一步问你，卡上等你回答；回答记进要点、发回给它接着做；这一轮没结束时先存着', async () => {
+    const { c, a, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '问用户',
+      steps: [{ id: 's1', title: '做法术', memberId: a, deps: [], kind: 'work' }],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    await expect(c.flowAction(ch, { type: 'answer', messageId, stepId: 's1', text: '8 秒' })).rejects.toThrow(
+      '这一步没在等你回答',
+    )
+    await c.toolUserAsk(s1, '持续时间多少？')
+    await expect(c.toolUserAsk(s1, '再问一个')).rejects.toThrow('已经问过')
+    await endTurn(c, s1, '等你回答')
+    expect(stepOf(c, ch, 's1')).toMatchObject({ status: 'asking', question: { text: '持续时间多少？' } })
+    // 问题也记在这一步的讨论串里
+    const card = tasks(c, ch)[0]
+    expect(
+      c.messages(ch).messages.some(m => m.kind === 'message' && m.threadId === card.id && m.text === '持续时间多少？'),
+    ).toBe(true)
+    await expect(c.flowAction(ch, { type: 'answer', messageId, stepId: 's1', text: '  ' })).rejects.toThrow(
+      '写一句回答',
+    )
+    await c.flowAction(ch, { type: 'answer', messageId, stepId: 's1', text: '8 秒' })
+    await settle()
+    expect(stepOf(c, ch, 's1')).toMatchObject({ status: 'running', question: null })
+    expect(flowOf(c, ch).brief?.facts).toEqual([{ k: '持续时间多少？', v: '8 秒', by: SELF_ID }])
+    expect(lastTo(s1).text).toContain('8 秒')
+
+    // 这一轮还没结束就答了：先存着，这一轮结束后发给它
+    await c.toolUserAsk(s1, '攻击间隔呢？')
+    await c.flowAction(ch, { type: 'answer', messageId, stepId: 's1', text: '0.5 秒' })
+    await settle()
+    expect(stepOf(c, ch, 's1').question).toBeNull()
+    await endTurn(c, s1, '先做了别的部分')
+    expect(stepOf(c, ch, 's1').status).toBe('running')
+    expect(lastTo(s1).text).toContain('0.5 秒')
+    expect(flowOf(c, ch).brief?.facts.map(f => f.v)).toEqual(['8 秒', '0.5 秒'])
   })
 })
