@@ -30,6 +30,9 @@ export function QuestionsForm({
   const [answers, setAnswers] = useState<string[]>(() => questions.map(q => q.answer ?? ''))
   const set = (i: number, v: string) => setAnswers(a => a.map((x, j) => (j === i ? v : x)))
   const left = answers.filter(a => !a.trim()).length
+  // 都答过了（交了）：只读，你选的高亮，自己写的也当成选中的一项显示
+  const done = questions.length > 0 && questions.every(q => !!q.answer)
+  const locked = readOnly || done
   return (
     <section
       aria-label={tr('channels.plan.questions', { n: questions.length })}
@@ -42,20 +45,20 @@ export function QuestionsForm({
             <span className="mr-1 font-semibold text-warn">{i + 1}.</span>
             {q.q}
           </span>
-          {q.options.length > 0 && (
+          {(q.options.length > 0 || (done && answers[i])) && (
             <div className="flex flex-wrap gap-1.5">
-              {q.options.map(o => (
+              {[...q.options, ...(done && answers[i] && !q.options.includes(answers[i]) ? [answers[i]] : [])].map(o => (
                 <button
                   key={o}
                   type="button"
-                  disabled={readOnly}
+                  disabled={locked}
                   aria-pressed={answers[i] === o}
                   onClick={() => set(i, o)}
                   className={cn(
-                    'h-7 rounded-full border px-3 text-meta',
+                    'min-h-7 rounded-full border px-3 py-0.5 text-left text-meta disabled:cursor-default',
                     answers[i] === o
                       ? 'border-transparent bg-primary text-primary-fg'
-                      : 'border-line bg-surface text-fg hover:border-accent',
+                      : cn('border-line bg-surface text-fg', !locked && 'hover:border-accent', done && 'opacity-60'),
                   )}
                 >
                   {o}
@@ -63,17 +66,19 @@ export function QuestionsForm({
               ))}
             </div>
           )}
-          <input
-            aria-label={q.q}
-            placeholder={tr('channels.plan.own')}
-            disabled={readOnly}
-            value={q.options.includes(answers[i]) ? '' : answers[i]}
-            onChange={e => set(i, e.target.value)}
-            className="h-7 rounded-md border border-line bg-surface px-2 text-meta text-fg outline-none focus:border-accent"
-          />
+          {!done && (
+            <input
+              aria-label={q.q}
+              placeholder={tr('channels.plan.own')}
+              disabled={readOnly}
+              value={q.options.includes(answers[i]) ? '' : answers[i]}
+              onChange={e => set(i, e.target.value)}
+              className="h-7 rounded-md border border-line bg-surface px-2 text-meta text-fg outline-none focus:border-accent"
+            />
+          )}
         </div>
       ))}
-      {!readOnly && (
+      {!locked && (
         <div className="flex items-center justify-end gap-2 pt-1">
           <span className="text-meta text-fg-faint">
             {left ? tr('channels.plan.left', { n: left }) : tr('channels.plan.ready')}
