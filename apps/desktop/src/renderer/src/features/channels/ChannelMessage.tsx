@@ -203,7 +203,8 @@ function MessageAttachments({ message }: { message: ChannelTextMessage }) {
     )
   return (
     <div data-channel-attachments="" className="mt-1.5 flex flex-col gap-2">
-      {data.images.length > 0 && <ImageAttachments images={data.images} />}
+      {/* 图片只放缩略图：文件名多是一长串 id，放在悬停提示和 alt 里 */}
+      {data.images.length > 0 && <ImageAttachments images={data.images} caption={false} />}
       {data.files.length > 0 && <FileAttachments files={data.files} />}
     </div>
   )
@@ -456,6 +457,13 @@ export function MessageGroup({
         const first = i === 0
         // 自己的纯文本消息用强调色气泡；Markdown 放强调色的浅底上，免得代码块、链接的颜色看不清
         const strong = mine && m.format !== 'markdown'
+        // 全局选中色是 22% 的强调色，叠在强调色 / 强调色浅底的气泡上几乎看不出来，像是选不中：
+        // 强调色气泡反色（气泡上的字色当底），浅底气泡加深强调色
+        const selection = strong
+          ? 'selection:bg-accent-on selection:text-accent'
+          : mine
+            ? 'selection:bg-accent/40'
+            : undefined
         const body = m.proposal ? (
           <ProposalCard message={m} membersById={membersById} readOnly={proposalsReadOnly} />
         ) : m.text ? (
@@ -465,6 +473,7 @@ export function MessageGroup({
               'max-w-full min-w-0 rounded-2xl px-3 py-1.5',
               mine ? (strong ? 'bg-accent' : 'bg-accent-soft') : 'bg-subtle',
               first && (mine ? 'rounded-tr-md' : 'rounded-tl-md'),
+              selection,
             )}
           >
             {m.format === 'markdown' ? (
@@ -492,9 +501,12 @@ export function MessageGroup({
                   ))}
               </div>
             )}
+            {/* 右边（自己的在左边）给悬停工具条留 7.5rem，工具条放在气泡列外面，不压字也不被裁掉；
+                别人的消息还要扣掉头像那一列（w-7 + gap-2.5） */}
             <div
               className={cn(
-                'relative flex max-w-[min(85%,760px)] min-w-0 flex-col',
+                'relative flex min-w-0 flex-col',
+                mine ? 'max-w-[min(calc(100%_-_7.5rem),760px)]' : 'max-w-[min(calc(100%_-_7.5rem_-_38px),760px)]',
                 mine ? 'items-end' : 'items-start',
                 highlight === m.id && 'search-hit rounded-2xl',
               )}
@@ -532,12 +544,13 @@ export function MessageGroup({
                   {tr('channels.pinned')}
                 </span>
               )}
+              {/* 悬停 / 键盘焦点时显示；看不见的时候不挡鼠标 */}
               <div
                 role="toolbar"
                 aria-label={tr('channels.messageActions')}
                 className={cn(
-                  'absolute -top-3 z-10 flex items-center gap-0.5 rounded-md border border-line-card bg-popover p-0.5 opacity-0 shadow-menu transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100',
-                  mine ? 'left-0' : 'right-0',
+                  'pointer-events-none absolute top-0 z-10 flex w-max items-center gap-0.5 rounded-md border border-line-card bg-popover p-0.5 opacity-0 shadow-menu transition-opacity group-focus-within/message:pointer-events-auto group-focus-within/message:opacity-100 group-hover/message:pointer-events-auto group-hover/message:opacity-100',
+                  mine ? 'right-full mr-1.5' : 'left-full ml-1.5',
                 )}
               >
                 {onReply && (
