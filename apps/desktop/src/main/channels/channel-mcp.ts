@@ -87,7 +87,7 @@ const TOOLS = [
   {
     name: 'task_done',
     description:
-      '流程里的一步确实做完了：交付这一步（摘要、改了哪些文件），流程才会往下走。审查步骤要写 verdict（pass 通过 / reject 打回）、打回时 issues 列出问题；让你拆流程的活用 steps 交回拆好的步骤。只有流程里的活能用，一轮只算第一次。',
+      '流程里的一步确实做完了：交付这一步（摘要、改了哪些文件），流程才会往下走。审查步骤要写 verdict（pass 通过 / reject 打回）、打回时 issues 列出问题；让你拆流程的活用 steps 交回拆好的步骤、brief 交回要点。只有流程里的活能用，一轮只算第一次。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -115,6 +115,35 @@ const TOOLS = [
             required: ['title', 'member'],
           },
         },
+        brief: {
+          type: 'object',
+          description: '拆流程时：要点。goal 一句话目标；facts 用户已经说定的；open 开工前还要人定的',
+          properties: {
+            goal: { type: 'string' },
+            facts: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  k: { type: 'string', description: '哪一项' },
+                  v: { type: 'string', description: '定了什么' },
+                },
+                required: ['k', 'v'],
+              },
+            },
+            open: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  q: { type: 'string', description: '要定什么（可以带上你建议的默认值）' },
+                  required: { type: 'boolean', description: '不定就不能开工' },
+                },
+                required: ['q'],
+              },
+            },
+          },
+        },
       },
       required: ['summary'],
     },
@@ -134,12 +163,25 @@ const TOOLS = [
     },
     annotations: WRITE,
   },
+  {
+    name: 'user_ask',
+    description:
+      '流程里的一步缺了只有用户能定的信息（影响结果、又推不出来）时问用户。问完结束这一轮；流程卡上会让用户回答，回答来了会作为新消息发给你。不依赖它的部分可以先做。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', minLength: 1, description: '要问什么；能给选项或建议值就给' },
+      },
+      required: ['question'],
+    },
+    annotations: WRITE,
+  },
 ].map(tool => ({ ...tool, annotations: { title: tool.name, ...tool.annotations } }))
 
 const INSTRUCTIONS =
   '你是像素星空协作频道里的 AI 成员。channel_read / thread_read 查频道记录；channel_reply 在你这项活的串里写进展；' +
   'task_propose 提议给别的成员派活（用户决定）；频道允许时 task_handover 直接交接。' +
-  '流程里的一步：做完调用 task_done 交付，需要别的成员提供东西用 member_ask。不能删消息、改频道设置、给别的频道发消息。'
+  '流程里的一步：做完调用 task_done 交付，需要别的成员提供东西用 member_ask，要用户拍板的用 user_ask。不能删消息、改频道设置、给别的频道发消息。'
 
 const str = (args: ToolArgs, key: string, required = false): string | undefined => {
   const value = args[key]
@@ -177,6 +219,8 @@ function mcpServer(channels: () => Channels | null, sessionId: string): Server {
           return text(c.toolDone(sessionId, args))
         case 'member_ask':
           return text(await c.toolAsk(sessionId, str(args, 'member', true)!, str(args, 'question', true)!))
+        case 'user_ask':
+          return text(await c.toolUserAsk(sessionId, str(args, 'question', true)!))
         default:
           return text(`没有这个工具：${request.params.name}`, true)
       }

@@ -306,6 +306,8 @@ export interface FlowStep {
   turns?: string[]
   /** 这一步的用量（主进程按 turns 算好缓存，用量记录变了再刷新） */
   usage?: FlowUsage | null
+  /** 这一步用 user_ask 问你、还没回答的问题（status 是 asking） */
+  question?: { text: string; at: number } | null
 }
 
 /** 一步（或几步加起来）的用量（docs/ui/channels-pipeline.md §10.1）：字段和用量页的 UsageTotals 同名 */
@@ -361,6 +363,13 @@ export interface FlowSchedule {
 export type FlowScheduleInput = Pick<FlowSchedule, 'title' | 'hour' | 'steps' | 'limits' | 'enabled'> &
   Partial<Pick<FlowSchedule, 'id' | 'isolate'>>
 
+/** 分工提案的要点：聊出来定下的（by 是谁说的：成员 id 或 SELF_ID）和开工前还要人定的（required 没定完不能开工） */
+export interface FlowBrief {
+  goal: string
+  facts: { k: string; v: string; by: string }[]
+  open: { q: string; required: boolean }[]
+}
+
 /** 流程（docs/ui/channels-pipeline.md §4）：挂在一条文字消息上 */
 export interface ChannelFlow {
   title: string
@@ -381,6 +390,10 @@ export interface ChannelFlow {
   since?: { at: number; rounds: number; cost?: number } | null
   /** 并行步骤用独立的 Git 副本（第 11 项）；没写 = 开 */
   isolate?: boolean
+  /** 牵头 / 拆流程的成员交回的要点；草稿期间在频道里接着说会更新 */
+  brief?: FlowBrief | null
+  /** 提案第几版（拆流程的成员每交回一次加一） */
+  rev?: number
 }
 
 /** 建 / 改流程草稿时的一步（channels:flow） */
@@ -401,10 +414,12 @@ export type FlowAction =
       steps?: FlowStepInput[]
       planner?: { memberId: string; request: string }
     } & FlowOptions)
-  | ({ type: 'update'; messageId: string; title?: string; steps?: FlowStepInput[] } & FlowOptions)
+  | ({ type: 'update'; messageId: string; title?: string; steps?: FlowStepInput[]; brief?: FlowBrief } & FlowOptions)
   | { type: 'start' | 'pause' | 'resume' | 'stop' | 'discard'; messageId: string }
   /** 人工关卡：通过，或打回（note 必填：要改什么） */
   | { type: 'gate'; messageId: string; stepId: string; decision: 'approve' | 'reject'; note?: string }
+  /** 回答一步用 user_ask 问你的问题 */
+  | { type: 'answer'; messageId: string; stepId: string; text: string }
 
 /** 系统消息（主动提醒、每日简报）的作者 */
 export const SYSTEM_AUTHOR = 'system'
@@ -658,8 +673,8 @@ export interface ChannelsSnapshot {
 export interface ChannelNeed {
   key: string
   kind: 'approval' | 'proposal' | 'held' | 'decision' | 'checks' | 'failed' | 'alert' | 'flow'
-  /** kind 是 flow 时：草稿等你确认（null）、停下的原因，或 gate（一步交付了等你确认，第 12 项） */
-  pause?: FlowPause | 'gate' | null
+  /** kind 是 flow 时：草稿等你确认（null）、停下的原因，gate（一步交付了等你确认，第 12 项），或 ask（一步在问你） */
+  pause?: FlowPause | 'gate' | 'ask' | null
   /** kind 是 flow、pause 是 gate 时：等你确认的那一步 */
   stepId?: string | null
   /** pause 是 limit 时：超的是哪一项 */

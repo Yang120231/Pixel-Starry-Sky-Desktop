@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Plus, Settings2, Workflow, X } from 'lucide-react'
 import type { Effort } from '@pixelsky/protocol'
 import { Button, cn, IconButton, Popover, Segmented, Select, Spinner, useToast, type SelectOption } from '@/ui'
@@ -10,6 +10,7 @@ import type { ChannelMember, ChannelTask, ChannelTextMessage } from '@/data/type
 import type {
   ChannelFlow,
   FlowAction,
+  FlowBrief,
   FlowUsage,
   FlowStep,
   FlowStepInput,
@@ -21,7 +22,6 @@ import { GateActions } from './GateActions'
 import { formatCardCost, formatTokens, costHint } from '@/features/usage/format'
 import { scheduleToInput } from './model'
 import { channelActions, useChannels } from './store'
-import { saveTemplate, TEMPLATE_MAX, TEMPLATE_NAME_MAX, toTemplate } from './flowTemplates'
 
 const NUMBERS = '①②③④⑤⑥⑦⑧⑨'
 const num = (i: number): string => NUMBERS[i] ?? String(i + 1)
@@ -160,73 +160,6 @@ function StepSettings({
               />
             </div>
           )}
-        </div>
-      </Popover>
-    </>
-  )
-}
-
-/** 流程卡头上的「存为模板」：填个名字存到本机（docs/ui/channels-pipeline.md §8.1） */
-function SaveTemplate({
-  steps,
-  limits,
-  isolate,
-  membersById,
-}: {
-  steps: readonly FlowStepInput[]
-  limits?: ChannelFlow['limits']
-  isolate?: boolean
-  membersById: Members
-}) {
-  useI18n()
-  const toast = useToast()
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const anchor = useRef<HTMLSpanElement>(null)
-  const save = () => {
-    const n = name.trim()
-    if (!n) return
-    const lookup = (id: string) => {
-      const m = membersById.get(id)
-      return m ? { name: m.name, engine: m.kind === 'agent' ? m.engine : undefined } : undefined
-    }
-    if (!saveTemplate(toTemplate({ steps, limits, isolate }, n, lookup)))
-      return toast(tr('channels.flow.tplFull', { n: TEMPLATE_MAX }))
-    toast(tr('channels.flow.tplSaved', { name: n.slice(0, TEMPLATE_NAME_MAX) }))
-    setOpen(false)
-    setName('')
-  }
-  return (
-    <>
-      <span ref={anchor} className="inline-flex shrink-0">
-        <Button className="h-7 px-2.5 text-meta" onClick={() => setOpen(o => !o)}>
-          {tr('channels.flow.saveTpl')}
-        </Button>
-      </span>
-      <Popover
-        open={open}
-        onClose={() => setOpen(false)}
-        anchor={anchor}
-        align="end"
-        role="dialog"
-        className="w-64 p-3"
-      >
-        <div className="flex flex-col gap-2">
-          <input
-            autoFocus
-            maxLength={TEMPLATE_NAME_MAX}
-            aria-label={tr('channels.flow.tplName')}
-            placeholder={tr('channels.flow.tplName')}
-            value={name}
-            onChange={e => setName(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.nativeEvent.isComposing) save()
-            }}
-            className="h-8 rounded-md border border-line bg-surface px-2 text-ui text-fg outline-none focus:border-accent"
-          />
-          <Button variant="primary" className="self-end" disabled={!name.trim()} onClick={save}>
-            {tr('channels.flow.tplSave')}
-          </Button>
         </div>
       </Popover>
     </>
@@ -607,8 +540,16 @@ function DraftEditor({
       },
     ])
 
+  const left = (flow.brief?.open ?? []).filter(o => o.required).length
   return (
     <>
+      <p className="mb-1 flex items-center gap-1.5 text-meta text-fg-muted">
+        <Workflow size={13} strokeWidth={1.75} className="shrink-0" />
+        {flow.planner && (
+          <span className="shrink-0 font-semibold text-fg">{tr('channels.flow.proposal', { n: flow.rev ?? 1 })}</span>
+        )}
+        <span className="min-w-0">{tr(flow.planner ? 'channels.flow.proposalHint' : 'channels.flow.draftHint')}</span>
+      </p>
       <input
         aria-label={tr('channels.flow.titleLabel')}
         value={title}
@@ -619,6 +560,9 @@ function DraftEditor({
         }}
         className="h-8 w-full rounded-md border border-transparent bg-transparent px-1 text-ui font-semibold text-fg outline-none hover:border-line focus:border-accent"
       />
+      {flow.brief && (
+        <BriefSection message={message} brief={flow.brief} membersById={membersById} editable={!readOnly} />
+      )}
       <ol className="mt-2 flex flex-col gap-2">
         {steps.map((s, i) => (
           <li key={s.id} className="rounded-md border border-line-subtle bg-subtle/40 p-2" data-flow-draft-step={s.id}>
@@ -752,27 +696,152 @@ function DraftEditor({
           </Button>
           <span className="flex-1" />
           {local && <ScheduleButton channelId={message.channelId} title={title} steps={steps} isolate={isolate} />}
-          {steps.length > 0 && (
-            <SaveTemplate
-              steps={steps}
-              isolate={isolate}
-              limits={{
-                rounds: rounds.trim() ? Number(rounds) : null,
-                minutes: minutes.trim() ? Number(minutes) : null,
-                costUsd: costNum(cost),
-              }}
-              membersById={membersById}
-            />
-          )}
           <Button disabled={busy} onClick={() => void run({ type: 'discard', messageId: message.id })}>
             {tr('channels.flow.discard')}
           </Button>
-          <Button variant="primary" disabled={busy || steps.length === 0} onClick={() => void start()}>
-            {tr('channels.flow.start')}
+          <Button variant="primary" disabled={busy || steps.length === 0 || left > 0} onClick={() => void start()}>
+            {left > 0 ? tr('channels.flow.startLeft', { n: left }) : tr('channels.flow.start')}
           </Button>
         </div>
       )}
     </>
+  )
+}
+
+/** 提案的要点：目标、定下来的（谁说的）、开工前还要定的（草稿时能直接回答，或交给 AI 定） */
+function BriefSection({
+  message,
+  brief,
+  membersById,
+  editable,
+}: {
+  message: ChannelTextMessage
+  brief: FlowBrief
+  membersById: Members
+  editable: boolean
+}) {
+  useI18n()
+  const { run, busy } = useFlowRun(message.channelId)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const save = (next: FlowBrief) => {
+    setAnswers({})
+    void run({ type: 'update', messageId: message.id, brief: next })
+  }
+  // 回答的结论没写谁定的：主进程记成你
+  const answer = (q: string) => {
+    const v = (answers[q] ?? '').trim()
+    if (v) save({ ...brief, facts: [...brief.facts, { k: q, v, by: '' }], open: brief.open.filter(o => o.q !== q) })
+  }
+  return (
+    <section
+      aria-label={tr('channels.flow.brief')}
+      className="mt-2 flex flex-col gap-1.5 rounded-md border border-dashed border-line px-2.5 py-2"
+      data-flow-brief
+    >
+      {brief.goal && <p className="text-ui text-fg">{brief.goal}</p>}
+      {brief.facts.length > 0 && (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-meta">
+          {brief.facts.map((f, i) => {
+            const by = membersById.get(f.by)?.name
+            return (
+              <Fragment key={`${i}:${f.k}`}>
+                <dt className="text-fg-muted">{f.k}</dt>
+                <dd className="min-w-0 text-fg">
+                  {f.v}
+                  {by && <span className="ml-1.5 text-fg-faint">· {by}</span>}
+                </dd>
+              </Fragment>
+            )
+          })}
+        </dl>
+      )}
+      {brief.open.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-meta text-fg-muted">{tr('channels.flow.brief.open')}</span>
+          {brief.open.map(o => (
+            <div key={o.q} className="flex flex-wrap items-center gap-1.5">
+              <span className={cn('min-w-0 flex-1 text-meta', o.required ? 'text-warn' : 'text-fg-muted')}>
+                {o.q}
+                {!o.required && ` ${tr('channels.flow.brief.aiDecides')}`}
+              </span>
+              {editable && (
+                <>
+                  <input
+                    aria-label={tr('channels.flow.brief.answerLabel', { q: o.q })}
+                    value={answers[o.q] ?? ''}
+                    onChange={e => setAnswers(a => ({ ...a, [o.q]: e.target.value }))}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.nativeEvent.isComposing) answer(o.q)
+                    }}
+                    className="h-7 w-40 rounded-md border border-line bg-surface px-2 text-meta text-fg outline-none focus:border-accent"
+                  />
+                  <Button
+                    className="h-7 px-2"
+                    disabled={busy || !(answers[o.q] ?? '').trim()}
+                    onClick={() => answer(o.q)}
+                  >
+                    {tr('channels.flow.brief.answer')}
+                  </Button>
+                </>
+              )}
+            </div>
+          ))}
+          {editable && brief.open.some(o => o.required) && (
+            <Button
+              className="h-7 self-end px-2.5"
+              disabled={busy}
+              onClick={() => save({ ...brief, open: brief.open.map(o => ({ ...o, required: false })) })}
+            >
+              {tr('channels.flow.brief.letAi')}
+            </Button>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** 一步用 user_ask 问你：问题和回答框，答了它接着做 */
+function AnswerBox({
+  question,
+  asker,
+  disabled,
+  onAnswer,
+}: {
+  question: string
+  asker: string
+  disabled: boolean
+  onAnswer: (text: string) => void
+}) {
+  useI18n()
+  const [text, setText] = useState('')
+  const send = () => {
+    if (text.trim()) onAnswer(text.trim())
+  }
+  return (
+    <div className="mr-1.5 mb-1.5 ml-8 flex flex-col gap-1.5 rounded-md bg-subtle px-2.5 py-2">
+      <span className="text-meta text-fg-muted">{tr('channels.flow.ask.label', { name: asker })}</span>
+      <p className="text-ui whitespace-pre-wrap text-fg">{question}</p>
+      <div className="flex items-start gap-1.5">
+        <textarea
+          aria-label={tr('channels.flow.brief.answerLabel', { q: question })}
+          placeholder={tr('channels.flow.ask.placeholder')}
+          rows={2}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              send()
+            }
+          }}
+          className="min-w-0 flex-1 resize-y rounded-md border border-line bg-surface px-2 py-1 text-ui text-fg outline-none focus:border-accent"
+        />
+        <Button variant="primary" className="h-7 px-2.5" disabled={disabled || !text.trim()} onClick={send}>
+          {tr('channels.flow.brief.answer')}
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -802,7 +871,9 @@ function stepStatus(flow: ChannelFlow, step: FlowStep, membersById: Members): { 
     case 'running':
       return { text: tr('channels.flow.step.running'), running: true }
     case 'asking': {
+      if (step.question) return { text: tr('channels.flow.step.askingYou'), running: false }
       const to = [...(flow.asks ?? [])].reverse().find(a => a.from === step.memberId)?.to
+      if (to === SELF) return { text: tr('channels.flow.step.answered'), running: true }
       const name = to ? membersById.get(to)?.name : undefined
       return {
         text: name ? tr('channels.flow.step.asking', { name }) : tr('channels.flow.step.askingAny'),
@@ -824,6 +895,9 @@ function stepStatus(flow: ChannelFlow, step: FlowStep, membersById: Members): { 
       return { text: tr('channels.flow.step.stopped'), running: false }
   }
 }
+
+/** 主进程里「你」的成员 id（SELF_ID） */
+const SELF = 'you'
 
 const STEP_TONE: Record<FlowStep['status'], string> = {
   pending: 'bg-subtle text-fg-muted',
@@ -893,7 +967,14 @@ export function ChannelFlowCard({
         )}
       >
         {flow.status === 'draft' ? (
-          <DraftEditor message={message} flow={flow} agents={agents} membersById={membersById} readOnly={readOnly} />
+          <DraftEditor
+            key={flow.rev ?? 0}
+            message={message}
+            flow={flow}
+            agents={agents}
+            membersById={membersById}
+            readOnly={readOnly}
+          />
         ) : (
           <>
             <div className="flex items-center gap-2 text-meta">
@@ -907,14 +988,6 @@ export function ChannelFlowCard({
               <span className={cn('shrink-0 rounded-md px-1.5 py-0.5', tone)}>
                 {tr(`channels.flow.status.${flow.status}`)}
               </span>
-              {flow.steps.length > 0 && (
-                <SaveTemplate
-                  steps={flow.steps}
-                  limits={flow.limits}
-                  isolate={flow.isolate}
-                  membersById={membersById}
-                />
-              )}
             </div>
             {flow.status === 'paused' && flow.paused && (
               <p className="mt-1 text-meta text-warn">
@@ -925,11 +998,24 @@ export function ChannelFlowCard({
                 )}
               </p>
             )}
+            {flow.brief && flow.status === 'planning' && (
+              <BriefSection message={message} brief={flow.brief} membersById={membersById} editable={false} />
+            )}
+            {flow.brief && flow.status !== 'planning' && (
+              <details className="mt-2 text-meta text-fg-muted">
+                <summary className="cursor-pointer select-none">
+                  {tr('channels.flow.brief.show', { n: flow.brief.facts.length })}
+                </summary>
+                <BriefSection message={message} brief={flow.brief} membersById={membersById} editable={false} />
+              </details>
+            )}
             {flow.status === 'planning' ? (
               <div className="mt-2 flex items-center gap-2 text-ui text-fg-muted">
                 <Spinner size={13} />
                 <span className="min-w-0 flex-1 truncate">
-                  {tr('channels.flow.planning', { name: planner?.name ?? '?' })}
+                  {tr(flow.steps.length ? 'channels.flow.refining' : 'channels.flow.planning', {
+                    name: planner?.name ?? '?',
+                  })}
                 </span>
                 {!readOnly && (
                   <Button className="h-7 px-2.5" disabled={busy} onClick={() => act('discard')}>
@@ -1007,6 +1093,14 @@ export function ChannelFlowCard({
                           </span>
                         )}
                       </button>
+                      {s.question && !readOnly && (flow.status === 'running' || flow.status === 'paused') && (
+                        <AnswerBox
+                          question={s.question.text}
+                          asker={member?.name ?? '?'}
+                          disabled={busy}
+                          onAnswer={text => void run({ type: 'answer', messageId: message.id, stepId: s.id, text })}
+                        />
+                      )}
                       {s.status === 'gated' && !readOnly && (flow.status === 'running' || flow.status === 'paused') && (
                         <div
                           className="flex items-center justify-end gap-1.5 pt-0.5 pr-1.5 pb-1.5 pl-8"

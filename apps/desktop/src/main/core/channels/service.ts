@@ -98,6 +98,7 @@ import {
   flowAskPrompt,
   flowNoAnswerPrompt,
   flowPlanPrompt,
+  flowRefinePrompt,
   flowRejectPrompt,
   flowRemindPrompt,
   flowReviewAgainPrompt,
@@ -111,6 +112,8 @@ import {
   FLOW_MAX_REJECTS,
   FLOW_TITLE_MAX,
   allDelivered,
+  attributeBrief,
+  cleanBrief,
   cleanLimits,
   cleanSchedule,
   cleanSteps,
@@ -118,6 +121,7 @@ import {
   defaultLimits,
   draftProblem,
   limitHit,
+  openRequired,
   planSteps,
   SCHEDULE_MAX,
   scheduleDue,
@@ -1224,7 +1228,8 @@ export class Channels {
       tasks.push(target.id)
     } else for (const id of agents) tasks.push(this.newTask(c, message, id, replyToId ?? threadId))
     // 没派给任何人的需求：交给牵头成员（docs/ui/channels-pipeline.md §8.3）
-    if (!tasks.length && this.leadTakes(c, message)) void this.leadPlan(c, message)
+    // 有份提案在商量：不带 @ 的话（或回复提案卡）交给拆它的成员接着改，不另开、不派活
+    if (!tasks.length && !this.refineTakes(c, message) && this.leadTakes(c, message)) void this.leadPlan(c, message)
     this.changed()
     return { message, tasks }
   }
@@ -2296,6 +2301,7 @@ export class Channels {
       pinned: this.pinnedLines(c),
       instructions: this.member(step.memberId)?.instructions ?? '',
       flow: flow.title,
+      brief: flow.brief ?? null,
       lines: flow.steps.map(s => ({
         no: this.stepNo(flow, s.id),
         title: s.title,
@@ -2547,10 +2553,20 @@ export class Channels {
       // 拆流程的活：交回的步骤成为草稿；没交回就是空草稿，你自己写
       const steps = run.done?.steps
       if (m.flow.status !== 'planning' || m.flow.planner?.taskId !== run.taskId) return
-      // 牵头自动拆、没交回步骤：它直接回答了（回复照常发在卡片下），流程不留草稿
-      if (m.flow.planner.auto && finish.status === 'done' && !steps?.length)
+      // 牵头自动拆、头一回就没交回步骤：它直接回答了（回复照常发在卡片下），流程不留草稿；
+      // 已经有提案时（接着商量）没交回就是这次不用改，提案留着
+      if (m.flow.planner.auto && finish.status === 'done' && !steps?.length && !m.flow.steps.length && !more)
         this.updateFlow(run.channelId, messageId, f => ({ ...f, status: 'stopped' }))
-      else this.updateFlow(run.channelId, messageId, f => ({ ...f, status: 'draft', ...(steps ? { steps } : {}) }))
+      else {
+        const brief = run.done?.brief
+        this.updateFlow(run.channelId, messageId, f => ({
+          ...f,
+          // 后面还排着你接着说的话：等它们也改完再回到草稿
+          status: more ? 'planning' : 'draft',
+          ...(steps ? { steps, rev: (f.rev ?? 0) + 1 } : {}),
+          ...(steps && brief ? { brief: attributeBrief(brief, f.brief, SELF_ID) } : {}),
+        }))
+      }
       return
     }
     if (m.flow.status !== 'running' && m.flow.status !== 'paused') return
@@ -2721,6 +2737,8 @@ export class Channels {
       const problem = draftProblem(steps, this.flowMemberCheck(c))
       if (problem) throw new Error(`${problem}。改好再调用 task_done`)
       done.steps = steps
+      const brief = cleanBrief(args.brief, SELF_ID)
+      if (brief) done.brief = brief
     } else if (step?.kind === 'review') {
       if (args.verdict !== 'pass' && args.verdict !== 'reject')
         throw new Error('审查步骤要写 verdict：pass（通过）或 reject（打回）')
@@ -2779,7 +2797,7 @@ export class Channels {
     // 次数算进频道的接力规则（docs/ui/channels-pipeline.md §3）
     const rules = relayRulesOf(c)
     const now = this.now()
-    const asks = (flow.asks ?? []).filter(a => a.at >= this.relaySince(c))
+    const asks = (flow.asks ?? []).filter(a => a.at >= this.relaySince(c) && a.to !== SELF_ID)
     const pair = asks.filter(
       a =>
         ((a.from === member.id && a.to === peer.id) || (a.from === peer.id && a.to === member.id)) &&
@@ -2815,16 +2833,54 @@ export class Channels {
     return `问题已发给 ${peer.name}。现在结束这一轮，回答来了会发给你。`
   }
 
+  /** user_ask：问用户（要人拍板、又推不出来的）；流程卡上这一步显示问题和回答框，回答来了接着做 */
+  async toolUserAsk(sessionId: string, raw: string): Promise<string> {
+    const { run, ref, c, member, step } = this.flowCaller(sessionId)
+    if (!step) throw new Error('拆流程时不用问：要用户定的写进 task_done 的 brief.open，提案卡上会让用户回答')
+    if (run.answering) throw new Error('这一轮是在回答问题，不能再问；不确定的地方在回答里写明')
+    if (run.done) throw new Error('这一轮已经交付了')
+    if (run.ask) throw new Error(`已经问过 ${this.nameOf(run.ask.to)} 了，结束这一轮等回答`)
+    const question = this.toolRequest(raw)
+    const now = this.now()
+    this.store.runs.set(run.taskId, { ...run, ask: { to: SELF_ID, question, at: now } })
+    this.saveRuns()
+    this.updateFlow(c.id, ref.messageId, f => ({
+      ...withStep(f, step.id, { question: { text: question, at: now } }),
+      asks: [...(f.asks ?? []), { from: member.id, to: SELF_ID, at: now }].slice(-100),
+    }))
+    await this.threadNote(c.id, run.taskId, member.id, question)
+    return '问题已发给用户，流程卡上会让用户回答。现在结束这一轮，回答来了会发给你。'
+  }
+
+  /** 在一张任务卡的讨论串里记一句（问题、回答），频道里看得到 */
+  private async threadNote(channelId: string, taskId: string, authorId: string, text: string): Promise<void> {
+    const note: ChannelTextMessage = {
+      kind: 'message',
+      id: randomUUID(),
+      channelId,
+      at: this.now(),
+      authorId,
+      text,
+      format: 'plain',
+      threadId: taskId,
+      mentions: [],
+    }
+    await this.store.append(note)
+    this.pushMessage(note)
+  }
+
   /** 等别人回答太久（巡检）：流程停下等你 */
   private askTimeouts(c: StoredChannel, now: number): void {
     for (const m of [...(this.store.messages.get(c.id) ?? [])]) {
       if (m.kind !== 'message' || m.flow?.status !== 'running') continue
       // 护栏的时长（第 13 项）：一分钟查一次
       // 只在有步骤在做时查：只剩等你确认的步骤时，等你的时间不算
-      const active = m.flow.steps.find(s => s.status === 'running' || s.status === 'asking')
+      const askingYou = (s: FlowStep) => !!s.taskId && this.store.runs.get(s.taskId)?.ask?.to === SELF_ID
+      const active = m.flow.steps.find(s => s.status === 'running' || (s.status === 'asking' && !askingYou(s)))
       if (active && this.overLimit(c.id, m.id, active.id)) continue
       const late = m.flow.steps.find(s => {
-        if (s.status !== 'asking' || !s.taskId) return false
+        // 问你的不算超时：等你的时间不算进护栏
+        if (s.status !== 'asking' || !s.taskId || askingYou(s)) return false
         // 运行信息没了（成员被删）：再也等不到
         const ask = this.store.runs.get(s.taskId)?.ask
         return !ask || now - ask.at >= ASK_TIMEOUT_MS
@@ -3078,6 +3134,44 @@ export class Channels {
     return !(this.store.messages.get(c.id) ?? []).some(x => x.kind === 'message' && x.flow?.status === 'planning')
   }
 
+  /**
+   * 草稿期间接着说（补充细节、改主意、回答提案里的问题）：交给拆这份提案的成员改，改完还是草稿，点开始才派活。
+   * 只认不带 @、不在讨论串里的话；回复别的消息不算，回复提案卡算
+   */
+  private refineTakes(c: StoredChannel, m: ChannelTextMessage): boolean {
+    if (m.mentions?.length || m.threadId || m.text.trim().startsWith('/')) return false
+    const draft = [...(this.store.messages.get(c.id) ?? [])]
+      .reverse()
+      .find(
+        (x): x is ChannelTextMessage & { flow: ChannelFlow } =>
+          x.kind === 'message' &&
+          !!x.flow?.planner?.taskId &&
+          (x.flow.status === 'draft' || x.flow.status === 'planning'),
+      )
+    if (!draft || (m.replyToId && m.replyToId !== draft.id)) return false
+    const planner = draft.flow.planner!
+    if (!this.flowMemberCheck(c)(planner.memberId)?.local) return false
+    const f = draft.flow
+    this.updateFlow(c.id, draft.id, x => (x.status === 'draft' ? { ...x, status: 'planning' } : x))
+    this.flowRound(
+      planner.taskId!,
+      flowRefinePrompt({
+        locale: this.deps.locale(),
+        from: this.nameOf(m.authorId),
+        text: m.text,
+        steps: f.steps.map(s => ({
+          title: s.title,
+          member: this.nameOf(s.memberId),
+          deps: s.deps.map(d => f.steps.findIndex(x => x.id === d) + 1).filter(n => n > 0),
+          kind: s.kind,
+        })),
+        brief: f.brief ?? null,
+        attached: !!(m.attached?.images.length || m.attached?.files.length),
+      }),
+    )
+    return true
+  }
+
   /** 牵头成员拆这条需求：和「让成员拆」同一条路，拆出的是草稿，你确认后才开始；只是问题时它直接回答 */
   private async leadPlan(c: StoredChannel, m: ChannelTextMessage): Promise<void> {
     this.leading.add(c.id)
@@ -3180,6 +3274,7 @@ export class Channels {
           steps,
           ...(limits ? { limits } : {}),
           ...(a.isolate === undefined ? {} : { isolate: a.isolate !== false }),
+          ...(a.brief === undefined ? {} : { brief: cleanBrief(a.brief, SELF_ID) }),
         }))
         break
       }
@@ -3187,6 +3282,8 @@ export class Channels {
         if (f.status !== 'draft') throw new Error('只有草稿能开始')
         const problem = draftProblem(f.steps, this.flowMemberCheck(c))
         if (problem) throw new Error(problem)
+        const open = openRequired(f)
+        if (open.length) throw new Error(`还有要先定的：${open.join('、')}。在提案卡上回答，或交给 AI 定`)
         // 没设护栏的按默认上限；计数从现在算
         this.updateFlow(channelId, messageId, x => ({
           ...x,
@@ -3213,6 +3310,43 @@ export class Channels {
         }))
         if (a.decision === 'approve') this.advance(channelId, messageId)
         else this.flowRound(step.taskId, flowGatePrompt(locale, note), { reminded: false })
+        break
+      }
+      case 'answer': {
+        // 一步用 user_ask 问你的问题：回答记进要点（后面的步骤也看得到），再发给它接着做
+        const step = f.steps.find(s => s.id === a.stepId)
+        const run = step?.taskId ? this.store.runs.get(step.taskId) : undefined
+        // 问了之后这一轮还没结束（还是进行中）也能答：先存着，这一轮结束后发给它
+        const waiting = step?.status === 'asking' || step?.status === 'running'
+        if (!step?.taskId || !waiting || !step.question || !run || run.ask?.to !== SELF_ID)
+          throw new Error('这一步没在等你回答')
+        const text = typeof a.text === 'string' ? a.text.trim().slice(0, RELAY_REQUEST_CHARS) : ''
+        if (!text) throw new Error('写一句回答')
+        const question = step.question.text
+        // 等你回答的时间不算进护栏的时长：时钟从现在重新算
+        this.updateFlow(channelId, messageId, x => ({
+          ...withStep(x, step.id, { question: null }),
+          brief: {
+            goal: x.brief?.goal ?? '',
+            open: x.brief?.open ?? [],
+            facts: [...(x.brief?.facts ?? []), { k: question.slice(0, 80), v: text.slice(0, 500), by: SELF_ID }].slice(
+              -20,
+            ),
+          },
+          ...(x.since ? { since: { ...x.since, at: this.now() } } : {}),
+        }))
+        await this.threadNote(c.id, step.taskId, SELF_ID, text)
+        if (run.phase !== 'ended') {
+          this.store.runs.set(step.taskId, { ...run, answer: { from: SELF_ID, text } })
+          this.saveRuns()
+        } else {
+          this.updateFlow(channelId, messageId, x => withStep(x, step.id, { status: 'running' }))
+          this.flowRound(step.taskId, flowAnswerPrompt(locale, this.nameOf(SELF_ID), text), {
+            ask: undefined,
+            answer: undefined,
+            reminded: false,
+          })
+        }
         break
       }
       case 'pause':

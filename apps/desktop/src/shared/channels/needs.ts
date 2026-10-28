@@ -73,7 +73,8 @@ export function channelNeeds(
             ...base,
             key: `flow:${m.id}`,
             kind: 'flow',
-            sig: flow.status === 'draft' ? 'draft' : `${flow.paused?.reason}:${flow.paused?.stepId}`,
+            // 提案改了一版就重新出现
+            sig: flow.status === 'draft' ? `draft:${flow.rev ?? 0}` : `${flow.paused?.reason}:${flow.paused?.stepId}`,
             memberId: step?.memberId ?? null,
             messageId: m.id,
             taskId: step?.taskId ?? null,
@@ -99,6 +100,23 @@ export function channelNeeds(
                 stepId: s.id,
                 text: flow.title,
                 detail: s.title,
+              })
+        // 一步用 user_ask 在问你（回答在流程卡上写）
+        if (flow && (flow.status === 'running' || flow.status === 'paused'))
+          for (const s of flow.steps)
+            if (s.question)
+              found.push({
+                ...base,
+                key: `flow:${m.id}:ask:${s.id}`,
+                kind: 'flow',
+                sig: `ask:${s.question.at}`,
+                memberId: s.memberId,
+                messageId: m.id,
+                taskId: s.taskId,
+                pause: 'ask',
+                stepId: s.id,
+                text: flow.title,
+                detail: s.question.text,
               })
         continue
       }

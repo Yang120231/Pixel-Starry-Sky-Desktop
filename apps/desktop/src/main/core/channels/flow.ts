@@ -3,6 +3,7 @@
 import { EFFORTS, type Effort } from '@pixelsky/protocol'
 import type {
   ChannelFlow,
+  FlowBrief,
   FlowLimits,
   FlowSchedule,
   FlowStep,
@@ -144,6 +145,46 @@ export function planSteps(raw: unknown, byName: (name: string) => string | null)
     }),
   )
 }
+
+// ── 要点（分工提案里聊出来的结论和开工前要定的）──────────────────────────
+
+const BRIEF_GOAL_MAX = 500
+const BRIEF_ITEMS_MAX = 20
+const BRIEF_KEY_MAX = 80
+const BRIEF_TEXT_MAX = 500
+
+/** 要点（界面改的或成员交回的，不可信）→ 干净的要点；什么都没有为 null。结论没写谁定的记 by */
+export function cleanBrief(raw: unknown, by: string): FlowBrief | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const items = (v: unknown): Record<string, unknown>[] =>
+    (Array.isArray(v) ? v : [])
+      .slice(0, BRIEF_ITEMS_MAX)
+      .map(x => (x && typeof x === 'object' ? x : {}) as Record<string, unknown>)
+  const facts = items(r.facts).flatMap(f => {
+    const k = text(f.k, BRIEF_KEY_MAX)
+    const v = text(f.v, BRIEF_TEXT_MAX)
+    return k && v ? [{ k, v, by: text(f.by, 64) || by }] : []
+  })
+  const open = items(r.open).flatMap(o => {
+    const q = text(o.q, BRIEF_TEXT_MAX)
+    return q ? [{ q, required: o.required !== false }] : []
+  })
+  const goal = text(r.goal, BRIEF_GOAL_MAX)
+  return goal || facts.length || open.length ? { goal, facts, open } : null
+}
+
+/** 成员交回的新要点：和旧要点里一模一样的结论沿用原来的「谁定的」，其余记 by（成员交回的 by 不可信，一律不认） */
+export function attributeBrief(next: FlowBrief, prev: FlowBrief | null | undefined, by: string): FlowBrief {
+  return {
+    ...next,
+    facts: next.facts.map(f => ({ ...f, by: prev?.facts.find(p => p.k === f.k && p.v === f.v)?.by ?? by })),
+  }
+}
+
+/** 开工前还没定的必答项 */
+export const openRequired = (flow: ChannelFlow): string[] =>
+  (flow.brief?.open ?? []).filter(o => o.required).map(o => o.q)
 
 // ── 护栏（docs/ui/channels-pipeline.md §6.2）──────────────────────────────
 

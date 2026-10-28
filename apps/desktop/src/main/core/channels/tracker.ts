@@ -2,7 +2,14 @@
 // 纯函数：输入一项活的运行信息和一个事件，返回新的运行信息、要改的任务卡字段，以及这一轮是不是结束了。
 import { codexPlainText, diffStat } from '@pixelsky/protocol'
 import type { ApprovalRequest, EngineEvent, Item, SessionSnapshot } from '@pixelsky/protocol'
-import type { ChannelActivity, ChannelStep, ChannelTask, FlowResult, FlowStep } from '../../../shared/types/channels'
+import type {
+  ChannelActivity,
+  ChannelStep,
+  ChannelTask,
+  FlowBrief,
+  FlowResult,
+  FlowStep,
+} from '../../../shared/types/channels'
 import type { CopyPlan } from './flow'
 
 /** 团队频道派来的活（Phase C §9.1）：任务卡在云端，状态写回云端；本机运行信息照存 runs.json */
@@ -73,7 +80,7 @@ export interface TaskRun {
   /** 流程里的一步：流程卡消息 id、步骤 id（拆流程的活是空串） */
   flow?: { messageId: string; stepId: string }
   /** 这一轮调过 task_done（第一次算数） */
-  done?: FlowResult & { steps?: FlowStep[] }
+  done?: FlowResult & { steps?: FlowStep[]; brief?: FlowBrief }
   /** 问了别的成员、还在等回答 */
   ask?: { to: string; question: string; at: number }
   /** 等的回答在这一轮还没结束时就到了：这一轮结束后接着发 */
