@@ -19,15 +19,21 @@ export { excerpt, mentionsAll, parseMentions, splitMentions } from '../../../../
 // ---------------------------------------------------------------------------
 
 export type TimelineRow =
-  | { kind: 'day'; key: string; at: number }
+  /** 跨天的日期分隔；first 是这天第一条消息的时间，分隔线上一起写 */
+  | { kind: 'day'; key: string; at: number; first: number }
+  /** 同一天里隔了一阵才有的消息：居中的时间分隔 */
+  | { kind: 'time'; key: string; at: number }
   | { kind: 'new'; key: string }
-  | { kind: 'group'; key: string; authorId: string; items: ChannelTextMessage[] }
+  /** tasks：从这组某条消息派出去的任务卡（按消息 id），状态条挂在那条消息下面 */
+  | { kind: 'group'; key: string; authorId: string; items: ChannelTextMessage[]; tasks?: Record<string, ChannelTask[]> }
   | { kind: 'task'; key: string; message: ChannelTask }
   | { kind: 'flow'; key: string; message: ChannelTextMessage }
   | { kind: 'event'; key: string; message: ChannelEvent }
 
 /** 同一作者的连续消息在这个间隔内合并成一组 */
 export const GROUP_GAP_MS = 5 * 60_000
+/** 同一天里前后两条隔了这么久，中间插一条时间分隔 */
+export const TIME_GAP_MS = 10 * 60_000
 
 export function dayStart(at: number): number {
   const d = new Date(at)
@@ -35,51 +41,77 @@ export function dayStart(at: number): number {
   return d.getTime()
 }
 
+/** 在主时间线上以普通消息（气泡）显示的消息：不在串里、不是流程卡 */
+const bubbleMessage = (m: ChannelMessage): boolean => m.kind === 'message' && !m.threadId && !m.flow
+
 /**
- * 按时间排好的消息 → 时间线的行：跨天插日期分隔，`newFrom` 处插一次「新消息」分隔，
+ * 按时间排好的消息 → 时间线的行：跨天插日期分隔，同一天隔了 TIME_GAP_MS 插时间分隔，`newFrom` 处插一次「新消息」分隔，
  * 同一作者 gap 内的连续普通消息合并成组；换人、超时、跨天、分隔线、任务卡 / 事件、带引用都会断开。
+ * 派活的那条消息在时间线上时，任务卡挂到那条消息下面（组的 tasks），不单独占一行，也不打断分组
  */
 export function buildTimeline(
   messages: readonly ChannelMessage[],
-  opts: { newFrom?: number | null; gapMs?: number } = {},
+  opts: { newFrom?: number | null; gapMs?: number; timeGapMs?: number } = {},
 ): TimelineRow[] {
   const gap = opts.gapMs ?? GROUP_GAP_MS
+  const timeGap = opts.timeGapMs ?? TIME_GAP_MS
   const rows: TimelineRow[] = []
   let lastDay: number | null = null
+  let lastAt: number | null = null
   let group: Extract<TimelineRow, { kind: 'group' }> | null = null
   let newPlaced = false
+  // 消息 id → 它所在的组：任务卡找派活的那条消息
+  const groupOf = new Map<string, Extract<TimelineRow, { kind: 'group' }>>()
   for (const m of messages) {
     // 只在讨论串里的消息不上主时间线（docs/ui/channels-collab-v2.md §3）
     if (m.kind === 'message' && m.threadId) continue
     // 牵头成员直接回答了、没拆出步骤的流程（docs/ui/channels-pipeline.md §8.3）：回答在任务卡下面，流程卡不显示
     if (m.kind === 'message' && m.flow?.planner?.auto && m.flow.status === 'stopped' && !m.flow.steps.length) continue
+    const host = m.kind === 'task' && m.sourceMessageId ? groupOf.get(m.sourceMessageId) : undefined
+    if (host && m.kind === 'task') {
+      const tasks = (host.tasks ??= {})
+      ;(tasks[m.sourceMessageId!] ??= []).push(m)
+      continue
+    }
     const day = dayStart(m.at)
     if (day !== lastDay) {
-      rows.push({ kind: 'day', key: `day-${day}`, at: day })
+      rows.push({ kind: 'day', key: `day-${day}`, at: day, first: m.at })
       lastDay = day
       group = null
+    } else if (lastAt != null && m.at - lastAt > timeGap) {
+      rows.push({ kind: 'time', key: `time-${m.id}`, at: m.at })
+      group = null
     }
+    lastAt = m.at
     if (opts.newFrom != null && !newPlaced && m.at >= opts.newFrom) {
       rows.push({ kind: 'new', key: 'new' })
       newPlaced = true
       group = null
     }
-    if (m.kind === 'message' && m.flow) {
-      rows.push({ kind: 'flow', key: m.id, message: m })
-      group = null
-    } else if (m.kind === 'message') {
+    if (m.kind === 'message' && !m.flow) {
       const last = group?.items[group.items.length - 1]
       if (group && last && group.authorId === m.authorId && !m.replyToId && m.at - last.at <= gap) group.items.push(m)
       else {
         group = { kind: 'group', key: m.id, authorId: m.authorId, items: [m] }
         rows.push(group)
       }
+      groupOf.set(m.id, group)
+    } else if (m.kind === 'message') {
+      rows.push({ kind: 'flow', key: m.id, message: m })
+      group = null
     } else {
       rows.push(m.kind === 'task' ? { kind: 'task', key: m.id, message: m } : { kind: 'event', key: m.id, message: m })
       group = null
     }
   }
   return rows
+}
+
+/** 主时间线上已经有结果消息的任务卡：卡上不再重复结果摘要 */
+export function tasksWithResult(messages: readonly ChannelMessage[]): Set<string> {
+  const ids = new Set<string>()
+  for (const m of messages) if (bubbleMessage(m) && m.kind === 'message' && m.taskId) ids.add(m.taskId)
+  return ids
 }
 
 /** 进入频道前最早一条未读的时间：算未读的（别人发的、不含事件和没 @ 你的串里回复）里最后 unread 条中的第一条 */

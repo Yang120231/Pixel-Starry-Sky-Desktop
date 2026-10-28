@@ -9,6 +9,7 @@ import {
   defaultMentionIndex,
   filterMentionable,
   firstUnreadAt,
+  tasksWithResult,
   insertMention,
   markRead,
   mentionAllOption,
@@ -135,6 +136,55 @@ describe('频道时间线', () => {
             : r.kind,
       ),
     ).toEqual(['day:1', 'a1', 'day:2', 'a2', 'new', 'a3+a4'])
+  })
+  it('派活那条消息在时间线上时任务卡挂在它下面，不单独占一行、也不打断分组', () => {
+    const task = (id: string, source?: string): ChannelMessage => ({
+      kind: 'task',
+      id,
+      channelId: 'c',
+      at: DAY1 + min(601),
+      authorId: 'me',
+      assigneeId: 'fe',
+      title: 't',
+      status: 'running',
+      ...(source ? { sourceMessageId: source } : {}),
+    })
+    const rows = buildTimeline([
+      text('a1', 'me', DAY1 + min(600)),
+      task('t1', 'a1'),
+      task('t2', 'gone'),
+      text('a2', 'me', DAY1 + min(602)),
+      task('t3', 'a2'),
+      text('r', 'fe', DAY1 + min(603), { taskId: 't1' }),
+    ])
+    expect(rows.map(r => (r.kind === 'group' ? r.items.map(i => i.id).join('+') : r.kind))).toEqual([
+      'day',
+      'a1',
+      'task',
+      'a2',
+      'r',
+    ])
+    const g = rows[1]
+    expect(g.kind === 'group' && Object.keys(g.tasks ?? {})).toEqual(['a1'])
+    const g2 = rows[3]
+    expect(g2.kind === 'group' && g2.tasks?.a2?.map(t => t.id)).toEqual(['t3'])
+    expect([
+      ...tasksWithResult([text('r', 'fe', 1, { taskId: 't1' }), text('x', 'fe', 2, { taskId: 't9', threadId: 'q' })]),
+    ]).toEqual(['t1'])
+  })
+  it('同一天隔了 10 分钟以上插时间分隔；日期分隔带当天第一条的时间', () => {
+    const rows = buildTimeline([
+      text('a1', 'me', DAY1 + min(600)),
+      text('a2', 'me', DAY1 + min(605)),
+      text('b1', 'fe', DAY1 + min(620)),
+    ])
+    expect(rows.map(r => (r.kind === 'group' ? r.items.map(i => i.id).join('+') : r.kind))).toEqual([
+      'day',
+      'a1+a2',
+      'time',
+      'b1',
+    ])
+    expect(rows[0].kind === 'day' && rows[0].first).toBe(DAY1 + min(600))
   })
   it('最早未读：只算别人的消息和任务卡，不算事件', () => {
     const list: ChannelMessage[] = [
