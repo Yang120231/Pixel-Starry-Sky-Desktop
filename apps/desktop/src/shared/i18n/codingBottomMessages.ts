@@ -32,9 +32,10 @@ export const codingBottomMessages = {
   'coding.bottom.ai.noSession': { zh: '没有打开的对话', en: 'No conversation is open' },
   'coding.bottom.ai.noOutput': { zh: '没有输出', en: 'No output' },
   'coding.bottom.ai.runningNote': {
-    zh: 'Claude 引擎跑完才有输出',
-    en: 'Output appears after the Claude engine finishes the command',
+    zh: 'Claude Code 跑完命令才有输出',
+    en: 'Output appears after Claude Code finishes the command',
   },
+  'coding.bottom.ai.waitingOutput': { zh: '还没有输出', en: 'No output yet' },
   'coding.bottom.ai.status.running': { zh: '运行中', en: 'Running' },
   'coding.bottom.ai.status.completed': { zh: '已完成', en: 'Completed' },
   'coding.bottom.ai.status.failed': { zh: '失败', en: 'Failed' },
