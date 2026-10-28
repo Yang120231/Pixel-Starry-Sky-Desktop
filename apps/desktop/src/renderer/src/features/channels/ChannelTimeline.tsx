@@ -3,10 +3,10 @@ import { tr, translateMessage } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Hash, Info, UserMinus, UserPlus, Users } from 'lucide-react'
 import { Spinner, useToast } from '@/ui'
-import type { Channel, ChannelEvent, ChannelMember, ChannelMessage } from '@/data/types'
-import { buildTimeline } from './model'
-import { formatDay } from './format'
-import { MessageGroup, ThreadRow, type Quotable } from './ChannelMessage'
+import type { Channel, ChannelEvent, ChannelMember, ChannelMessage, ChannelTask } from '@/data/types'
+import { buildTimeline, tasksWithResult } from './model'
+import { formatClock, formatDay } from './format'
+import { isSelfAuthor, MessageGroup, ThreadRow, type Quotable } from './ChannelMessage'
 import { threadStats } from '../../../../shared/channels/threads'
 import { ChannelTaskCard, type TaskCardActions } from './ChannelTaskCard'
 import { ChannelFlowCard } from './ChannelFlowCard'
@@ -42,6 +42,17 @@ function eventText(event: ChannelEvent, name: (id: string | null | undefined) =>
     case 'restored':
       return tr('channels.event.restored', { actor: name(event.actorId) })
   }
+}
+
+/** 同一天里隔了一阵的时间：居中的一小行字，不画线 */
+function TimeMark({ at }: { at: number }) {
+  return (
+    <div className="conversation-message mt-4 mb-1 flex justify-center">
+      <time dateTime={new Date(at).toISOString()} className="text-meta text-fg-faint tabular-nums">
+        {formatClock(at)}
+      </time>
+    </div>
+  )
 }
 
 function Divider({ label, accent }: { label: string; accent?: boolean }) {
@@ -89,6 +100,7 @@ export function ChannelTimeline({
   const [highlight, setHighlight] = useState<string | null>(null)
   const rows = useMemo(() => buildTimeline(messages, { newFrom }), [messages, newFrom])
   const threads = useMemo(() => threadStats(messages), [messages])
+  const results = useMemo(() => tasksWithResult(messages), [messages])
   const membersById = useMemo(() => new Map(members.map(m => [m.id, m])), [members])
   const messagesById = useMemo(
     () => new Map(messages.filter((m): m is Quotable => m.kind !== 'event').map(m => [m.id, m])),
@@ -187,6 +199,27 @@ export function ChannelTimeline({
   }, [focus, channel.id, messages.length])
 
   const pinned = useMemo(() => new Set(channel.pinned ?? []), [channel.pinned])
+  const selfId = taskActions.selfId ?? null
+
+  /** 任务卡的一行状态条：挂在派活那条消息下面时 attached，自己派的靠右 */
+  const taskChip = (task: ChannelTask, attached: boolean) => (
+    <ChannelTaskCard
+      key={task.id}
+      task={task}
+      membersById={membersById}
+      highlight={highlight === task.id}
+      compact
+      attached={attached}
+      resultShown={results.has(task.id)}
+      align={isSelfAuthor(membersById.get(task.authorId), task.authorId, selfId) ? 'end' : 'start'}
+      thread={
+        onThread && (
+          <ThreadRow rootId={task.id} stats={threads} membersById={membersById} onOpen={onThread} idle={!!onReply} />
+        )
+      }
+      {...taskActions}
+    />
+  )
 
   return (
     <div
@@ -224,7 +257,9 @@ export function ChannelTimeline({
         {rows.map(row => {
           switch (row.kind) {
             case 'day':
-              return <Divider key={row.key} label={formatDay(row.at, now)} />
+              return <Divider key={row.key} label={`${formatDay(row.at, now)} ${formatClock(row.first)}`} />
+            case 'time':
+              return <TimeMark key={row.key} at={row.at} />
             case 'new':
               return (
                 <div key={row.key} data-new-divider>
@@ -253,27 +288,7 @@ export function ChannelTimeline({
                 </div>
               )
             case 'task':
-              return (
-                <div key={row.key} className="group/thread">
-                  <ChannelTaskCard
-                    task={row.message}
-                    membersById={membersById}
-                    highlight={highlight === row.message.id}
-                    {...taskActions}
-                  />
-                  {onThread && (
-                    <div className="conversation-message pl-10">
-                      <ThreadRow
-                        rootId={row.message.id}
-                        stats={threads}
-                        membersById={membersById}
-                        onOpen={onThread}
-                        idle={!!onReply}
-                      />
-                    </div>
-                  )}
-                </div>
-              )
+              return taskChip(row.message, false)
             case 'flow':
               return (
                 <ChannelFlowCard
@@ -290,6 +305,8 @@ export function ChannelTimeline({
                 <MessageGroup
                   key={row.key}
                   items={row.items}
+                  selfId={selfId}
+                  renderBelow={row.tasks ? m => row.tasks?.[m.id]?.map(task => taskChip(task, true)) : undefined}
                   membersById={membersById}
                   channelMembers={channelMembers}
                   messagesById={messagesById}
@@ -309,7 +326,7 @@ export function ChannelTimeline({
           }
         })}
         {working.length > 0 && (
-          <div role="status" className="conversation-message mt-4 flex flex-col gap-1 pl-10">
+          <div role="status" className="conversation-message mt-4 flex flex-col gap-1 pl-[38px]">
             {working.map(m => (
               <div key={m.id} className="flex min-w-0 items-center gap-2 text-meta text-fg-muted">
                 <Spinner size={12} />

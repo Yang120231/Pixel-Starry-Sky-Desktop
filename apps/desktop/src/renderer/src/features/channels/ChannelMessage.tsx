@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { BellRing, CornerUpLeft, Forward, MessageSquareText, Pin, PinOff } from 'lucide-react'
 import { Avatar, Button, cn, CopyButton, EngineIcon, IconButton, useToast } from '@/ui'
 import { appendComposerDraft } from '@/features/engine/drafts'
@@ -84,7 +84,7 @@ export type Quotable = ChannelTextMessage | ChannelTask
 
 /** AI 的长回复超过 12 行时折叠（docs/ui/channels-phase-b.md §5.2） */
 const FOLD_PX = 12 * 26
-function Folded({ text }: { text: string }) {
+function Folded({ text, fade = 'from-surface' }: { text: string; fade?: string }) {
   useI18n()
   const box = useRef<HTMLDivElement>(null)
   const [tall, setTall] = useState(false)
@@ -104,7 +104,7 @@ function Folded({ text }: { text: string }) {
         {tall && !open && (
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface to-transparent"
+            className={cn('pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t to-transparent', fade)}
           />
         )}
       </div>
@@ -122,13 +122,13 @@ function Folded({ text }: { text: string }) {
   )
 }
 
-/** 作者行：名字、（你）、AI 标签、模型 · 机器、时间 */
-function AuthorLine({ member, at }: { member: ChannelMember | undefined; at: number }) {
+/** 气泡上方的作者行：名字、（你）、AI 标签、模型 · 机器；时间在分隔线和悬停里 */
+function AuthorLine({ member }: { member: ChannelMember | undefined }) {
   useI18n()
   const meta = agentMeta(member)
   return (
-    <div className="flex min-w-0 items-baseline gap-1.5">
-      <span className="shrink-0 truncate text-list font-medium text-fg">{member?.name ?? '?'}</span>
+    <div className="flex max-w-full min-w-0 items-baseline gap-1.5 px-1 pb-0.5">
+      <span className="shrink-0 truncate text-meta font-medium text-fg-secondary">{member?.name ?? '?'}</span>
       {member?.kind === 'human' && member.you && (
         <span className="shrink-0 text-meta text-fg-muted">{tr('channels.youSuffix')}</span>
       )}
@@ -147,20 +147,23 @@ function AuthorLine({ member, at }: { member: ChannelMember | undefined; at: num
           {meta}
         </span>
       )}
-      <time dateTime={new Date(at).toISOString()} className="shrink-0 text-meta text-fg-faint tabular-nums">
-        {formatClock(at)}
-      </time>
     </div>
   )
 }
 
-/** 真人消息：纯文本，@成员 和 @全体 高亮 */
-function MentionText({ text, members }: { text: string; members: readonly ChannelMember[] }) {
+/** 真人消息：纯文本，@成员 和 @全体 高亮；mine 时在强调色气泡里，换成气泡上的颜色 */
+function MentionText({ text, members, mine }: { text: string; members: readonly ChannelMember[]; mine?: boolean }) {
   return (
-    <p className="text-prose break-words whitespace-pre-wrap text-fg-body">
+    <p className={cn('text-prose break-words whitespace-pre-wrap', mine ? 'text-accent-on' : 'text-fg-body')}>
       {splitMentions(text, members).map((segment, i) =>
         segment.memberId || segment.all ? (
-          <span key={i} className="rounded bg-accent-soft px-0.5 text-accent-fg">
+          <span
+            key={i}
+            className={cn(
+              'rounded px-0.5',
+              mine ? 'bg-accent-on/20 font-medium text-accent-on' : 'bg-accent-soft text-accent-fg',
+            )}
+          >
             {segment.text}
           </span>
         ) : (
@@ -228,7 +231,7 @@ function QuoteBlock({
       type="button"
       title={tr('channels.jumpToQuote')}
       onClick={() => onJump(quoted.id)}
-      className="mb-1 flex w-full min-w-0 items-baseline gap-1.5 border-l-2 border-line-strong pl-2 text-left text-meta text-fg-muted hover:border-accent hover:text-fg"
+      className="mb-1 flex max-w-full min-w-0 items-baseline gap-1.5 border-l-2 border-line-strong pl-2 text-left text-meta text-fg-muted hover:border-accent hover:text-fg"
     >
       <span className="shrink-0 font-medium">{author?.name ?? '?'}</span>
       <span className="min-w-0 truncate">{excerpt(quoted.kind === 'task' ? quoted.title : quoted.text)}</span>
@@ -276,6 +279,7 @@ export type ThreadStats = ReadonlyMap<string, { count: number; last: ChannelText
 
 /**
  * 卡片 / 消息下面那一行：「3 条回复 · 最新：前端：…」，点开右侧讨论串。
+ * 最新一条本来就在主时间线上（任务结果、引用它的回复）时只写「3 条回复」，不再重复内容。
  * 还没有回复时（只给任务卡用）是一个悬停才显示的「在串里讨论」
  */
 export function ThreadRow({
@@ -301,7 +305,7 @@ export function ThreadRow({
       data-thread-row={rootId}
       onClick={() => onOpen(rootId)}
       className={cn(
-        'mt-1 flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-meta hover:bg-hover',
+        'flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-meta hover:bg-hover',
         s ? 'text-fg-muted' : 'text-fg-faint opacity-0 group-hover/thread:opacity-100 focus-visible:opacity-100',
       )}
     >
@@ -311,13 +315,15 @@ export function ThreadRow({
           <span className="shrink-0 font-medium text-accent-fg">
             {tr('channels.thread.replies', { count: s.count })}
           </span>
-          <span className="min-w-0 truncate">
-            ·{' '}
-            {tr('channels.thread.latest', {
-              name: membersById.get(s.last.authorId)?.name ?? '?',
-              text: excerpt(s.last.text),
-            })}
-          </span>
+          {s.last.threadId && (
+            <span className="min-w-0 truncate">
+              ·{' '}
+              {tr('channels.thread.latest', {
+                name: membersById.get(s.last.authorId)?.name ?? '?',
+                text: excerpt(s.last.text),
+              })}
+            </span>
+          )}
         </>
       ) : (
         <span>{tr('channels.thread.start')}</span>
@@ -401,9 +407,25 @@ export interface MessageGroupProps {
   onThread?: (id: string) => void
   /** 提议卡只读（归档的频道）；不传时按能不能回复判断 */
   proposalsReadOnly?: boolean
+  /** 当前用户：自己发的消息靠右、用强调色气泡 */
+  selfId?: string | null
+  /** 挂在某条消息下面的东西（从它派出去的任务卡状态条） */
+  renderBelow?: (message: ChannelTextMessage) => ReactNode
 }
 
-/** 同一作者的连续消息：第一条带头像和作者行，后面的悬停时在头像位置显示时间 */
+/** 自己发的：作者是当前用户（团队频道里是 owner key，本机频道里是 you） */
+export function isSelfAuthor(
+  member: ChannelMember | undefined,
+  authorId: string,
+  selfId: string | null | undefined,
+): boolean {
+  return (!!selfId && authorId === selfId) || (member?.kind === 'human' && !!member.you)
+}
+
+/**
+ * 同一作者的连续消息（群聊样式）：别人的靠左，第一条上面写名字、左边放头像，气泡是中性色；
+ * 自己的靠右，用强调色气泡，不写名字和头像。时间悬停时在气泡旁边显示
+ */
 export function MessageGroup({
   items,
   membersById,
@@ -417,46 +439,67 @@ export function MessageGroup({
   threads,
   onThread,
   proposalsReadOnly = !onReply,
+  selfId,
+  renderBelow,
 }: MessageGroupProps) {
   useI18n()
   const toast = useToast()
   const system = items[0].authorId === SYSTEM_AUTHOR
   const author = system ? SYSTEM_MEMBER() : membersById.get(items[0].authorId)
+  const mine = !system && isSelfAuthor(author, items[0].authorId, selfId)
   const togglePin = (id: string, on: boolean): void =>
     void onPin?.(id, on).catch(e => toast(tr('channels.pinFailed', { error: translateMessage((e as Error).message) })))
   return (
-    <div className="conversation-message mt-3 flex flex-col">
+    <div className="conversation-message mt-3 flex flex-col gap-1" data-mine={mine || undefined}>
       {items.map((m, i) => {
         const quoted = m.replyToId ? messagesById.get(m.replyToId) : undefined
+        const first = i === 0
+        // 自己的纯文本消息用强调色气泡；Markdown 放强调色的浅底上，免得代码块、链接的颜色看不清
+        const strong = mine && m.format !== 'markdown'
+        const body = m.proposal ? (
+          <ProposalCard message={m} membersById={membersById} readOnly={proposalsReadOnly} />
+        ) : m.text ? (
+          <div
+            data-bubble
+            className={cn(
+              'max-w-full min-w-0 rounded-2xl px-3 py-1.5',
+              mine ? (strong ? 'bg-accent' : 'bg-accent-soft') : 'bg-subtle',
+              first && (mine ? 'rounded-tr-md' : 'rounded-tl-md'),
+            )}
+          >
+            {m.format === 'markdown' ? (
+              <Folded text={m.text} fade={mine ? 'from-accent-soft' : 'from-subtle'} />
+            ) : (
+              <MentionText text={m.text} members={channelMembers} mine={strong} />
+            )}
+          </div>
+        ) : null
         return (
           <div
             key={m.id}
             data-channel-message={m.id}
-            className={cn(
-              'group/message relative -mx-2 flex gap-3 rounded-md px-2 py-0.5 hover:bg-hover focus-within:bg-hover',
-              highlight === m.id && 'search-hit',
-            )}
+            className={cn('group/message relative flex gap-2.5', mine && 'flex-row-reverse')}
           >
-            <div className="w-7 shrink-0 pt-0.5">
-              {i === 0 ? (
-                system ? (
-                  <span className="inline-flex size-7 items-center justify-center rounded-md bg-subtle text-warn">
-                    <BellRing size={15} strokeWidth={1.5} />
-                  </span>
-                ) : (
-                  <MemberAvatar member={author} />
-                )
-              ) : (
-                <time
-                  dateTime={new Date(m.at).toISOString()}
-                  className="invisible block pt-1 text-right text-[10px] leading-4 text-fg-faint tabular-nums group-hover/message:visible"
-                >
-                  {formatClock(m.at)}
-                </time>
+            {!mine && (
+              <div className="w-7 shrink-0 pt-0.5">
+                {first &&
+                  (system ? (
+                    <span className="inline-flex size-7 items-center justify-center rounded-md bg-subtle text-warn">
+                      <BellRing size={15} strokeWidth={1.5} />
+                    </span>
+                  ) : (
+                    <MemberAvatar member={author} />
+                  ))}
+              </div>
+            )}
+            <div
+              className={cn(
+                'relative flex max-w-[min(85%,760px)] min-w-0 flex-col',
+                mine ? 'items-end' : 'items-start',
+                highlight === m.id && 'search-hit rounded-2xl',
               )}
-            </div>
-            <div className="min-w-0 flex-1">
-              {i === 0 && <AuthorLine member={author} at={m.at} />}
+            >
+              {first && !mine && <AuthorLine member={author} />}
               {m.replyToId && (
                 <QuoteBlock
                   quoted={quoted}
@@ -466,58 +509,66 @@ export function MessageGroup({
                   onJump={onJump}
                 />
               )}
-              {m.proposal ? (
-                <ProposalCard message={m} membersById={membersById} readOnly={proposalsReadOnly} />
-              ) : m.format === 'markdown' ? (
-                <Folded text={m.text} />
-              ) : (
-                m.text && <MentionText text={m.text} members={channelMembers} />
+              {body && (
+                <div className={cn('flex max-w-full min-w-0 items-end gap-1.5', mine && 'flex-row-reverse')}>
+                  {body}
+                  <time
+                    dateTime={new Date(m.at).toISOString()}
+                    className="invisible shrink-0 pb-1 text-[10px] leading-4 text-fg-faint tabular-nums group-hover/message:visible"
+                  >
+                    {formatClock(m.at)}
+                  </time>
+                </div>
               )}
               {m.alert && <AlertButtons message={m} readOnly={proposalsReadOnly} />}
               {m.attached && <MessageAttachments message={m} />}
+              {renderBelow?.(m)}
               {threads && onThread && (
                 <ThreadRow rootId={m.id} stats={threads} membersById={membersById} onOpen={onThread} />
               )}
               {pinned?.has(m.id) && (
-                <span data-pinned className="mt-0.5 inline-flex items-center gap-1 text-meta text-fg-faint">
+                <span data-pinned className="mt-0.5 inline-flex items-center gap-1 px-1 text-meta text-fg-faint">
                   <Pin size={11} strokeWidth={1.75} />
                   {tr('channels.pinned')}
                 </span>
               )}
-            </div>
-            <div
-              role="toolbar"
-              aria-label={tr('channels.messageActions')}
-              className="absolute -top-3 right-2 flex items-center gap-0.5 rounded-md border border-line-card bg-popover p-0.5 opacity-0 shadow-menu transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100"
-            >
-              {onReply && (
-                <IconButton
-                  icon={CornerUpLeft}
-                  label={tr('channels.reply')}
-                  size={24}
-                  iconSize={13}
-                  onClick={() => onReply(m.id)}
-                />
-              )}
-              {onThread && (
-                <IconButton
-                  icon={MessageSquareText}
-                  label={tr('channels.thread.open')}
-                  size={24}
-                  iconSize={13}
-                  onClick={() => onThread(m.id)}
-                />
-              )}
-              <CopyButton text={m.text} label={tr('channels.copy')} iconOnly />
-              {onPin && (
-                <IconButton
-                  icon={pinned?.has(m.id) ? PinOff : Pin}
-                  label={tr(pinned?.has(m.id) ? 'channels.unpin' : 'channels.pin')}
-                  size={24}
-                  iconSize={13}
-                  onClick={() => togglePin(m.id, !pinned?.has(m.id))}
-                />
-              )}
+              <div
+                role="toolbar"
+                aria-label={tr('channels.messageActions')}
+                className={cn(
+                  'absolute -top-3 z-10 flex items-center gap-0.5 rounded-md border border-line-card bg-popover p-0.5 opacity-0 shadow-menu transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100',
+                  mine ? 'left-0' : 'right-0',
+                )}
+              >
+                {onReply && (
+                  <IconButton
+                    icon={CornerUpLeft}
+                    label={tr('channels.reply')}
+                    size={24}
+                    iconSize={13}
+                    onClick={() => onReply(m.id)}
+                  />
+                )}
+                {onThread && (
+                  <IconButton
+                    icon={MessageSquareText}
+                    label={tr('channels.thread.open')}
+                    size={24}
+                    iconSize={13}
+                    onClick={() => onThread(m.id)}
+                  />
+                )}
+                <CopyButton text={m.text} label={tr('channels.copy')} iconOnly />
+                {onPin && (
+                  <IconButton
+                    icon={pinned?.has(m.id) ? PinOff : Pin}
+                    label={tr(pinned?.has(m.id) ? 'channels.unpin' : 'channels.pin')}
+                    size={24}
+                    iconSize={13}
+                    onClick={() => togglePin(m.id, !pinned?.has(m.id))}
+                  />
+                )}
+              </div>
             </div>
           </div>
         )

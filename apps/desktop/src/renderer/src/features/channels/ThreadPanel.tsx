@@ -89,6 +89,7 @@ export function ThreadPanel({
             highlight={null}
             onJump={jump}
             proposalsReadOnly={readOnly}
+            selfId={selfId}
           />
         )}
         <div role="separator" className="my-3 h-px shrink-0 bg-line-subtle" />
@@ -105,6 +106,7 @@ export function ThreadPanel({
               highlight={null}
               onJump={jump}
               proposalsReadOnly={readOnly}
+              selfId={selfId}
             />
           ))
         )}
