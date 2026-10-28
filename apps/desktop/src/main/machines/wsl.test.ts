@@ -387,6 +387,38 @@ describe('WslConnection（假 wsl.exe）', () => {
     expect((error as WslNotReady).items[0]).toMatchObject({ key: 'start', code: 'WSL_START_FAILED', detail: 'boom' })
   })
 
+  itSh(
+    '探测什么都没输出时再试一次（wsl.exe 偶发）',
+    async () => {
+      const { home, spawn } = setup()
+      await mkdir(home, { recursive: true })
+      const { link } = connection()
+      let probes = 0
+      const flaky = ((exe: string, args: string[], options: object) => {
+        // 第一次探测：什么都不输出就退出
+        if (args.includes('-s') && probes++ === 0) return realSpawn(process.execPath, ['-e', ''])
+        return spawn(exe, args, options)
+      }) as unknown as typeof realSpawn
+      link.configure({ spawn: flaky, requireLinux: false })
+      const result = await link.probe('Ubuntu', process.execPath)
+      expect(probes).toBe(2)
+      expect(result.probe).not.toBeNull()
+    },
+    60_000,
+  )
+
+  it('探测一直没输出：检查项写明退出码，不是空的', async () => {
+    const { link, id } = connection()
+    const spawn = (() => realSpawn(process.execPath, ['-e', 'process.exitCode = 3'])) as unknown as typeof realSpawn
+    const error = await link.connect('Ubuntu', id, undefined, 'unused', handler, { spawn }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(WslNotReady)
+    expect((error as WslNotReady).items[0]).toMatchObject({
+      key: 'start',
+      code: 'WSL_START_FAILED',
+      detail: 'WSL_PROBE_EMPTY (exit 3)',
+    })
+  })
+
   it('机器 ID 格式不对直接拒绝', async () => {
     const { link } = connection()
     await expect(link.connect('Ubuntu', 'bad id', undefined, 'x', handler)).rejects.toThrow('SSH_INVALID_CONFIG')

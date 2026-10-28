@@ -18,12 +18,18 @@ while (rest[0] === 'env' || /^[A-Z_]+=/.test(rest[0] ?? '')) {
 const cmd = rest[0] === 'sh' ? (process.env.FAKE_WSL_SH ?? 'sh') : rest[0] === 'node' ? process.execPath : rest[0]
 const args = rest.slice(1)
 const helper = args[0]?.endsWith('.cjs')
+// 一次性命令的输入自己读、再显式转给下一层：直接继承同一个输入管道在 Windows 上偶尔读到空的
+// （探测是 sh -s 从输入读脚本，读到空就什么都不输出地退出，测试时好时坏）
 const child = spawn(cmd, args, {
   cwd: cd && cd !== '~' ? cd : home,
   env,
-  stdio: helper ? 'inherit' : ['inherit', 'pipe', 'inherit'],
+  stdio: helper ? 'inherit' : ['pipe', 'pipe', 'inherit'],
   windowsHide: true,
 })
+if (!helper) {
+  child.stdin.on('error', () => {})
+  process.stdin.pipe(child.stdin)
+}
 if (helper) child.on('exit', code => process.exit(code ?? 1))
 if (!helper) {
   const out = []
