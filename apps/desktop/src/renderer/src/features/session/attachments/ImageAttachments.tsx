@@ -15,12 +15,15 @@ function ImageTile({
   onRemove,
   onReplace,
   compact = false,
+  caption = true,
 }: {
   image: ImageAttachment
   /** 对话里的图：所在条目（图片不带数据时按需取原图，imageSource.ts） */
   itemId?: string
   /** 小缩略图、不显示文件名（消息队列里用；文件名在悬停提示里） */
   compact?: boolean
+  /** 图下面写文件名；关掉时只有缩略图（文件名在悬停提示和 alt 里） */
+  caption?: boolean
   onRemove?: (id: string) => void
   /** 标注后替换这张图（docs/ui/rewind-fork-sidechat.md §6） */
   onReplace?: (id: string, next: ImageAttachment) => void
@@ -87,7 +90,7 @@ function ImageTile({
             <X size={12} />
           </button>
         )}
-        {!compact && (
+        {!compact && caption && (
           <span className="pointer-events-none absolute right-0 bottom-0 left-0 truncate border-t border-line-card bg-popover px-1 py-0.5 text-label text-fg-secondary">
             {image.name}
           </span>
@@ -135,11 +138,14 @@ export function ImageAttachments({
   onRemove,
   onReplace,
   compact,
+  caption,
 }: {
   images: ImageAttachment[]
   /** 对话里的图所在条目：图片不带数据时按需取原图 */
   itemId?: string
   compact?: boolean
+  /** 图下面写文件名（默认写）；频道消息里只放缩略图 */
+  caption?: boolean
   onRemove?: (id: string) => void
   onReplace?: (id: string, next: ImageAttachment) => void
 }) {
@@ -153,6 +159,7 @@ export function ImageAttachments({
           onRemove={onRemove}
           onReplace={onReplace}
           compact={compact}
+          caption={caption}
         />
       ))}
     </div>

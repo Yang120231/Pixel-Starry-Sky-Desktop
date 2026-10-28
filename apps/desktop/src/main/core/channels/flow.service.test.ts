@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { EngineEvent, HostEvent, ProjectRecord, SessionSummary, UsageRecord } from '@pixelsky/protocol'
 import type { AgentInput, ChannelFlow, ChannelTask, ChannelTextMessage } from '../../../shared/types/channels'
 import { ChannelStore } from './store'
-import { Channels, type ChannelsDeps } from './service'
+import { Channels, SELF_ID, type ChannelsDeps } from './service'
 
 const projects: ProjectRecord[] = [{ id: 'p1', name: 'pixel-web', path: 'D:/web' } as ProjectRecord]
 
@@ -60,6 +60,8 @@ async function open(extra: Partial<ChannelsDeps> = {}): Promise<Channels> {
     now: () => ++now,
     channelTools: true,
     alertTimer: false,
+    // @ 派活先出计划另有测试打开；这里沿用直接派活
+    planFirst: false,
     ...extra,
   })
   opened.push(c)
@@ -668,8 +670,12 @@ describe('流程第三批（docs/ui/channels-pipeline.md §8）', () => {
     const s = tasks(c, ch)[0].sessionId!
     expect(lastTo(s).text).toContain('你是这个频道的牵头成员')
 
-    // 只是问题：不调 task_done 直接回答，流程不留草稿
+    // 拆的时候接着说的（p4）排在这一轮后面，交给牵头一起看
     await endTurn(c, s, '两步验证用短信验证码就行。')
+    expect(flows()[0].flow?.status).toBe('planning')
+    expect(lastTo(s).text).toContain('顺便把注册页也改了吧谢谢')
+    // 只是问题：不调 task_done 直接回答，流程不留草稿
+    await endTurn(c, s, '注册页也一样。')
     expect(flows()[0].flow?.status).toBe('stopped')
 
     // 有 @ 的照常派活，不交给牵头
@@ -993,5 +999,366 @@ describe('频道问题修复第二轮复审', () => {
     await settle()
     expect(sends()).toHaveLength(1)
     expect(sends()[0].clientMessageId).toContain('-2')
+  })
+})
+
+describe('分工提案和问用户', () => {
+  it('提案带要点；草稿期间不带 @ 的话交给牵头改、不派活；必答没定不能开工；要点写进步骤提示词', async () => {
+    const { c, a, b, ch } = await setup()
+    await c.update(ch, { lead: a })
+    await c.post(ch, { text: '做个新法术万剑归宗：飞剑环绕自己自动攻击', clientId: 'p1' })
+    await settle()
+    const plan = tasks(c, ch)[0]
+    const s = plan.sessionId!
+    expect(lastTo(s).text).toContain('brief')
+    c.toolDone(s, {
+      summary: '拆好了',
+      steps: [
+        { title: '定数值', member: '画师' },
+        { title: '实现', member: '程序员', deps: [1] },
+      ],
+      brief: {
+        goal: '万剑归宗',
+        facts: [{ k: '效果', v: '飞剑环绕', by: '画师' }],
+        open: [
+          { q: '持续时间（建议 8 秒）', required: true },
+          { q: '特效谁出', required: false },
+        ],
+      },
+    })
+    await endTurn(c, s, '拆好了')
+    const messageId = c.messages(ch).messages.find(m => m.kind === 'message' && m.flow)!.id
+    // 成员交回的「谁定的」不认，记成你
+    expect(flowOf(c, ch)).toMatchObject({
+      status: 'draft',
+      rev: 1,
+      brief: { goal: '万剑归宗', facts: [{ k: '效果', v: '飞剑环绕', by: SELF_ID }] },
+    })
+    await expect(c.flowAction(ch, { type: 'start', messageId })).rejects.toThrow('还有要先定的：持续时间（建议 8 秒）')
+
+    // 接着说：不另开流程、不派活，交给牵头改
+    const before = sends().length
+    await c.post(ch, { text: '持续 8 秒，特效小李出', clientId: 'p2' })
+    await settle()
+    expect(c.messages(ch).messages.filter(m => m.kind === 'message' && m.flow)).toHaveLength(1)
+    expect(tasks(c, ch)).toHaveLength(1)
+    expect(flowOf(c, ch).status).toBe('planning')
+    expect(sends().length).toBe(before + 1)
+    expect(lastTo(s).text).toContain('持续 8 秒，特效小李出')
+    expect(lastTo(s).text).toContain('1. 定数值 · 画师')
+    await expect(c.flowAction(ch, { type: 'start', messageId })).rejects.toThrow('只有草稿能开始')
+    c.toolDone(s, {
+      summary: '改好了',
+      steps: [
+        { title: '定数值', member: '画师' },
+        { title: '实现', member: '程序员', deps: [1] },
+      ],
+      brief: {
+        goal: '万剑归宗',
+        facts: [
+          { k: '效果', v: '飞剑环绕' },
+          { k: '持续时间', v: '8 秒' },
+        ],
+        open: [{ q: '攻击间隔', required: true }],
+      },
+    })
+    await endTurn(c, s, '改好了')
+    expect(flowOf(c, ch)).toMatchObject({ status: 'draft', rev: 2 })
+    expect(flowOf(c, ch).brief?.facts.map(f => f.k)).toEqual(['效果', '持续时间'])
+
+    // 只是闲聊：牵头不交回，提案原样留着（不会像头一回那样被当成直接回答而停掉）
+    await c.post(ch, { text: '辛苦了，这个提案挺好', clientId: 'p3' })
+    await settle()
+    await endTurn(c, s, '不客气')
+    expect(flowOf(c, ch)).toMatchObject({ status: 'draft', rev: 2 })
+    expect(flowOf(c, ch).steps).toHaveLength(2)
+
+    // @ 的照常直接派
+    await c.post(ch, { text: '@程序员 先看看现有的法术代码', clientId: 'p4' })
+    await settle()
+    expect(tasks(c, ch).at(-1)?.assigneeId).toBe(b)
+    expect(flowOf(c, ch).status).toBe('draft')
+
+    // 剩下的交给 AI 定（必答改成非必答）：能开工，要点写进步骤提示词
+    await c.flowAction(ch, {
+      type: 'update',
+      messageId,
+      brief: { ...flowOf(c, ch).brief!, open: [{ q: '攻击间隔', required: false }] },
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    expect(lastTo(s1).text).toContain('频道里大家定下来的要点')
+    expect(lastTo(s1).text).toContain('- 持续时间：8 秒')
+    expect(lastTo(s1).text).toContain('还没定的（按合理默认值定，交付时写明你定了什么）：攻击间隔')
+    expect(lastTo(s1).text).toContain('user_ask')
+  })
+
+  it('user_ask：一步问你，卡上等你回答；回答记进要点、发回给它接着做；这一轮没结束时先存着', async () => {
+    const { c, a, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '问用户',
+      steps: [{ id: 's1', title: '做法术', memberId: a, deps: [], kind: 'work' }],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    await expect(c.flowAction(ch, { type: 'answer', messageId, stepId: 's1', text: '8 秒' })).rejects.toThrow(
+      '这一步没在等你回答',
+    )
+    await c.toolUserAsk(s1, '持续时间多少？')
+    await expect(c.toolUserAsk(s1, '再问一个')).rejects.toThrow('已经问过')
+    await endTurn(c, s1, '等你回答')
+    expect(stepOf(c, ch, 's1')).toMatchObject({ status: 'asking', question: { text: '持续时间多少？' } })
+    // 问题也记在这一步的讨论串里
+    const card = tasks(c, ch)[0]
+    expect(
+      c.messages(ch).messages.some(m => m.kind === 'message' && m.threadId === card.id && m.text === '持续时间多少？'),
+    ).toBe(true)
+    await expect(c.flowAction(ch, { type: 'answer', messageId, stepId: 's1', text: '  ' })).rejects.toThrow(
+      '写一句回答',
+    )
+    await c.flowAction(ch, { type: 'answer', messageId, stepId: 's1', text: '8 秒' })
+    await settle()
+    expect(stepOf(c, ch, 's1')).toMatchObject({ status: 'running', question: null })
+    expect(flowOf(c, ch).brief?.facts).toEqual([{ k: '持续时间多少？', v: '8 秒', by: SELF_ID }])
+    expect(lastTo(s1).text).toContain('8 秒')
+
+    // 这一轮还没结束就答了：先存着，这一轮结束后发给它
+    await c.toolUserAsk(s1, '攻击间隔呢？')
+    await c.flowAction(ch, { type: 'answer', messageId, stepId: 's1', text: '0.5 秒' })
+    await settle()
+    expect(stepOf(c, ch, 's1').question).toBeNull()
+    await endTurn(c, s1, '先做了别的部分')
+    expect(stepOf(c, ch, 's1').status).toBe('running')
+    expect(lastTo(s1).text).toContain('0.5 秒')
+    expect(flowOf(c, ch).brief?.facts.map(f => f.v)).toEqual(['8 秒', '0.5 秒'])
+  })
+})
+
+describe('@ 派活先出计划', () => {
+  it('@ 一个 AI：它先一次问完，答完一次出完整计划；不派活；问过就不再问', async () => {
+    const { c, a, b, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 帮我设计一个数据中心', clientId: 'p1' })
+    await settle()
+    const flows = () => c.messages(ch).messages.filter((m): m is ChannelTextMessage => m.kind === 'message' && !!m.flow)
+    expect(flows()).toHaveLength(1)
+    expect(flows()[0].flow).toMatchObject({
+      title: '帮我设计一个数据中心',
+      status: 'planning',
+      planner: { memberId: a, mention: true },
+    })
+    // 没有直接派活：只有拟计划那一张卡
+    expect(tasks(c, ch)).toHaveLength(1)
+    const s = tasks(c, ch)[0].sessionId!
+    expect(lastTo(s).text).toContain('用户点名把这件事交给你')
+    expect(lastTo(s).text).toContain('questions')
+    const messageId = flows()[0].id
+
+    expect(
+      c.toolDone(s, {
+        summary: '先问两件事',
+        questions: [
+          { q: '哪种数据中心？', options: ['游戏内', '机房', '管理软件', '多余的', '再多余'] },
+          { q: '主要解决什么问题？' },
+        ],
+      }),
+    ).toContain('问题已交给用户')
+    await endTurn(c, s, '先问两件事')
+    expect(flowOf(c, ch)).toMatchObject({ status: 'draft', steps: [] })
+    expect(flowOf(c, ch).questions).toEqual([
+      { q: '哪种数据中心？', options: ['游戏内', '机房', '管理软件', '多余的'] },
+      { q: '主要解决什么问题？', options: [] },
+    ])
+    await expect(c.flowAction(ch, { type: 'start', messageId })).rejects.toThrow()
+    await expect(c.flowAction(ch, { type: 'answers', messageId, answers: ['管理软件'] })).rejects.toThrow(
+      '每个问题都要回答',
+    )
+    await c.flowAction(ch, { type: 'answers', messageId, answers: ['管理软件', '资产管理'] })
+    await settle()
+    expect(flowOf(c, ch).status).toBe('planning')
+    // 回答作为你的一条消息留在频道里，计划卡记下它
+    const reply = c.messages(ch).messages.find(x => x.id === flowOf(c, ch).answersId) as ChannelTextMessage
+    expect(reply).toMatchObject({ authorId: SELF_ID, text: '1. 管理软件\n2. 资产管理' })
+    expect(tasks(c, ch)).toHaveLength(1)
+    expect(lastTo(s).text).toContain('1. 哪种数据中心？')
+    expect(lastTo(s).text).toContain('回答: 管理软件')
+    await expect(c.flowAction(ch, { type: 'answers', messageId, answers: ['a', 'b'] })).rejects.toThrow('没在等你回答')
+
+    expect(() => c.toolDone(s, { summary: '再问', questions: [{ q: '再问一个？' }] })).toThrow('已经问过一轮了')
+    c.toolDone(s, {
+      summary: '计划好了',
+      steps: [
+        { title: '定数据模型和接口', member: '画师', effort: 'high' },
+        { title: '写后端', member: '程序员', deps: [1], effort: '超强' },
+      ],
+      brief: {
+        goal: '数据中心管理软件',
+        facts: [
+          { k: '类型', v: '管理软件' },
+          { k: '技术栈', v: 'React + FastAPI', suggested: true },
+        ],
+      },
+    })
+    await endTurn(c, s, '计划好了')
+    const f = flowOf(c, ch)
+    expect(f).toMatchObject({ status: 'draft', rev: 1 })
+    expect(f.steps[0].settings).toEqual({ effort: 'high' })
+    expect(f.steps[1].settings ?? null).toBeNull()
+    expect(f.brief?.facts).toEqual([
+      { k: '类型', v: '管理软件', by: SELF_ID },
+      { k: '技术栈', v: 'React + FastAPI', by: a, suggested: true },
+    ])
+    expect(tasks(c, ch).some(t => t.assigneeId === b)).toBe(false)
+  })
+
+  it('换拟计划的成员、模型和推理强度：停掉正在拟的那一轮，由新的接手（带上回答），新会话按设置开', async () => {
+    const { c, a, b, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 帮我设计一个数据中心', clientId: 'p1' })
+    await settle()
+    const messageId = c.messages(ch).messages.find(m => m.kind === 'message' && m.flow)!.id
+    const first = tasks(c, ch)[0]
+    await expect(c.flowAction(ch, { type: 'replan', messageId, memberId: 'nobody' })).rejects.toThrow('不在频道里')
+    await c.flowAction(ch, {
+      type: 'replan',
+      messageId,
+      memberId: b,
+      settings: { model: 'big', effort: 'xhigh', junk: 1 },
+    })
+    await settle()
+    expect(flowOf(c, ch)).toMatchObject({
+      status: 'planning',
+      planner: { memberId: b, mention: true, settings: { model: 'big', effort: 'xhigh' } },
+    })
+    const second = tasks(c, ch).at(-1)!
+    expect(second.id).not.toBe(first.id)
+    expect(second.assigneeId).toBe(b)
+    expect(second.title).toContain('出计划')
+    const created = calls.filter(x => x.channel === 'engine:createSession').at(-1)!.args[0] as Record<string, unknown>
+    // 拟计划一律在计划模式里（只读）
+    expect(created).toMatchObject({ model: 'big', effort: 'xhigh', permissionMode: 'plan' })
+    // 旧的那一轮迟到的交付不算数
+    expect(() => c.toolDone(first.sessionId!, { summary: 'x', steps: [{ title: 'x', member: '画师' }] })).toThrow()
+
+    // 新的先问、答完再换人：交接里带上回答
+    const s2 = second.sessionId!
+    c.toolDone(s2, { summary: '问', questions: [{ q: '哪种？' }] })
+    await endTurn(c, s2, '问')
+    await c.flowAction(ch, { type: 'answers', messageId, answers: ['管理软件'] })
+    await settle()
+    await c.flowAction(ch, { type: 'replan', messageId, memberId: a })
+    await settle()
+    expect(lastTo(tasks(c, ch).at(-1)!.sessionId!).text).toContain('哪种？：管理软件')
+  })
+
+  it('拟计划在计划模式里用频道工具不用你批准：自动放行；别的工具照常等你确认', async () => {
+    const { c, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 帮我设计一个数据中心', clientId: 'p1' })
+    await settle()
+    const task = () => tasks(c, ch)[0]
+    const s = task().sessionId!
+    const ask = (id: string, toolName: string) =>
+      c.hostEvent(
+        ev(s, {
+          type: 'approval_request',
+          request: { requestId: id, itemId: null, kind: 'tool', title: `使用 ${toolName}`, toolName, alwaysScopes: [] },
+        }),
+      )
+    // 这一轮开始了（引擎回显了发出去的那条）
+    const x = lastTo(s)
+    c.hostEvent(
+      ev(s, {
+        type: 'item_completed',
+        item: { kind: 'user', id: x.clientMessageId, text: '', createdAt: 0, turnId: 't1' },
+      }),
+    )
+    ask('r1', 'mcp__pixelsky_channel__task_done')
+    await settle()
+    expect(calls.filter(x => x.channel === 'engine:answer').map(x => x.args)).toEqual([[s, 'r1', { type: 'allow' }]])
+    expect(task().request ?? null).toBeNull()
+    ask('r2', 'Write')
+    await settle()
+    expect(calls.filter(x => x.channel === 'engine:answer')).toHaveLength(1)
+    expect(task().request?.requestId).toBe('r2')
+  })
+
+  it('拿不到 task_done 时把 JSON 写在回复里也认（计划模式里的 Codex）；短标题替换原话', async () => {
+    const { c, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '我想设计一个数据中心', clientId: 'p0' })
+    await c.post(ch, { text: '@画师', clientId: 'p1' })
+    await settle()
+    // 只发了 @：前面那句一起交给它，也拿来当标题
+    expect(flowOf(c, ch)).toMatchObject({ title: '我想设计一个数据中心', status: 'planning' })
+    const s = tasks(c, ch)[0].sessionId!
+    expect(lastTo(s).text).toContain('我想设计一个数据中心')
+    await endTurn(
+      c,
+      s,
+      '当前环境没有 task_done 工具。\n```json\n{"summary":"先问","questions":[{"q":"哪种数据中心？","options":["游戏内","机房"]}]}\n```',
+    )
+    expect(flowOf(c, ch)).toMatchObject({
+      status: 'draft',
+      questions: [{ q: '哪种数据中心？', options: ['游戏内', '机房'] }],
+    })
+    const messageId = c.messages(ch).messages.find(m => m.kind === 'message' && m.flow)!.id
+    await c.flowAction(ch, { type: 'answers', messageId, answers: ['机房'] })
+    await settle()
+    // 不合格的（成员名字不对）不认，草稿也不留空步骤
+    await endTurn(c, s, '{"summary":"计划","steps":[{"title":"x","member":"没这个人"}]}')
+    expect(flowOf(c, ch).steps).toHaveLength(0)
+  })
+
+  it('task_done 带短标题：计划卡标题换成它', async () => {
+    const { c, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 两个任务，一个是检查为什么不亮灯，另一个是加字节显示', clientId: 'p1' })
+    await settle()
+    const s = tasks(c, ch)[0].sessionId!
+    c.toolDone(s, { summary: '好了', title: '不亮灯 + 字节显示', steps: [{ title: '查原因', member: '画师' }] })
+    await endTurn(c, s, '好了')
+    expect(flowOf(c, ch)).toMatchObject({ status: 'draft', title: '不亮灯 + 字节显示' })
+  })
+
+  it('带截图 @ 也先出计划：图片跟着交给拟计划的成员', async () => {
+    const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    const image = {
+      id: 'i',
+      name: 'i.png',
+      mediaType: 'image/png' as const,
+      bytes: 70,
+      width: 1,
+      height: 1,
+      dataBase64: PNG,
+    }
+    const { c, a, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 看图，这个界面怎么改', clientId: 'p1', attachments: [image] })
+    await settle()
+    expect(flowOf(c, ch)).toMatchObject({ status: 'planning', planner: { memberId: a, mention: true } })
+    const sent = lastTo(tasks(c, ch)[0].sessionId!) as unknown as { attachments?: unknown[] }
+    expect(sent.attachments).toHaveLength(1)
+  })
+
+  it('不先出计划的情况：频道关了、@ 了两个；只是问题时它直接回答，流程不留', async () => {
+    const { c, a, b, ch } = await setup({ planFirst: true })
+    const flows = () => c.messages(ch).messages.filter(m => m.kind === 'message' && m.flow)
+    await c.post(ch, { text: '@画师 @程序员 一起看看', clientId: 'p1' })
+    await settle()
+    expect(flows()).toHaveLength(0)
+    expect(tasks(c, ch).map(t => t.assigneeId)).toEqual([a, b])
+    for (const t of tasks(c, ch)) await endTurn(c, t.sessionId!, '看了')
+
+    await c.post(ch, { text: '@画师 这个函数是干嘛的', clientId: 'p2' })
+    await settle()
+    expect(flows()).toHaveLength(1)
+    const s = tasks(c, ch).at(-1)!.sessionId!
+    await endTurn(c, s, '它是算价格的。')
+    expect(flowOf(c, ch).status).toBe('stopped')
+
+    await c.update(ch, { planFirst: false })
+    expect(c.state().channels.find(x => x.id === ch)?.planFirst).toBe(false)
+    await c.post(ch, { text: '@画师 直接改一下', clientId: 'p3' })
+    await settle()
+    expect(flows()).toHaveLength(1)
+    expect(tasks(c, ch).at(-1)?.title).toContain('直接改一下')
   })
 })

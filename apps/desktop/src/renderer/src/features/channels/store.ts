@@ -493,6 +493,8 @@ export const channelActions = {
       digestHour?: number
       /** 牵头成员（docs/ui/channels-pipeline.md §8.3）；null 是不启用 */
       lead?: string | null
+      /** @ 一个 AI 派新活时先出计划 */
+      planFirst?: boolean
       /** 每天定时运行的流程（§10.3）：整份列表，主进程按 id 保留运行时字段 */
       schedules?: FlowScheduleInput[]
     },

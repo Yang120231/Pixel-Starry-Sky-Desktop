@@ -37,6 +37,48 @@ export function platformModelsFor(engine: EngineId, groups: PlatformGroup[]): st
   )
 }
 
+/** 这个引擎能用的线路，按倍率从低到高（倍率相同按管理员排序）；读不出模型的线路也列出来，界面灰掉写原因 */
+export function platformRoutesFor(engine: EngineId, groups: PlatformGroup[]): PlatformGroup[] {
+  return groups
+    .map((g, i) => ({ g, i }))
+    .filter(({ g }) => groupSupportsEngine(g, engine))
+    .sort((a, b) => a.g.rate_multiplier - b.g.rate_multiplier || a.i - b.i)
+    .map(({ g }) => g)
+}
+
+/** 线路上这个引擎能跑的模型 */
+export const routeModelsFor = (engine: EngineId, group: PlatformGroup): string[] =>
+  group.models.filter(m => platformModelSupportsEngine(m, engine))
+
+/**
+ * 成员实际用的（线路，模型）：只在这个引擎能用的线路、能跑的模型里按 resolvePlatform 对齐——
+ * 记下的线路有这个模型就用它，没有就换到有这个模型、倍率最低的线路
+ */
+export function resolveRoute(
+  engine: EngineId,
+  groups: PlatformGroup[],
+  groupId: string | null,
+  model: string,
+): { groupId: string | null; model: string | null } {
+  const usable = groups
+    .filter(g => groupSupportsEngine(g, engine))
+    .map(g => ({ ...g, models: routeModelsFor(engine, g) }))
+  return resolvePlatform(usable, groupId, model || null)
+}
+
+/** 换到某条线路：线路有当前模型就保留，没有就换成线路的第一个模型；线路用不了时返回 null */
+export function pickRoute(
+  engine: EngineId,
+  groups: PlatformGroup[],
+  groupId: string,
+  model: string,
+): { groupId: string; model: string } | null {
+  const group = groups.find(g => g.id === groupId && groupSupportsEngine(g, engine))
+  const models = group ? routeModelsFor(engine, group) : []
+  if (!models.length) return null
+  return { groupId, model: models.includes(model) ? model : models[0] }
+}
+
 export interface SourceOption {
   value: SourceKey
   kind: 'self' | 'platform' | 'custom'
@@ -94,7 +136,8 @@ export function modelForSource(
 }
 
 /**
- * 存进成员配置的设置：平台按模型取倍率最低、支持这个引擎的线路，记下登录的账号；自定义接口记接口 id。
+ * 存进成员配置的设置：平台用选的线路（没选或线路没有这个模型时取有这个模型、倍率最低、支持这个引擎的线路），
+ * 记下登录的账号；自定义接口记接口 id。
  * 平台没登录、没线路，或接口已经删了时抛错（界面已经灰掉这些选项，这里兜底）
  */
 export function settingsForSource(
@@ -102,12 +145,12 @@ export function settingsForSource(
   key: SourceKey,
   model: string,
   ctx: SourceContext,
+  groupId: string | null = null,
 ): Pick<AgentSettings, 'platform' | 'provider' | 'model'> {
   if (key === 'self') return model ? { model } : {}
   if (key === 'platform') {
     if (!ctx.email) throw new Error(tr('channels.agent.source.signin'))
-    const groups = ctx.groups.filter(g => groupSupportsEngine(g, engine))
-    const picked = resolvePlatform(groups, null, model || null)
+    const picked = resolveRoute(engine, ctx.groups, groupId, model)
     if (!picked.groupId || !picked.model) throw new Error(tr('channels.agent.source.noRoute'))
     return { platform: { groupId: picked.groupId, account: ctx.email }, model: picked.model }
   }

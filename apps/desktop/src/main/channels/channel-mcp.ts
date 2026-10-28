@@ -20,6 +20,8 @@ export const CHANNEL_SERVER_NAME = 'pixelsky_channel'
 
 /** 发消息、派活的工具：不是只读，但只在频道里留记录，不用每次等用户批准 */
 const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
+/** 流程里交付、提问的工具：只在频道里记一笔、不碰工作区，标成只读，拟计划的会话在计划模式里也能直接用 */
+const RECORD = { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false }
 
 const TOOLS = [
   {
@@ -87,11 +89,12 @@ const TOOLS = [
   {
     name: 'task_done',
     description:
-      '流程里的一步确实做完了：交付这一步（摘要、改了哪些文件），流程才会往下走。审查步骤要写 verdict（pass 通过 / reject 打回）、打回时 issues 列出问题；让你拆流程的活用 steps 交回拆好的步骤。只有流程里的活能用，一轮只算第一次。',
+      '流程里的一步确实做完了：交付这一步（摘要、改了哪些文件），流程才会往下走。审查步骤要写 verdict（pass 通过 / reject 打回）、打回时 issues 列出问题；让你拆流程的活：要先问用户就只交 questions（一次问完），否则用 steps 交回拆好的步骤、brief 交回要点。只有流程里的活能用，一轮只算第一次。',
     inputSchema: {
       type: 'object',
       properties: {
         summary: { type: 'string', minLength: 1, description: '一两句话：做了什么、结论是什么' },
+        title: { type: 'string', description: '拆流程时：给计划起的短名字（20 字以内），不要照抄需求原话' },
         files: { type: 'array', items: { type: 'string' }, description: '你改了哪些文件（相对路径），可不填' },
         open: {
           type: 'array',
@@ -111,14 +114,61 @@ const TOOLS = [
               deps: { type: 'array', items: { type: 'integer' }, description: '要先交付的步骤序号（从 1 数）' },
               kind: { type: 'string', enum: ['work', 'review', 'summary'] },
               target: { type: 'integer', description: 'review：审第几步' },
+              effort: {
+                type: 'string',
+                enum: ['low', 'medium', 'high', 'xhigh'],
+                description: '这一步建议的推理强度',
+              },
             },
             required: ['title', 'member'],
+          },
+        },
+        brief: {
+          type: 'object',
+          description: '拆流程时：要点。goal 一句话目标；facts 用户已经说定的；open 开工前还要人定的',
+          properties: {
+            goal: { type: 'string' },
+            facts: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  k: { type: 'string', description: '哪一项' },
+                  v: { type: 'string', description: '定了什么' },
+                  suggested: { type: 'boolean', description: '是你替用户定的' },
+                },
+                required: ['k', 'v'],
+              },
+            },
+            open: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  q: { type: 'string', description: '要定什么（可以带上你建议的默认值）' },
+                  required: { type: 'boolean', description: '不定就不能开工' },
+                },
+                required: ['q'],
+              },
+            },
+          },
+        },
+        questions: {
+          type: 'array',
+          description: '拆流程时先问用户（不写 steps）：一次问完，最多 6 个',
+          items: {
+            type: 'object',
+            properties: {
+              q: { type: 'string', description: '要用户定什么' },
+              options: { type: 'array', items: { type: 'string' }, description: '2–4 个简短选项，可不填' },
+            },
+            required: ['q'],
           },
         },
       },
       required: ['summary'],
     },
-    annotations: WRITE,
+    annotations: RECORD,
   },
   {
     name: 'member_ask',
@@ -132,14 +182,27 @@ const TOOLS = [
       },
       required: ['member', 'question'],
     },
-    annotations: WRITE,
+    annotations: RECORD,
+  },
+  {
+    name: 'user_ask',
+    description:
+      '流程里的一步缺了只有用户能定的信息（影响结果、又推不出来）时问用户。问完结束这一轮；流程卡上会让用户回答，回答来了会作为新消息发给你。不依赖它的部分可以先做。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', minLength: 1, description: '要问什么；能给选项或建议值就给' },
+      },
+      required: ['question'],
+    },
+    annotations: RECORD,
   },
 ].map(tool => ({ ...tool, annotations: { title: tool.name, ...tool.annotations } }))
 
 const INSTRUCTIONS =
   '你是像素星空协作频道里的 AI 成员。channel_read / thread_read 查频道记录；channel_reply 在你这项活的串里写进展；' +
   'task_propose 提议给别的成员派活（用户决定）；频道允许时 task_handover 直接交接。' +
-  '流程里的一步：做完调用 task_done 交付，需要别的成员提供东西用 member_ask。不能删消息、改频道设置、给别的频道发消息。'
+  '流程里的一步：做完调用 task_done 交付，需要别的成员提供东西用 member_ask，要用户拍板的用 user_ask。不能删消息、改频道设置、给别的频道发消息。'
 
 const str = (args: ToolArgs, key: string, required = false): string | undefined => {
   const value = args[key]
@@ -177,6 +240,8 @@ function mcpServer(channels: () => Channels | null, sessionId: string): Server {
           return text(c.toolDone(sessionId, args))
         case 'member_ask':
           return text(await c.toolAsk(sessionId, str(args, 'member', true)!, str(args, 'question', true)!))
+        case 'user_ask':
+          return text(await c.toolUserAsk(sessionId, str(args, 'question', true)!))
         default:
           return text(`没有这个工具：${request.params.name}`, true)
       }

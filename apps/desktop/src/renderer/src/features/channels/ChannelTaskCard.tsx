@@ -1,7 +1,8 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage, type TranslationKey } from '../../i18n/core'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
+  ChevronDown,
   CircleCheck,
   CirclePause,
   CircleX,
@@ -21,7 +22,7 @@ import { ChannelDialog } from './ChannelDialogs'
 import { relayDuration } from './RelayRules'
 import { useChannels } from './store'
 import { formatClock } from './format'
-import { agentPlace } from './ChannelMessage'
+import { agentPlace, MemberAvatar } from './ChannelMessage'
 import { canApprove, canControlTask, canWithdraw, isMyTask } from './teamModel'
 import { approvalSummary } from '@/features/session/live/approvals/model'
 import { activityTooltip, agoText } from '@/features/session/live/agentActivity'
@@ -105,15 +106,31 @@ export function ChannelTaskCard({
   selfId = null,
   onApprove,
   highlight = false,
+  compact = false,
+  attached = false,
+  resultShown = false,
+  align = 'start',
+  thread,
 }: {
   task: ChannelTask
   membersById: ReadonlyMap<string, ChannelMember>
   /** 刚跳过来（提醒点进来、置顶列表）：闪一下 */
   highlight?: boolean
+  /** 主时间线：缩成一行状态条，点开看详情和操作；要你处理的（等确认、等同意、接力停下）默认展开 */
+  compact?: boolean
+  /** 挂在派活那条消息下面：标题就是那条消息，不再重复 */
+  attached?: boolean
+  /** 主时间线上已经有这项活的结果消息：不再重复结果摘要 */
+  resultShown?: boolean
+  /** 状态条靠哪边（自己派的活靠右） */
+  align?: 'start' | 'end'
+  /** 状态条旁边的「N 条回复」 */
+  thread?: ReactNode
 } & TaskCardActions) {
   useI18n()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
+  const [expandedByUser, setExpanded] = useState<boolean | null>(null)
   const assignee = membersById.get(task.assigneeId)
   const author = membersById.get(task.authorId)
   const place = agentPlace(assignee)
@@ -157,18 +174,28 @@ export function ChannelTaskCard({
   ]
     .filter(Boolean)
     .join(' · ')
-  return (
-    <div className="conversation-message mt-3 pl-10" data-channel-message={task.id}>
-      {editRules && channel && <ChannelDialog channel={channel} agents={[]} onClose={() => setEditRules(false)} />}
-      <article
-        aria-label={`${statusText(task, ownerName, mine)}：${task.title}`}
-        className={cn(
-          'max-w-[560px] rounded-lg border border-line-card bg-surface p-3 shadow-sm',
-          (task.status === 'waiting' || task.decision || held) && 'border-warn/40',
-          highlight && 'search-hit',
-        )}
-      >
-        <div className="flex items-center gap-2 text-meta">
+  const dialog = editRules && channel && (
+    <ChannelDialog channel={channel} agents={[]} onClose={() => setEditRules(false)} />
+  )
+  // 要你处理的：等你确认、等主人同意、接力停下等放行
+  const attention = !!held || task.status === 'waiting' || task.status === 'approval'
+  const expanded = expandedByUser ?? attention
+  // 失败、要你决定的事：状态条上标出来
+  const flagged = attention || task.status === 'failed' || !!task.decision
+  // AI 交给 AI、派活那句不在主时间线上（task_handover 发在串里）：淡化成居中的一行
+  const relayLine = compact && !attached && !!task.relay && !attention
+  const article = (header: boolean) => (
+    <article
+      aria-label={`${statusText(task, ownerName, mine)}：${task.title}`}
+      className={cn(
+        'rounded-lg border border-line-card bg-surface p-3 shadow-sm',
+        header ? 'max-w-[560px]' : 'w-[480px] max-w-full',
+        (task.status === 'waiting' || task.decision || held) && 'border-warn/40',
+        highlight && header && 'search-hit',
+      )}
+    >
+      {header && (
+        <div className="mb-1.5 flex items-center gap-2 text-meta">
           {status ? (
             <status.icon size={14} strokeWidth={1.75} className={cn('shrink-0', status.className)} />
           ) : (
@@ -194,238 +221,329 @@ export function ChannelTaskCard({
             {formatClock(task.at)}
           </time>
         </div>
-        <div className="mt-1.5 text-list font-medium break-words text-fg">{task.title}</div>
-        {task.issue && (
-          // 从任务看板的事项派来的：点了去看板（docs/ui/channels-collab-v2.md §9）
-          <button
-            type="button"
-            data-task-issue
-            onClick={() => setPage('board')}
-            className="press mt-1 inline-flex max-w-full items-center gap-1 self-start rounded px-1 text-meta text-fg-muted hover:bg-hover hover:text-fg"
-          >
-            <SquareKanban size={12} strokeWidth={1.75} className="shrink-0" />
-            <span className="truncate">{tr('board.issue.chip', { title: task.issue.title })}</span>
-          </button>
-        )}
-        {task.summary && <p className="mt-1 text-list break-words text-fg-secondary">{task.summary}</p>}
-        {activity && (
-          <p
-            data-task-activity={activity.line.kind}
-            title={activityTooltip(activity.line, activity.steps, activity.seen, now)}
-            className="mt-1 truncate text-meta text-fg-muted"
-          >
-            {activity.line.text}
-            {activity.line.kind === 'step' && activity.line.stepId && (
-              <span className="text-fg-faint tabular-nums">
-                {' '}
-                · {agoText(now - activity.seen(activity.line.stepId))}
-              </span>
-            )}
-          </p>
-        )}
-        {task.status === 'failed' && task.error && (
-          <p className="mt-1 line-clamp-3 text-meta break-words text-danger" title={translateMessage(task.error)}>
-            {translateMessage(task.error)}
-          </p>
-        )}
-        {task.status === 'waiting' && task.request && (
-          <p
-            className={cn('mt-1 line-clamp-2 text-meta break-words text-fg-muted', task.request.command && 'font-mono')}
-            title={task.request.command ?? task.request.title}
-          >
-            {waitingText(task.request)}
-            {(task.waitingCount ?? 1) > 1 && (
-              <span data-waiting-more className="ml-1.5 font-sans text-fg-faint">
-                {tr('channels.task.waitingMore', { n: (task.waitingCount ?? 1) - 1 })}
-              </span>
-            )}
-          </p>
-        )}
-        {held && (
-          <p data-relay-held={held} className="mt-1.5 text-meta break-words text-warn">
-            {held === 'hops'
-              ? tr('channels.task.heldHops', { count: limit })
-              : held === 'duration'
-                ? tr('channels.task.heldDuration', { time: relayDuration(limit) })
-                : tr('channels.task.heldPair', {
-                    a: author?.name ?? '?',
-                    b: assignee?.name ?? '?',
-                    count: limit,
-                    window,
-                  })}
-          </p>
-        )}
-        {task.decision && (
-          <p className="mt-1.5 text-list break-words text-warn">
-            {tr('channels.task.decision', { text: task.decision })}
-          </p>
-        )}
-        {task.status === 'queued' && task.ownerOffline && !mine && (
-          <p className="mt-1 text-meta text-fg-muted">{tr('team.task.ownerOffline', { owner: ownerName })}</p>
-        )}
-        {pending && <p className="mt-1 text-meta text-fg-faint">{tr(PENDING_KEY[pending])}</p>}
-        {task.checks && (
-          <CheckSummary
-            run={task.checks}
-            className="mt-1.5"
-            onFix={
-              onAction
-                ? () =>
-                    onAction(task.id, 'fix').catch(e =>
-                      toast(tr('checks.fixFailed', { error: translateMessage((e as Error).message) })),
-                    )
-                : undefined
-            }
-          />
-        )}
-        {task.disconnected && (
-          <p className="mt-1 flex items-center gap-1.5 text-meta text-fg-muted">
-            <Unplug size={12} strokeWidth={1.75} className="shrink-0" />
-            {tr('channels.task.disconnected')}
-          </p>
-        )}
-        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 text-meta text-fg-faint">
-          {meta && <span className="min-w-0 truncate">{meta}</span>}
-          {task.diff && <DiffStat added={task.diff.added} removed={task.diff.removed} className="shrink-0" />}
-          <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
-            {onApprove && canApprove(task, selfId) && (
-              <>
-                <Button
-                  variant="primary"
-                  className="h-7 px-2.5 text-meta"
-                  disabled={busy}
-                  onClick={() => run(() => onApprove(task.id, true))}
-                >
-                  {tr('team.task.approve')}
-                </Button>
-                <Button
-                  className="h-7 px-2.5 text-meta"
-                  disabled={busy}
-                  onClick={() => run(() => onApprove(task.id, false))}
-                >
-                  {tr('team.task.reject')}
-                </Button>
-              </>
-            )}
-            {live && canWithdraw(task, selfId) && !pending && (
-              <Button
-                variant="ghost"
-                className="h-7 px-2.5 text-meta"
-                disabled={busy}
-                onClick={() => run(() => onAction!(task.id, 'cancel'))}
-              >
-                {tr('channels.task.cancel')}
-              </Button>
-            )}
-            {live && held && control && (
-              <>
-                <Button
-                  variant="primary"
-                  className="h-7 px-2.5 text-meta"
-                  disabled={busy}
-                  onClick={() => run(() => onAction!(task.id, 'continue'))}
-                >
-                  {held === 'hops'
-                    ? tr('channels.task.continueHops', { count: limit })
-                    : held === 'duration'
-                      ? tr('channels.task.continueDuration', { time: relayDuration(limit) })
-                      : tr('channels.task.continue')}
-                </Button>
-                <Button
-                  className="h-7 px-2.5 text-meta"
-                  disabled={busy}
-                  onClick={() => run(() => onAction!(task.id, 'unlimit'))}
-                >
-                  {tr('channels.task.unlimit')}
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="h-7 px-2.5 text-meta"
-                  disabled={busy}
-                  onClick={() => run(() => onAction!(task.id, 'cancel'))}
-                >
-                  {tr('channels.task.stopRelay')}
-                </Button>
-                {channel && channel.scope === 'local' && (
-                  <Button variant="ghost" className="h-7 px-2.5 text-meta" onClick={() => setEditRules(true)}>
-                    {tr('channels.task.editRules')}
-                  </Button>
-                )}
-              </>
-            )}
-            {live && task.status === 'queued' && !held && control && !pending && (
-              <Button
-                variant="ghost"
-                className="h-7 px-2.5 text-meta"
-                disabled={busy}
-                onClick={() => run(() => onAction!(task.id, 'cancel'))}
-              >
-                {tr('channels.task.cancel')}
-              </Button>
-            )}
-            {live && task.status === 'running' && control && !pending && (
-              <Button
-                variant="ghost"
-                className="h-7 px-2.5 text-meta"
-                disabled={busy}
-                onClick={() => run(() => onAction!(task.id, 'stop'))}
-              >
-                {tr('channels.task.stop')}
-              </Button>
-            )}
-            {live && inline && onAnswer && (
-              <>
-                <Button
-                  variant="primary"
-                  className="h-7 px-2.5 text-meta"
-                  disabled={busy}
-                  onClick={() => run(() => onAnswer(task, true))}
-                >
-                  {tr('channels.task.allow')}
-                </Button>
-                {task.request?.canDeny !== false && (
-                  <Button
-                    className="h-7 px-2.5 text-meta"
-                    disabled={busy}
-                    onClick={() => run(() => onAnswer(task, false))}
-                  >
-                    {tr('channels.task.deny')}
-                  </Button>
-                )}
-              </>
-            )}
-            {live && task.status === 'waiting' && mine && !inline && open && (
-              <Button variant="primary" className="h-7 px-2.5 text-meta" onClick={open}>
-                {tr('channels.task.answer')}
-              </Button>
-            )}
-            {live && (task.status === 'failed' || task.status === 'stopped') && control && !pending && (
-              <Button
-                className="h-7 px-2.5 text-meta"
-                disabled={busy}
-                onClick={() => run(() => onAction!(task.id, 'retry'))}
-              >
-                {tr('channels.task.retry')}
-              </Button>
-            )}
-            {live && task.status === 'done' && onFollowUp && (
-              <Button variant="ghost" className="h-7 px-2.5 text-meta" onClick={() => onFollowUp(task.id)}>
-                {tr('channels.task.followUp')}
-              </Button>
-            )}
-            {open && (live || task.status !== 'waiting') && (
-              <Button variant="outline" className="h-7 px-2.5 text-meta" onClick={open}>
-                {tr('channels.openSession')}
-              </Button>
-            )}
-            {!live && open && task.status === 'waiting' && (
-              <Button variant="outline" className="h-7 px-2.5 text-meta" onClick={open}>
-                {tr('channels.approve')}
-              </Button>
-            )}
-          </div>
+      )}
+      {(header || !attached) && <div className="text-list font-medium break-words text-fg">{task.title}</div>}
+      {!header && (
+        <div className="text-meta text-fg-faint">
+          {tr('channels.task.assigned', { author: author?.name ?? '?', assignee: assignee?.name ?? '?' })} ·{' '}
+          <time dateTime={new Date(task.at).toISOString()} className="tabular-nums">
+            {formatClock(task.at)}
+          </time>
         </div>
-      </article>
+      )}
+      {task.issue && (
+        // 从任务看板的事项派来的：点了去看板（docs/ui/channels-collab-v2.md §9）
+        <button
+          type="button"
+          data-task-issue
+          onClick={() => setPage('board')}
+          className="press mt-1 inline-flex max-w-full items-center gap-1 self-start rounded px-1 text-meta text-fg-muted hover:bg-hover hover:text-fg"
+        >
+          <SquareKanban size={12} strokeWidth={1.75} className="shrink-0" />
+          <span className="truncate">{tr('board.issue.chip', { title: task.issue.title })}</span>
+        </button>
+      )}
+      {task.summary && !resultShown && <p className="mt-1 text-list break-words text-fg-secondary">{task.summary}</p>}
+      {activity && (
+        <p
+          data-task-activity={activity.line.kind}
+          title={activityTooltip(activity.line, activity.steps, activity.seen, now)}
+          className="mt-1 truncate text-meta text-fg-muted"
+        >
+          {activity.line.text}
+          {activity.line.kind === 'step' && activity.line.stepId && (
+            <span className="text-fg-faint tabular-nums"> · {agoText(now - activity.seen(activity.line.stepId))}</span>
+          )}
+        </p>
+      )}
+      {task.status === 'failed' && task.error && (
+        <p className="mt-1 line-clamp-3 text-meta break-words text-danger" title={translateMessage(task.error)}>
+          {translateMessage(task.error)}
+        </p>
+      )}
+      {task.status === 'waiting' && task.request && (
+        <p
+          className={cn('mt-1 line-clamp-2 text-meta break-words text-fg-muted', task.request.command && 'font-mono')}
+          title={task.request.command ?? task.request.title}
+        >
+          {waitingText(task.request)}
+          {(task.waitingCount ?? 1) > 1 && (
+            <span data-waiting-more className="ml-1.5 font-sans text-fg-faint">
+              {tr('channels.task.waitingMore', { n: (task.waitingCount ?? 1) - 1 })}
+            </span>
+          )}
+        </p>
+      )}
+      {held && (
+        <p data-relay-held={held} className="mt-1.5 text-meta break-words text-warn">
+          {held === 'hops'
+            ? tr('channels.task.heldHops', { count: limit })
+            : held === 'duration'
+              ? tr('channels.task.heldDuration', { time: relayDuration(limit) })
+              : tr('channels.task.heldPair', {
+                  a: author?.name ?? '?',
+                  b: assignee?.name ?? '?',
+                  count: limit,
+                  window,
+                })}
+        </p>
+      )}
+      {task.decision && (
+        <p className="mt-1.5 text-list break-words text-warn">
+          {tr('channels.task.decision', { text: task.decision })}
+        </p>
+      )}
+      {task.status === 'queued' && task.ownerOffline && !mine && (
+        <p className="mt-1 text-meta text-fg-muted">{tr('team.task.ownerOffline', { owner: ownerName })}</p>
+      )}
+      {pending && <p className="mt-1 text-meta text-fg-faint">{tr(PENDING_KEY[pending])}</p>}
+      {task.checks && (
+        <CheckSummary
+          run={task.checks}
+          className="mt-1.5"
+          onFix={
+            onAction
+              ? () =>
+                  onAction(task.id, 'fix').catch(e =>
+                    toast(tr('checks.fixFailed', { error: translateMessage((e as Error).message) })),
+                  )
+              : undefined
+          }
+        />
+      )}
+      {task.disconnected && (
+        <p className="mt-1 flex items-center gap-1.5 text-meta text-fg-muted">
+          <Unplug size={12} strokeWidth={1.75} className="shrink-0" />
+          {tr('channels.task.disconnected')}
+        </p>
+      )}
+      <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 text-meta text-fg-faint">
+        {meta && <span className="min-w-0 truncate">{meta}</span>}
+        {task.diff && <DiffStat added={task.diff.added} removed={task.diff.removed} className="shrink-0" />}
+        <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
+          {onApprove && canApprove(task, selfId) && (
+            <>
+              <Button
+                variant="primary"
+                className="h-7 px-2.5 text-meta"
+                disabled={busy}
+                onClick={() => run(() => onApprove(task.id, true))}
+              >
+                {tr('team.task.approve')}
+              </Button>
+              <Button
+                className="h-7 px-2.5 text-meta"
+                disabled={busy}
+                onClick={() => run(() => onApprove(task.id, false))}
+              >
+                {tr('team.task.reject')}
+              </Button>
+            </>
+          )}
+          {live && canWithdraw(task, selfId) && !pending && (
+            <Button
+              variant="ghost"
+              className="h-7 px-2.5 text-meta"
+              disabled={busy}
+              onClick={() => run(() => onAction!(task.id, 'cancel'))}
+            >
+              {tr('channels.task.cancel')}
+            </Button>
+          )}
+          {live && held && control && (
+            <>
+              <Button
+                variant="primary"
+                className="h-7 px-2.5 text-meta"
+                disabled={busy}
+                onClick={() => run(() => onAction!(task.id, 'continue'))}
+              >
+                {held === 'hops'
+                  ? tr('channels.task.continueHops', { count: limit })
+                  : held === 'duration'
+                    ? tr('channels.task.continueDuration', { time: relayDuration(limit) })
+                    : tr('channels.task.continue')}
+              </Button>
+              <Button
+                className="h-7 px-2.5 text-meta"
+                disabled={busy}
+                onClick={() => run(() => onAction!(task.id, 'unlimit'))}
+              >
+                {tr('channels.task.unlimit')}
+              </Button>
+              <Button
+                variant="ghost"
+                className="h-7 px-2.5 text-meta"
+                disabled={busy}
+                onClick={() => run(() => onAction!(task.id, 'cancel'))}
+              >
+                {tr('channels.task.stopRelay')}
+              </Button>
+              {channel && channel.scope === 'local' && (
+                <Button variant="ghost" className="h-7 px-2.5 text-meta" onClick={() => setEditRules(true)}>
+                  {tr('channels.task.editRules')}
+                </Button>
+              )}
+            </>
+          )}
+          {live && task.status === 'queued' && !held && control && !pending && (
+            <Button
+              variant="ghost"
+              className="h-7 px-2.5 text-meta"
+              disabled={busy}
+              onClick={() => run(() => onAction!(task.id, 'cancel'))}
+            >
+              {tr('channels.task.cancel')}
+            </Button>
+          )}
+          {live && task.status === 'running' && control && !pending && (
+            <Button
+              variant="ghost"
+              className="h-7 px-2.5 text-meta"
+              disabled={busy}
+              onClick={() => run(() => onAction!(task.id, 'stop'))}
+            >
+              {tr('channels.task.stop')}
+            </Button>
+          )}
+          {live && inline && onAnswer && (
+            <>
+              <Button
+                variant="primary"
+                className="h-7 px-2.5 text-meta"
+                disabled={busy}
+                onClick={() => run(() => onAnswer(task, true))}
+              >
+                {tr('channels.task.allow')}
+              </Button>
+              {task.request?.canDeny !== false && (
+                <Button
+                  className="h-7 px-2.5 text-meta"
+                  disabled={busy}
+                  onClick={() => run(() => onAnswer(task, false))}
+                >
+                  {tr('channels.task.deny')}
+                </Button>
+              )}
+            </>
+          )}
+          {live && task.status === 'waiting' && mine && !inline && open && (
+            <Button variant="primary" className="h-7 px-2.5 text-meta" onClick={open}>
+              {tr('channels.task.answer')}
+            </Button>
+          )}
+          {live && (task.status === 'failed' || task.status === 'stopped') && control && !pending && (
+            <Button
+              className="h-7 px-2.5 text-meta"
+              disabled={busy}
+              onClick={() => run(() => onAction!(task.id, 'retry'))}
+            >
+              {tr('channels.task.retry')}
+            </Button>
+          )}
+          {live && task.status === 'done' && onFollowUp && (
+            <Button variant="ghost" className="h-7 px-2.5 text-meta" onClick={() => onFollowUp(task.id)}>
+              {tr('channels.task.followUp')}
+            </Button>
+          )}
+          {open && (live || task.status !== 'waiting') && (
+            <Button variant="outline" className="h-7 px-2.5 text-meta" onClick={open}>
+              {tr('channels.openSession')}
+            </Button>
+          )}
+          {!live && open && task.status === 'waiting' && (
+            <Button variant="outline" className="h-7 px-2.5 text-meta" onClick={open}>
+              {tr('channels.approve')}
+            </Button>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+  if (!compact)
+    return (
+      <div className="conversation-message mt-3 pl-10" data-channel-message={task.id}>
+        {dialog}
+        {article(true)}
+      </div>
+    )
+  const pill = pillTone(task, !!held)
+  const chip = (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      title={task.title}
+      onClick={() => setExpanded(!expanded)}
+      className={cn(
+        'press inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-full border py-0.5 pr-2 pl-0.5 text-meta text-fg-muted hover:border-line-strong hover:text-fg',
+        relayLine ? 'border-dashed border-line-strong bg-transparent' : 'bg-surface',
+        !relayLine && (task.status === 'failed' ? 'border-danger/50' : flagged ? 'border-warn/50' : 'border-line-card'),
+        highlight && 'search-hit',
+      )}
+    >
+      <MemberAvatar member={assignee} size={18} className="rounded-full" />
+      <span className="shrink-0">
+        {!attached
+          ? `${author?.name ?? '?'} → ${assignee?.name ?? '?'}`
+          : tr('channels.task.chipTo', { name: assignee?.name ?? '?' })}
+      </span>
+      <span
+        className={cn(
+          'inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 text-[11px] leading-4 font-medium',
+          pill,
+        )}
+      >
+        {status ? <status.icon size={11} strokeWidth={2} className="shrink-0" /> : <Spinner size={9} />}
+        {statusText(task, ownerName, mine)}
+        {detail && <span className="font-normal opacity-80">· {detail}</span>}
+      </span>
+      {!attached && <span className="min-w-0 truncate text-fg-faint">{task.title}</span>}
+      {attached && activity && !expanded && (
+        <span className="min-w-0 truncate text-fg-faint">{activity.line.text}</span>
+      )}
+      {task.diff && task.status === 'done' && (
+        <DiffStat added={task.diff.added} removed={task.diff.removed} className="shrink-0" />
+      )}
+      <ChevronDown
+        size={12}
+        strokeWidth={2}
+        className={cn('shrink-0 text-fg-faint transition-transform', expanded && 'rotate-180')}
+      />
+    </button>
+  )
+  return (
+    <div
+      data-channel-message={task.id}
+      data-task-chip={task.status}
+      className={cn(
+        'group/thread flex max-w-full min-w-0 flex-col gap-1',
+        relayLine ? 'conversation-message mt-2 items-center' : align === 'end' ? 'items-end' : 'items-start',
+        !attached && !relayLine && 'conversation-message mt-2',
+        !attached && !relayLine && align === 'start' && 'pl-[38px]',
+        attached && 'mt-1',
+      )}
+    >
+      {dialog}
+      <div
+        className={cn(
+          'flex max-w-full min-w-0 items-center gap-1',
+          align === 'end' && !relayLine && 'flex-row-reverse',
+        )}
+      >
+        {chip}
+        {/* 讨论串入口不让状态条挤窄（不然「在串里讨论」会一个字一行竖着排），长的是状态条自己截断 */}
+        {thread && <div className="max-w-[45%] shrink-0 whitespace-nowrap">{thread}</div>}
+      </div>
+      {expanded && article(false)}
     </div>
   )
+}
+
+/** 状态条上状态那一小块的颜色 */
+function pillTone(task: ChannelTask, held: boolean): string {
+  if (held || task.status === 'waiting' || task.status === 'approval') return 'bg-warn/15 text-warn-fg'
+  if (task.status === 'done') return 'bg-success/15 text-success'
+  if (task.status === 'failed') return 'bg-danger/15 text-danger'
+  if (task.status === 'running') return 'bg-accent-soft text-accent-fg'
+  return 'bg-subtle text-fg-muted'
 }

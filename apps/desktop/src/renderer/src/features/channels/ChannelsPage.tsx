@@ -11,7 +11,7 @@ import type { TaskCardActions } from './ChannelTaskCard'
 import { ChannelList } from './ChannelList'
 import { ChannelTimeline } from './ChannelTimeline'
 import { ChannelComposer } from './ChannelComposer'
-import { NewFlowButton } from './NewFlowButton'
+import { LeadHint } from './LeadHint'
 import { ChannelMembers } from './ChannelMembers'
 import { ChannelsEmpty } from './ChannelsEmpty'
 import { ThreadPanel } from './ThreadPanel'
@@ -187,7 +187,7 @@ export function ChannelsPage({
             <ArchivedBar channel={channel} />
           ) : (
             <>
-              {channel.scope === 'local' && <NewFlowButton channel={channel} members={channelMembers} />}
+              {channel.scope === 'local' && <LeadHint channel={channel} members={channelMembers} />}
               <ChannelComposer
                 key={channel.id}
                 channel={channel}

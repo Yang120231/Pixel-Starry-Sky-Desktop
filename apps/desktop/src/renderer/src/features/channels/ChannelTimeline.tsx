@@ -3,13 +3,21 @@ import { tr, translateMessage } from '../../i18n/core'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Hash, Info, UserMinus, UserPlus, Users } from 'lucide-react'
 import { Spinner, useToast } from '@/ui'
-import type { Channel, ChannelEvent, ChannelMember, ChannelMessage } from '@/data/types'
-import { buildTimeline } from './model'
-import { formatDay } from './format'
-import { MessageGroup, ThreadRow, type Quotable } from './ChannelMessage'
+import type {
+  Channel,
+  ChannelEvent,
+  ChannelMember,
+  ChannelMessage,
+  ChannelTask,
+  ChannelTextMessage,
+} from '@/data/types'
+import { buildTimeline, tasksWithResult, type FlowPart } from './model'
+import { formatClock, formatDay } from './format'
+import { isSelfAuthor, MessageGroup, ThreadRow, type Quotable } from './ChannelMessage'
 import { threadStats } from '../../../../shared/channels/threads'
 import { ChannelTaskCard, type TaskCardActions } from './ChannelTaskCard'
 import { ChannelFlowCard } from './ChannelFlowCard'
+import { PlannerHandoff, PlannerRow } from './PlannerRow'
 import { channelActions, useChannels } from './store'
 
 /** 离底部这么近时，新消息到来自动跟到底部 */
@@ -42,6 +50,17 @@ function eventText(event: ChannelEvent, name: (id: string | null | undefined) =>
     case 'restored':
       return tr('channels.event.restored', { actor: name(event.actorId) })
   }
+}
+
+/** 同一天里隔了一阵的时间：居中的一小行字，不画线 */
+function TimeMark({ at }: { at: number }) {
+  return (
+    <div className="conversation-message mt-4 mb-1 flex justify-center">
+      <time dateTime={new Date(at).toISOString()} className="text-meta text-fg-faint tabular-nums">
+        {formatClock(at)}
+      </time>
+    </div>
+  )
 }
 
 function Divider({ label, accent }: { label: string; accent?: boolean }) {
@@ -89,6 +108,7 @@ export function ChannelTimeline({
   const [highlight, setHighlight] = useState<string | null>(null)
   const rows = useMemo(() => buildTimeline(messages, { newFrom }), [messages, newFrom])
   const threads = useMemo(() => threadStats(messages), [messages])
+  const results = useMemo(() => tasksWithResult(messages), [messages])
   const membersById = useMemo(() => new Map(members.map(m => [m.id, m])), [members])
   const messagesById = useMemo(
     () => new Map(messages.filter((m): m is Quotable => m.kind !== 'event').map(m => [m.id, m])),
@@ -125,7 +145,21 @@ export function ChannelTimeline({
       })
   }
   const name = (id: string | null | undefined) => (id ? membersById.get(id)?.name : undefined) ?? '?'
-  const working = channelMembers.filter(m => m.kind === 'agent' && m.status === 'running')
+  // 正在拟计划的成员：进度写在流程卡里，底部不再说一遍
+  const planning = useMemo(() => {
+    const list: ChannelTask[] = []
+    for (const m of messages)
+      if (m.kind === 'task' && m.flow?.stepId === '' && (m.status === 'running' || m.status === 'waiting')) list.push(m)
+    return list
+  }, [messages])
+  const working = channelMembers.filter(
+    m =>
+      m.kind === 'agent' &&
+      m.status === 'running' &&
+      !planning.some(
+        t => t.assigneeId === m.id && (t.title === m.task || (!!t.sessionId && t.sessionId === m.sessionId)),
+      ),
+  )
   const now = Date.now()
 
   // 换频道：有新消息分隔线就停在它附近，否则到底部
@@ -187,6 +221,41 @@ export function ChannelTimeline({
   }, [focus, channel.id, messages.length])
 
   const pinned = useMemo(() => new Set(channel.pinned ?? []), [channel.pinned])
+  const selfId = taskActions.selfId ?? null
+
+  /** 任务卡的一行状态条：挂在派活那条消息下面时 attached，自己派的靠右 */
+  const taskChip = (task: ChannelTask, attached: boolean) => (
+    <ChannelTaskCard
+      key={task.id}
+      task={task}
+      membersById={membersById}
+      highlight={highlight === task.id}
+      compact
+      attached={attached}
+      resultShown={results.has(task.id)}
+      align={isSelfAuthor(membersById.get(task.authorId), task.authorId, selfId) ? 'end' : 'start'}
+      thread={
+        onThread && (
+          <ThreadRow rootId={task.id} stats={threads} membersById={membersById} onOpen={onThread} idle={!!onReply} />
+        )
+      }
+      {...taskActions}
+    />
+  )
+
+  const flowCard = (message: ChannelTextMessage, attached: boolean, part: FlowPart = 'whole') => (
+    <ChannelFlowCard
+      key={message.id}
+      message={message}
+      part={part}
+      membersById={membersById}
+      channelMembers={channelMembers}
+      readOnly={!!channel.archivedAt || channel.scope !== 'local'}
+      highlight={highlight === message.id}
+      attached={attached}
+      onOpenSession={channel.scope === 'local' ? taskActions.onOpenSession : undefined}
+    />
+  )
 
   return (
     <div
@@ -224,7 +293,9 @@ export function ChannelTimeline({
         {rows.map(row => {
           switch (row.kind) {
             case 'day':
-              return <Divider key={row.key} label={formatDay(row.at, now)} />
+              return <Divider key={row.key} label={`${formatDay(row.at, now)} ${formatClock(row.first)}`} />
+            case 'time':
+              return <TimeMark key={row.key} at={row.at} />
             case 'new':
               return (
                 <div key={row.key} data-new-divider>
@@ -253,43 +324,34 @@ export function ChannelTimeline({
                 </div>
               )
             case 'task':
-              return (
-                <div key={row.key} className="group/thread">
-                  <ChannelTaskCard
-                    task={row.message}
-                    membersById={membersById}
-                    highlight={highlight === row.message.id}
-                    {...taskActions}
-                  />
-                  {onThread && (
-                    <div className="conversation-message pl-10">
-                      <ThreadRow
-                        rootId={row.message.id}
-                        stats={threads}
-                        membersById={membersById}
-                        onOpen={onThread}
-                        idle={!!onReply}
-                      />
-                    </div>
-                  )}
-                </div>
-              )
+              return taskChip(row.message, false)
             case 'flow':
-              return (
-                <ChannelFlowCard
-                  key={row.key}
-                  message={row.message}
-                  membersById={membersById}
-                  channelMembers={channelMembers}
-                  readOnly={!!channel.archivedAt || channel.scope !== 'local'}
-                  highlight={highlight === row.message.id}
-                />
+              // 拟计划的流程是拟计划的成员在说话：放在左边它的头像下面；手写的流程照常单独一张卡
+              return row.message.flow?.planner ? (
+                <PlannerRow key={row.key} message={row.message} part={row.part} raw={row.raw} membersById={membersById}>
+                  {flowCard(row.message, true, row.part)}
+                </PlannerRow>
+              ) : (
+                flowCard(row.message, false)
               )
             case 'group':
               return (
                 <MessageGroup
                   key={row.key}
                   items={row.items}
+                  selfId={selfId}
+                  renderBelow={
+                    row.tasks || row.flows
+                      ? m => (
+                          <>
+                            {row.tasks?.[m.id]?.map(task => taskChip(task, true))}
+                            {row.flows?.[m.id]?.map(flow => (
+                              <PlannerHandoff key={flow.id} flow={flow} membersById={membersById} onJump={jump} />
+                            ))}
+                          </>
+                        )
+                      : undefined
+                  }
                   membersById={membersById}
                   channelMembers={channelMembers}
                   messagesById={messagesById}
@@ -309,7 +371,7 @@ export function ChannelTimeline({
           }
         })}
         {working.length > 0 && (
-          <div role="status" className="conversation-message mt-4 flex flex-col gap-1 pl-10">
+          <div role="status" className="conversation-message mt-4 flex flex-col gap-1 pl-[38px]">
             {working.map(m => (
               <div key={m.id} className="flex min-w-0 items-center gap-2 text-meta text-fg-muted">
                 <Spinner size={12} />

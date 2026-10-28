@@ -387,6 +387,8 @@ export interface FlowStepPromptInput {
   pinned?: string[]
   instructions: string
   flow: string
+  /** 分工提案里定下来的要点和还没定的 */
+  brief?: FlowBriefInput | null
   lines: FlowLine[]
   step: { no: string; title: string; kind: 'work' | 'review' | 'summary' }
   inputs: FlowInput[]
@@ -402,6 +404,32 @@ export interface FlowStepPromptInput {
   forks?: boolean
   /** 汇合步骤：好几个分支都改了的文件（steps 是步骤序号） */
   overlap?: { path: string; steps: string[] }[]
+}
+
+/** 要点（和 shared 的 FlowBrief 同形，by 不用） */
+export interface FlowBriefInput {
+  goal: string
+  facts: { k: string; v: string }[]
+  open: { q: string; required: boolean }[]
+}
+
+/** 要点写进提示词：目标、定下来的、还没定的（还没定的按合理默认值定，交付时写明） */
+function briefText(b: FlowBriefInput | null | undefined, locale: Locale): string {
+  if (!b || (!b.goal && !b.facts.length && !b.open.length)) return ''
+  const lines: string[] = []
+  if (en(locale)) {
+    if (b.goal) lines.push(`Goal: ${b.goal}`)
+    for (const f of b.facts) lines.push(`- ${f.k}: ${f.v}`)
+    if (b.open.length)
+      lines.push(
+        `Not decided yet (use a sensible default and say what you chose when you deliver): ${b.open.map(o => o.q).join('; ')}`,
+      )
+    return `What the people in the channel agreed on (follow it):\n${lines.join('\n')}`
+  }
+  if (b.goal) lines.push(`目标：${b.goal}`)
+  for (const f of b.facts) lines.push(`- ${f.k}：${f.v}`)
+  if (b.open.length) lines.push(`还没定的（按合理默认值定，交付时写明你定了什么）：${b.open.map(o => o.q).join('；')}`)
+  return `频道里大家定下来的要点（照着做）：\n${lines.join('\n')}`
 }
 
 function inputText(i: FlowInput, locale: Locale): string {
@@ -436,6 +464,7 @@ export function flowStepPrompt(input: FlowStepPromptInput): string {
       input.instructions.trim() ? `Your role:\n${input.instructions.trim()}` : '',
       input.notes?.trim() ? `Channel guidelines:\n${input.notes.trim()}` : '',
       pinned.length ? `Pinned reference:\n${pinned.map(p => `- ${p}`).join('\n')}` : '',
+      briefText(input.brief, locale),
       `The flow (→ is your step):\n${overview}`,
       input.inputs.length
         ? `Delivered by earlier steps:\n${input.inputs.map(i => inputText(i, locale)).join('\n')}`
@@ -459,7 +488,7 @@ export function flowStepPrompt(input: FlowStepPromptInput): string {
         ? 'The next steps branch off from the current commit of this folder. Before task_done, commit the files you changed in this step (only yours, not git add -A); otherwise the next steps will not see them.'
         : '',
       `Your step: ${step.no} ${step.title}`,
-      `When you are really done, call the task_done tool (summary, files you changed); the flow moves on only after task_done. If you need something from another member${peers ? ` (${peers})` : ''}, call member_ask and then end your turn; the answer will be sent to you as a new message.`,
+      `When you are really done, call the task_done tool (summary, files you changed); the flow moves on only after task_done. If you need something from another member${peers ? ` (${peers})` : ''}, call member_ask and then end your turn; the answer will be sent to you as a new message. If something only the user can decide is missing (it changes the result and you cannot infer it), call user_ask and end your turn instead of guessing or stopping; keep doing the parts that do not depend on it.`,
     ]
       .filter(Boolean)
       .join('\n\n')
@@ -468,6 +497,7 @@ export function flowStepPrompt(input: FlowStepPromptInput): string {
     input.instructions.trim() ? `你的职责：\n${input.instructions.trim()}` : '',
     input.notes?.trim() ? `频道说明：\n${input.notes.trim()}` : '',
     pinned.length ? `频道里置顶的资料：\n${pinned.map(p => `- ${p}`).join('\n')}` : '',
+    briefText(input.brief, locale),
     `整个流程（→ 是你这一步）：\n${overview}`,
     input.inputs.length ? `前面的步骤交上来的：\n${input.inputs.map(i => inputText(i, locale)).join('\n')}` : '',
     input.target
@@ -489,7 +519,7 @@ export function flowStepPrompt(input: FlowStepPromptInput): string {
       ? '后面的步骤会从这个目录的当前提交分出去。调用 task_done 之前把你这一步改的文件提交（只提交你改的，别用 git add -A），不然后面的步骤看不到。'
       : '',
     `你这一步：${step.no} ${step.title}`,
-    `确实做完了再调用 task_done 工具交付（摘要、你改的文件）；流程只在 task_done 之后往下走。需要别的成员${peers ? `（${peers}）` : ''}提供东西时，调用 member_ask，然后结束这一轮，回答会作为新消息发给你。`,
+    `确实做完了再调用 task_done 工具交付（摘要、你改的文件）；流程只在 task_done 之后往下走。需要别的成员${peers ? `（${peers}）` : ''}提供东西时，调用 member_ask，然后结束这一轮，回答会作为新消息发给你。缺了只有用户能定的信息（影响结果、又推不出来）时，调用 user_ask 问用户再结束这一轮，不要瞎猜，也不要直接停下；不依赖它的部分先做。`,
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -503,6 +533,10 @@ export function flowPlanPrompt(input: {
   members: { name: string; role: string }[]
   /** 牵头成员按用户不带 @ 的消息自动拆的：只是问题、一步能做完时直接回答 */
   auto?: boolean
+  /** 用户 @ 它派的活：先出计划，一个人能做完的计划可以只有一步给它自己 */
+  mention?: boolean
+  /** 换人接手时：前一个成员拆到哪了、用户答过什么 */
+  handover?: string
 }): string {
   const sep = en(input.locale) ? ': ' : '：'
   const list = input.members.map(m => `- ${m.name}${m.role ? `${sep}${m.role}` : ''}`).join('\n')
@@ -510,10 +544,19 @@ export function flowPlanPrompt(input: {
     return [
       `In the channel #${input.channel}, the user wants this done by several AI members as a flow:\n${input.request}`,
       `Members you can use:\n${list}`,
+      'You are in plan mode (read-only): look, do not change anything. Deliver through task_done; do not call ExitPlanMode or ask to leave plan mode.',
       'Split it into at most 9 steps. Each step: title (what to do), member (exact name), deps (numbers of the steps that must be delivered first, counting from 1), kind ("work"; "review" with target = the step number it reviews; or "summary" for the final wrap-up). Steps that do not depend on each other run in parallel. If the work spans several layers (say the main process and the UI), first add a step that defines the shared interfaces and types, and make the others depend on it. Steps that run at the same time should not change the same files; put anything they share into that earlier step. Do not do the work yourself.',
-      'When the split is ready, call task_done with summary (one line) and steps. The user will check it and start it.',
+      'Ask first, all at once: if something changes the result and cannot be inferred, call task_done once with summary and questions (at most 6, each {q, options}: 2-4 short options where possible) and no steps. The answers will be sent to you. Ask only what really matters; if nothing, skip this.',
+      'Then deliver the complete plan in one go, without asking again: steps (each may also have effort: "low" | "medium" | "high" | "xhigh", the reasoning effort that step needs; think hard on interfaces and reviews, less on mechanical work) and brief: goal (one line), facts (what was decided, {k, v}; things you decided for the user get suggested: true, e.g. acceptance criteria or tech stack nobody named). Leave open empty. Also give title: a short name for the plan (at most 20 characters), not a copy of the request. Nobody starts yet: the user can edit it or ask for changes, and starts it when ready.',
+      'If the task_done tool is not available to you, put exactly the same JSON (summary, title, questions or steps and brief) in a ```json block at the end of your reply instead; the app reads it from there.',
       input.auto
         ? 'You are the lead of this channel and the user did not name anyone. If this is just a question, or one member can finish it in one go, do not call task_done: answer directly in your reply.'
+        : '',
+      input.mention
+        ? 'The user named you for this. Plan it before doing anything; if you can do it alone, a one-step plan assigned to yourself is fine. If it is only a question that needs no changes, answer directly and do not call task_done.'
+        : '',
+      input.handover
+        ? `You are taking over from another member. Where they got to:\n${input.handover}\nKeep the user's answers and decisions; deliver the complete plan.`
         : '',
     ]
       .filter(Boolean)
@@ -521,10 +564,19 @@ export function flowPlanPrompt(input: {
   return [
     `用户想在频道 #${input.channel} 里让几个 AI 成员按流程做这件事：\n${input.request}`,
     `能用的成员：\n${list}`,
+    '你现在在计划模式（只读）：只看不改。计划用 task_done 交，不要调用 ExitPlanMode，也不要申请退出计划模式。',
     '把它拆成最多 9 步。每一步写：title（做什么）、member（成员名字，原样写）、deps（要先交付的步骤序号，从 1 数）、kind（"work" 干活；"review" 审查，target 写审第几步；"summary" 最后汇总）。互相不依赖的步骤会同时做。跨好几层的活（比如主进程和界面都要改），先安排一步定共用的接口和类型，其余步骤依赖它；同时做的步骤不要改同一批文件，要共用的东西放进前面那一步。不要自己动手做这件事。',
-    '拆好后调用 task_done：summary 写一句话，steps 写上面的步骤。用户确认后才会开始。',
+    '先问、一次问完：有影响结果、又推不出来的事要用户定时，先只调用一次 task_done，写 summary 和 questions（最多 6 个，每个 {q, options}，尽量给 2–4 个简短选项），不写 steps。用户答完会发给你。只问真正要紧的，没有就跳过这一步。',
+    '然后一次交出完整计划，不要再追问：steps（每一步可以带 effort："low" | "medium" | "high" | "xhigh"，这一步需要的推理强度；定接口、审查要想得深，照着写的活用低一些）和 brief：goal（一句话目标）、facts（定下来的，{k, v}；你替用户定的标 suggested: true，比如没人提的验收标准、技术栈），open 留空。再写 title：给计划起个短名字（20 字以内），不要照抄用户的原话。现在不会开工：用户可以直接改、或说要改哪里，确认后才开始。',
+    '如果你这边没有 task_done 工具，就把一模一样的 JSON（summary、title、questions 或 steps 和 brief）放在回复最后的 ```json 代码块里，软件会从那里读取。',
     input.auto
       ? '你是这个频道的牵头成员，用户没有点名交给谁。如果这只是个问题，或者一个成员一次就能做完，不要调用 task_done，直接在回复里回答。'
+      : '',
+    input.mention
+      ? '用户点名把这件事交给你。先拟计划，不要动手；你一个人能做完的，计划可以只有一步、交给你自己。如果只是个问题、不用改东西，直接在回复里回答，不要调用 task_done。'
+      : '',
+    input.handover
+      ? `你接手另一个成员拟的计划。它做到这里：\n${input.handover}\n保留用户的回答和定下的东西，交出完整计划。`
       : '',
   ]
     .filter(Boolean)
@@ -532,6 +584,54 @@ export function flowPlanPrompt(input: {
 }
 
 const quote = (text: string): string => `> ${text.trim().replace(/\n/g, '\n> ')}`
+
+/** 提案还没开工时，频道里有人接着说（补充细节、改主意、回答问题）：发给拆提案的成员改 */
+export function flowRefinePrompt(input: {
+  locale: Locale
+  from: string
+  text: string
+  steps: { title: string; member: string; deps: number[]; kind: string }[]
+  brief: FlowBriefInput | null
+  /** 带了图片 / 文件（这里只转文字） */
+  attached?: boolean
+}): string {
+  const steps = input.steps
+    .map(
+      (s, i) =>
+        `${i + 1}. ${s.title} · ${s.member}${s.deps.length ? ` · deps ${s.deps.join(',')}` : ''}${s.kind !== 'work' ? ` · ${s.kind}` : ''}`,
+    )
+    .join('\n')
+  const brief = briefText(input.brief, input.locale)
+  if (en(input.locale))
+    return [
+      `${input.from} said in the channel, about the proposal you made (nothing has started yet):\n${quote(input.text)}`,
+      input.attached
+        ? '(They also attached images or files, which you cannot see here; ask in your reply if you need them.)'
+        : '',
+      `Current steps:\n${steps || '(none)'}`,
+      brief ? `Current ${brief}` : '',
+      'If this adds details or asks for changes, update the plan: call task_done again with the complete steps and brief (facts gets what was just decided). Change only what they asked for and keep the rest, including edits they made on the card. Do not ask new questions. Then reply in one or two lines with what changed. If it does not change the proposal (just chat or a question), only reply; do not call task_done. Do not start the work.',
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+  return [
+    `${input.from} 在频道里接着说（关于你拆的提案，现在还没开工）：\n${quote(input.text)}`,
+    input.attached ? '（还带了图片或文件，这里看不到；需要的话在回复里说）' : '',
+    `现在的步骤：\n${steps || '（还没有）'}`,
+    brief ? `现在的${brief}` : '',
+    '如果这是在补充细节或要你改，就更新计划：再调用一次 task_done，交回完整的 steps 和 brief（刚定下的写进 facts）。只改用户要改的，其余照旧，包括用户在卡上改过的分工；不要再提新问题。然后在回复里用一两句说改了什么。如果和计划无关（闲聊、提问），只在回复里回答，不要调用 task_done。不要开始干活。',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+/** 用户一次答完了拟计划时问的问题：接着一次交出完整计划 */
+export function flowAnswersPrompt(locale: Locale, items: { q: string; a: string }[]): string {
+  const list = items.map((x, i) => `${i + 1}. ${x.q}\n   ${en(locale) ? 'Answer' : '回答'}: ${x.a}`).join('\n')
+  return en(locale)
+    ? `The user answered your questions:\n${list}\n\nNow deliver the complete plan in one go with task_done (steps and brief, facts include these answers). Do not ask again.`
+    : `用户回答了你的问题：\n${list}\n\n现在用 task_done 一次交出完整计划（steps 和 brief，facts 里带上这些回答）。不要再问。`
+}
 
 /** 别的成员问过来的问题（发给被问的成员） */
 export function flowAskPrompt(locale: Locale, from: string, question: string): string {

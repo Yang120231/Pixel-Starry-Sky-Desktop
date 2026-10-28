@@ -2,6 +2,8 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '../../i18n/core'
 import { useMemo, useState } from 'react'
 import {
+  Archive,
+  ArchiveRestore,
   AtSign,
   ChevronDown,
   CloudOff,
@@ -9,6 +11,7 @@ import {
   Hash,
   Inbox,
   LogOut,
+  Pencil,
   Plus,
   Search,
   Settings,
@@ -66,7 +69,18 @@ function useCollapsed(): [readonly string[], (id: string) => void] {
   return [list, toggle]
 }
 
-function ChannelRow({ channel, selected, onSelect }: { channel: Channel; selected: boolean; onSelect: () => void }) {
+function ChannelRow({
+  channel,
+  selected,
+  onSelect,
+  onMenu,
+}: {
+  channel: Channel
+  selected: boolean
+  onSelect: () => void
+  /** 右键或点「⋯」：编辑、归档 / 恢复、删除（团队频道不给，在成员栏的菜单里按权限处理） */
+  onMenu?: (x: number, y: number) => void
+}) {
   useI18n()
   const label = [
     channel.name,
@@ -76,22 +90,48 @@ function ChannelRow({ channel, selected, onSelect }: { channel: Channel; selecte
     .filter(Boolean)
     .join(' · ')
   return (
-    <button
-      type="button"
-      aria-current={selected || undefined}
-      aria-label={label}
-      title={channel.topic ? `${channel.name}\n${channel.topic}` : channel.name}
-      onClick={onSelect}
-      className={cn(
-        'flex h-8 w-full min-w-0 shrink-0 items-center gap-2 rounded-md px-2.5 text-left text-list transition-colors',
-        selected ? 'bg-selected text-fg' : 'text-fg-secondary hover:bg-hover',
+    <div className="group relative shrink-0">
+      <button
+        type="button"
+        aria-current={selected || undefined}
+        aria-label={label}
+        title={channel.topic ? `${channel.name}\n${channel.topic}` : channel.name}
+        onClick={onSelect}
+        onContextMenu={
+          onMenu
+            ? e => {
+                e.preventDefault()
+                onMenu(e.clientX, e.clientY)
+              }
+            : undefined
+        }
+        className={cn(
+          'flex h-8 w-full min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-list transition-colors',
+          onMenu && 'group-hover:pr-9 group-focus-within:pr-9',
+          selected ? 'bg-selected text-fg' : 'text-fg-secondary hover:bg-hover',
+        )}
+      >
+        <Hash size={14} strokeWidth={1.5} className="shrink-0 text-fg-faint" />
+        <span className={cn('min-w-0 flex-1 truncate', channel.unread > 0 && 'font-medium text-fg')}>
+          {channel.name}
+        </span>
+        {channel.mentioned && <AtSign size={13} strokeWidth={2} className="shrink-0 text-accent-fg" />}
+        {channel.unread > 0 && <CountBadge count={channel.unread} />}
+      </button>
+      {onMenu && (
+        <IconButton
+          icon={Ellipsis}
+          label={tr('channels.members.channelMenu')}
+          size={24}
+          iconSize={14}
+          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
+          onClick={e => {
+            const r = e.currentTarget.getBoundingClientRect()
+            onMenu(r.right - 180, r.bottom + 4)
+          }}
+        />
       )}
-    >
-      <Hash size={14} strokeWidth={1.5} className="shrink-0 text-fg-faint" />
-      <span className={cn('min-w-0 flex-1 truncate', channel.unread > 0 && 'font-medium text-fg')}>{channel.name}</span>
-      {channel.mentioned && <AtSign size={13} strokeWidth={2} className="shrink-0 text-accent-fg" />}
-      {channel.unread > 0 && <CountBadge count={channel.unread} />}
-    </button>
+    </div>
   )
 }
 
@@ -337,9 +377,12 @@ export function ChannelList({
     | { kind: 'newTeam' }
     | { kind: 'settings'; teamId: string; tab: 'members' | 'settings'; focusInvite?: boolean }
     | { kind: 'leave'; team: TeamInfo }
+    | { kind: 'editChannel'; channel: Channel }
+    | { kind: 'deleteChannel'; channel: Channel }
     | null
   >(null)
   const [menu, setMenu] = useState<{ x: number; y: number; team: TeamInfo } | null>(null)
+  const [channelMenu, setChannelMenu] = useState<{ x: number; y: number; channel: Channel } | null>(null)
   const [busy, setBusy] = useState(false)
 
   const createLocal = () =>
@@ -382,6 +425,35 @@ export function ChannelList({
           },
         ]),
   ]
+
+  // 本机频道的右键菜单：和成员栏「⋯」里的一样（归档的只能恢复、删除）
+  const channelMenuActions = (c: Channel): MenuAction[] => {
+    const archive = (on: boolean) =>
+      void channelActions
+        .updateChannel(c.id, { archived: on })
+        .catch((e: unknown) =>
+          toast(tr('channels.task.actionFailed', { error: translateMessage((e as Error).message) })),
+        )
+    return [
+      ...(c.archivedAt
+        ? [{ label: tr('channels.channel.restore'), icon: ArchiveRestore, run: () => archive(false) }]
+        : [
+            {
+              label: tr('channels.channel.edit'),
+              icon: Pencil,
+              run: () => setDialog({ kind: 'editChannel', channel: c }),
+            },
+            { label: tr('channels.channel.archive'), icon: Archive, run: () => archive(true) },
+          ]),
+      {
+        label: tr('channels.channel.delete'),
+        icon: Trash2,
+        danger: true,
+        separator: true,
+        run: () => setDialog({ kind: 'deleteChannel', channel: c }),
+      },
+    ]
+  }
 
   return (
     <nav
@@ -451,7 +523,15 @@ export function ChannelList({
                     <SidebarEmpty>{tr('team.section.empty')}</SidebarEmpty>
                   )}
                   {rows.map(c => (
-                    <ChannelRow key={c.id} channel={c} selected={c.id === selectedId} onSelect={() => onSelect(c.id)} />
+                    <ChannelRow
+                      key={c.id}
+                      channel={c}
+                      selected={c.id === selectedId}
+                      onSelect={() => onSelect(c.id)}
+                      onMenu={
+                        channelsLive && c.scope !== 'team' ? (x, y) => setChannelMenu({ x, y, channel: c }) : undefined
+                      }
+                    />
                   ))}
                 </div>
               )}
@@ -512,8 +592,42 @@ export function ChannelList({
           onClose={() => setMenu(null)}
         />
       )}
+      {channelMenu && (
+        <ActionMenu
+          x={channelMenu.x}
+          y={channelMenu.y}
+          label={tr('channels.members.channelMenu')}
+          actions={channelMenuActions(channelMenu.channel)}
+          onClose={() => setChannelMenu(null)}
+        />
+      )}
       {dialog?.kind === 'channel' && (
         <ChannelDialog channel={null} agents={agents} teamId={dialog.teamId} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === 'editChannel' && (
+        <ChannelDialog channel={dialog.channel} agents={[]} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === 'deleteChannel' && (
+        <ConfirmDialog
+          danger
+          title={tr('channels.channel.deleteTitle', { name: dialog.channel.name })}
+          description={tr('channels.channel.deleteBody')}
+          confirmLabel={tr('channels.channel.deleteConfirm')}
+          cancelLabel={tr('channels.dialog.cancel')}
+          busy={busy}
+          onConfirm={() => {
+            setBusy(true)
+            channelActions
+              .deleteChannel(dialog.channel.id)
+              .then(
+                () => setDialog(null),
+                (e: unknown) =>
+                  toast(tr('channels.task.actionFailed', { error: translateMessage((e as Error).message) })),
+              )
+              .finally(() => setBusy(false))
+          }}
+          onCancel={() => setDialog(null)}
+        />
       )}
       {dialog?.kind === 'newTeam' && (
         <CreateTeamDialog

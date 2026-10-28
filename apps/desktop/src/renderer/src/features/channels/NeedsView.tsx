@@ -395,11 +395,12 @@ export function NeedsView() {
         items: [n.detail, n.findings ? tr('checks.findings', { count: n.findings }) : null].filter(Boolean).join(' · '),
       })
     if (n.kind === 'flow' && n.pause === 'gate') return tr('channels.flow.gate.detail')
+    if (n.kind === 'flow' && n.pause === 'ask') return tr('channels.flow.needsAsk', { q: n.detail ?? '' })
     if (n.kind === 'flow')
       return tr(
         n.pause === 'limit' && n.limit
           ? `channels.flow.pause.limit.${n.limit}`
-          : n.pause && n.pause !== 'gate'
+          : n.pause && n.pause !== 'gate' && n.pause !== 'ask'
             ? `channels.flow.pause.${n.pause}`
             : 'channels.flow.needsDraft',
       )
