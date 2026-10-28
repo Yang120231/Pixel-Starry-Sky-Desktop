@@ -1248,6 +1248,37 @@ describe('@ 派活先出计划', () => {
     expect(lastTo(tasks(c, ch).at(-1)!.sessionId!).text).toContain('哪种？：管理软件')
   })
 
+  it('拟计划在计划模式里用频道工具不用你批准：自动放行；别的工具照常等你确认', async () => {
+    const { c, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 帮我设计一个数据中心', clientId: 'p1' })
+    await settle()
+    const task = () => tasks(c, ch)[0]
+    const s = task().sessionId!
+    const ask = (id: string, toolName: string) =>
+      c.hostEvent(
+        ev(s, {
+          type: 'approval_request',
+          request: { requestId: id, itemId: null, kind: 'tool', title: `使用 ${toolName}`, toolName, alwaysScopes: [] },
+        }),
+      )
+    // 这一轮开始了（引擎回显了发出去的那条）
+    const x = lastTo(s)
+    c.hostEvent(
+      ev(s, {
+        type: 'item_completed',
+        item: { kind: 'user', id: x.clientMessageId, text: '', createdAt: 0, turnId: 't1' },
+      }),
+    )
+    ask('r1', 'mcp__pixelsky_channel__task_done')
+    await settle()
+    expect(calls.filter(x => x.channel === 'engine:answer').map(x => x.args)).toEqual([[s, 'r1', { type: 'allow' }]])
+    expect(task().request ?? null).toBeNull()
+    ask('r2', 'Write')
+    await settle()
+    expect(calls.filter(x => x.channel === 'engine:answer')).toHaveLength(1)
+    expect(task().request?.requestId).toBe('r2')
+  })
+
   it('带截图 @ 也先出计划：图片跟着交给拟计划的成员', async () => {
     const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
     const image = {
