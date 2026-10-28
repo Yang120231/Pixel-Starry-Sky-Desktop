@@ -95,6 +95,7 @@ import {
   taskTitle,
   withoutCode,
   flowAnswerPrompt,
+  flowAnswersPrompt,
   flowAskPrompt,
   flowNoAnswerPrompt,
   flowPlanPrompt,
@@ -115,6 +116,8 @@ import {
   attributeBrief,
   cleanBrief,
   cleanLimits,
+  cleanQuestions,
+  cleanSettings,
   cleanSchedule,
   cleanSteps,
   copyPlan,
@@ -208,6 +211,8 @@ export interface ChannelsDeps {
   teamTiming?: { progressMs?: number; statusMs?: number }
   /** 本机会话挂了频道工具（main/channels/channel-mcp.ts）：派活提示词只带最近几条、说明怎么用工具 */
   channelTools?: boolean
+  /** 频道没设 planFirst 时的默认：@ 一个 AI 派新活先出计划（默认开；测试里关掉沿用直接派活） */
+  planFirst?: boolean
   /** 产出检查（docs/ui/channels-collab-v2.md §8）：在会话的工作目录跑；项目关了频道检查时返回 null */
   runChecks?: (sessionId: string, files: string[]) => Promise<CheckRun | null>
   /** 事项派出去的卡片变了：写回任务看板的事项（docs/ui/channels-collab-v2.md §9）；没接时不写 */
@@ -515,6 +520,7 @@ export class Channels {
         relay: c.relay === true,
         relayRules: relayRulesOf(c),
         lead: c.lead ?? null,
+        planFirst: c.planFirst ?? this.deps.planFirst ?? true,
         schedules: c.schedules ?? [],
         alerts: alertRulesOf(c),
         digestHour: c.digestHour ?? DIGEST_HOUR,
@@ -825,6 +831,8 @@ export class Channels {
       relayRules?: RelayRules
       /** 牵头成员（只有本机频道，docs/ui/channels-pipeline.md §8.3）：null 不启用 */
       lead?: string | null
+      /** @ 一个 AI 派新活时先出计划（只有本机频道） */
+      planFirst?: boolean
       /** 每天定时运行的流程（只有本机频道，§10.3）：整个列表一起存 */
       schedules?: unknown[]
       /** 主动提醒的规则开关、每日简报几点发（只有本机频道） */
@@ -893,6 +901,7 @@ export class Channels {
         throw new Error('牵头成员要选这个频道里本机的 AI 成员')
       c.lead = patch.lead
     }
+    if (patch.planFirst !== undefined) c.planFirst = patch.planFirst === true
     if (patch.schedules !== undefined) c.schedules = this.cleanSchedules(c, patch.schedules)
     if (patch.alerts !== undefined) c.alerts = cleanAlertRules(patch.alerts)
     if (patch.digestHour !== undefined) c.digestHour = cleanDigestHour(patch.digestHour)
@@ -1223,13 +1232,19 @@ export class Channels {
     // 讨论串里：@ 同一个成员 = 追加要求，不 @ 只是留言（docs/ui/channels-collab-v2.md §3）；引用卡片照旧，不 @ 也算追加要求
     const target = this.replyTask(channelId, threadId ?? replyToId)
     const tasks: string[] = []
+    let planning = false
     if (target && (!threadId || agents.length > 0) && agents.every(id => id === target.assigneeId)) {
       this.followUp(c, target, message)
       tasks.push(target.id)
+    } else if (!only && this.planTakes(c, message, agents)) {
+      // @ 一个 AI 派新活：先让它出计划，商量好、点开工才动手
+      planning = true
+      void this.mentionPlan(c, message, agents[0])
     } else for (const id of agents) tasks.push(this.newTask(c, message, id, replyToId ?? threadId))
     // 没派给任何人的需求：交给牵头成员（docs/ui/channels-pipeline.md §8.3）
     // 有份提案在商量：不带 @ 的话（或回复提案卡）交给拆它的成员接着改，不另开、不派活
-    if (!tasks.length && !this.refineTakes(c, message) && this.leadTakes(c, message)) void this.leadPlan(c, message)
+    if (!tasks.length && !planning && !this.refineTakes(c, message) && this.leadTakes(c, message))
+      void this.leadPlan(c, message)
     this.changed()
     return { message, tasks }
   }
@@ -1795,7 +1810,11 @@ export class Channels {
           sessionId = await this.createSession(
             member,
             task.title,
-            current.flow ? (this.flowStepOf(current)?.settings ?? null) : undefined,
+            current.flow
+              ? current.flow.stepId
+                ? (this.flowStepOf(current)?.settings ?? null)
+                : (this.flowMessage(current.channelId, current.flow.messageId)?.flow.planner?.settings ?? null)
+              : undefined,
             ws?.copyId,
           )
           text = ws?.prompt ?? current.freshPrompt
@@ -2555,7 +2574,16 @@ export class Channels {
       if (m.flow.status !== 'planning' || m.flow.planner?.taskId !== run.taskId) return
       // 牵头自动拆、头一回就没交回步骤：它直接回答了（回复照常发在卡片下），流程不留草稿；
       // 已经有提案时（接着商量）没交回就是这次不用改，提案留着
-      if (m.flow.planner.auto && finish.status === 'done' && !steps?.length && !m.flow.steps.length && !more)
+      const questions = run.done?.questions
+      if (
+        (m.flow.planner.auto || m.flow.planner.mention) &&
+        finish.status === 'done' &&
+        !steps?.length &&
+        !questions?.length &&
+        !m.flow.steps.length &&
+        !m.flow.questions?.length &&
+        !more
+      )
         this.updateFlow(run.channelId, messageId, f => ({ ...f, status: 'stopped' }))
       else {
         const brief = run.done?.brief
@@ -2563,8 +2591,9 @@ export class Channels {
           ...f,
           // 后面还排着你接着说的话：等它们也改完再回到草稿
           status: more ? 'planning' : 'draft',
+          ...(questions?.length ? { questions } : {}),
           ...(steps ? { steps, rev: (f.rev ?? 0) + 1 } : {}),
-          ...(steps && brief ? { brief: attributeBrief(brief, f.brief, SELF_ID) } : {}),
+          ...(steps && brief ? { brief: attributeBrief(brief, f.brief, SELF_ID, f.planner?.memberId) } : {}),
         }))
       }
       return
@@ -2733,12 +2762,20 @@ export class Channels {
       if (flow.status !== 'planning') throw new Error('流程已经不在拆分中了')
       const byName = (name: string): string | null =>
         c.memberIds.map(id => this.member(id)).find(m => m && m.name.toLowerCase() === name.toLowerCase())?.id ?? null
-      const steps = planSteps(args.steps, byName)
-      const problem = draftProblem(steps, this.flowMemberCheck(c))
-      if (problem) throw new Error(`${problem}。改好再调用 task_done`)
-      done.steps = steps
-      const brief = cleanBrief(args.brief, SELF_ID)
-      if (brief) done.brief = brief
+      const questions = cleanQuestions(args.questions)
+      if (questions.length && args.steps === undefined) {
+        // 先问、只问一轮：问过了就按回答交完整计划
+        if (flow.questions?.length)
+          throw new Error('已经问过一轮了：按用户的回答用 steps 和 brief 交出完整计划，不要再问')
+        done.questions = questions
+      } else {
+        const steps = planSteps(args.steps, byName)
+        const problem = draftProblem(steps, this.flowMemberCheck(c))
+        if (problem) throw new Error(`${problem}。改好再调用 task_done`)
+        done.steps = steps
+        const brief = cleanBrief(args.brief, SELF_ID)
+        if (brief) done.brief = brief
+      }
     } else if (step?.kind === 'review') {
       if (args.verdict !== 'pass' && args.verdict !== 'reject')
         throw new Error('审查步骤要写 verdict：pass（通过）或 reject（打回）')
@@ -2751,6 +2788,7 @@ export class Channels {
     this.store.runs.set(run.taskId, { ...run, done })
     this.saveRuns()
     const note = dropped.length ? `（这些路径不在工作区里，没有记下：${dropped.join('、')}）` : ''
+    if (!ref.stepId && done.questions) return '问题已交给用户，答完会发给你。可以结束这一轮了。'
     return ref.stepId ? `已交付，可以结束这一轮了。${note}` : '拆好的流程已交回，等用户确认后开始。可以结束这一轮了。'
   }
 
@@ -2850,6 +2888,15 @@ export class Channels {
     }))
     await this.threadNote(c.id, run.taskId, member.id, question)
     return '问题已发给用户，流程卡上会让用户回答。现在结束这一轮，回答来了会发给你。'
+  }
+
+  /** 换人拟计划时交给新成员的：问过的问题和回答、已经拟好的步骤和要点 */
+  private planHandover(f: ChannelFlow): string {
+    const lines: string[] = []
+    for (const q of f.questions ?? []) if (q.answer) lines.push(`- ${q.q}：${q.answer}`)
+    f.steps.forEach((s, i) => lines.push(`${i + 1}. ${s.title} · ${this.nameOf(s.memberId)}`))
+    for (const x of f.brief?.facts ?? []) lines.push(`- ${x.k}：${x.v}`)
+    return lines.join('\n')
   }
 
   /** 在一张任务卡的讨论串里记一句（问题、回答），频道里看得到 */
@@ -3172,6 +3219,46 @@ export class Channels {
     return true
   }
 
+  private plannerTaskName(title: string, auto?: boolean, mention?: boolean): string {
+    const en = this.deps.locale() === 'en-US'
+    if (auto) return en ? `Lead: ${title}` : `牵头处理：${title}`
+    if (mention) return en ? `Plan: ${title}` : `出计划：${title}`
+    return en ? `Plan the flow: ${title}` : `拆流程：${title}`
+  }
+
+  /** @ 了一个 AI 的新需求要不要先出计划：频道开着、本机有频道工具、不在讨论串 / 回复里、不带附件（拟计划只看文字） */
+  private planTakes(c: StoredChannel, m: ChannelTextMessage, agents: string[]): boolean {
+    if (agents.length !== 1 || m.threadId || m.replyToId || m.text.trim().startsWith('/')) return false
+    if (!(c.planFirst ?? this.deps.planFirst ?? true)) return false
+    if (m.attached?.images.length || m.attached?.files.length) return false
+    return !!this.flowMemberCheck(c)(agents[0])?.local
+  }
+
+  /** 计划标题：去掉开头的 @成员（「@GPT 帮我做个数据中心」→「帮我做个数据中心」） */
+  private titleWithoutMentions(c: StoredChannel, text: string): string {
+    const plain = splitMentions(text, this.channelMembers(c))
+      .filter(x => !x.memberId && !x.all)
+      .map(x => x.text)
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim()
+    return plain || text
+  }
+
+  /** 被 @ 的成员先拟计划（和牵头拆同一条路）：出的是草稿，点开工才派活；只是问题时它直接回答 */
+  private async mentionPlan(c: StoredChannel, m: ChannelTextMessage, memberId: string): Promise<void> {
+    try {
+      await this.flowAction(
+        c.id,
+        { type: 'create', title: this.titleWithoutMentions(c, m.text), planner: { memberId, request: m.text } },
+        false,
+        true,
+      )
+    } catch (e) {
+      this.deps.log?.('先出计划失败', e)
+    }
+  }
+
   /** 牵头成员拆这条需求：和「让成员拆」同一条路，拆出的是草稿，你确认后才开始；只是问题时它直接回答 */
   private async leadPlan(c: StoredChannel, m: ChannelTextMessage): Promise<void> {
     this.leading.add(c.id)
@@ -3189,7 +3276,7 @@ export class Channels {
   }
 
   /** 流程卡上的操作（channels:flow）：建草稿（手写或让成员拆）、改草稿、开始、暂停、继续、停止、丢弃 */
-  async flowAction(channelId: string, raw: unknown, auto = false): Promise<{ messageId: string }> {
+  async flowAction(channelId: string, raw: unknown, auto = false, mention = false): Promise<{ messageId: string }> {
     if (this.isTeam(channelId)) throw new Error('团队频道暂时不支持流程')
     const c = this.writable(channelId)
     const a = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
@@ -3212,7 +3299,13 @@ export class Channels {
         if (!check) throw new Error('这个成员不在频道里')
         if (!check.local) throw new Error(`「${check.name}」在 SSH 机器上，流程暂时只支持本机的成员`)
         if (!request) throw new Error('写一句要拆的需求')
-        planner = { memberId, request, taskId: null, ...(auto ? { auto: true } : {}) }
+        planner = {
+          memberId,
+          request,
+          taskId: null,
+          ...(auto ? { auto: true } : {}),
+          ...(mention ? { mention: true } : {}),
+        }
       }
       const message: ChannelTextMessage & { flow: ChannelFlow } = {
         kind: 'message',
@@ -3243,14 +3336,9 @@ export class Channels {
           request: planner.request,
           members: this.relayPeers(c, '').filter(x => local.has(x.name)),
           auto,
+          mention,
         })
-        const name = auto
-          ? locale === 'en-US'
-            ? `Lead: ${title}`
-            : `牵头处理：${title}`
-          : locale === 'en-US'
-            ? `Plan the flow: ${title}`
-            : `拆流程：${title}`
+        const name = this.plannerTaskName(title, auto, mention)
         const taskId = this.flowTask(c, message, planner.memberId, name, '', prompt)
         this.updateFlow(channelId, message.id, f => ({ ...f, planner: { ...f.planner!, taskId } }))
         void this.pump(planner.memberId)
@@ -3310,6 +3398,70 @@ export class Channels {
         }))
         if (a.decision === 'approve') this.advance(channelId, messageId)
         else this.flowRound(step.taskId, flowGatePrompt(locale, note), { reminded: false })
+        break
+      }
+      case 'answers': {
+        // 拟计划的成员一次问完的问题：都答了才发给它，接着一次出完整计划
+        const qs = f.questions ?? []
+        if (f.status !== 'draft' || !f.planner?.taskId || !qs.length || qs.every(q => q.answer))
+          throw new Error('这份计划没在等你回答')
+        const list = Array.isArray(a.answers) ? a.answers : []
+        const answers = qs.map((_, i) =>
+          typeof list[i] === 'string' ? list[i].trim().slice(0, RELAY_REQUEST_CHARS) : '',
+        )
+        if (answers.some(x => !x)) throw new Error('每个问题都要回答')
+        this.updateFlow(channelId, messageId, x => ({
+          ...x,
+          status: 'planning',
+          questions: qs.map((q, i) => ({ ...q, answer: answers[i] })),
+        }))
+        this.flowRound(
+          f.planner.taskId,
+          flowAnswersPrompt(
+            locale,
+            qs.map((q, i) => ({ q: q.q, a: answers[i] })),
+          ),
+        )
+        break
+      }
+      case 'replan': {
+        // 换拟计划的成员 / 模型 / 推理强度：正在拟的那一轮停掉，由新的从头接手（带上已经问过、拟过的）
+        if ((f.status !== 'draft' && f.status !== 'planning') || !f.planner)
+          throw new Error('计划已经开工了，换不了拟计划的成员')
+        const memberId = typeof a.memberId === 'string' ? a.memberId : ''
+        const check = this.flowMemberCheck(c)(memberId)
+        if (!check) throw new Error('这个成员不在频道里')
+        if (!check.local) throw new Error(`「${check.name}」在 SSH 机器上，流程暂时只支持本机的成员`)
+        const settings = cleanSettings(a.settings)
+        const old = f.planner.taskId
+        const oldRun = old ? this.store.runs.get(old) : undefined
+        if (old && oldRun && oldRun.phase !== 'ended') {
+          this.store.runs.set(old, { ...oldRun, followUps: [], inbox: [] })
+          await this.runAction(old, 'stop').catch(e => this.deps.log?.('停止拟计划失败', e))
+        }
+        const local = new Set(c.memberIds.filter(id => this.flowMemberCheck(c)(id)?.local).map(this.nameOf))
+        const handover = this.planHandover(f)
+        const prompt = flowPlanPrompt({
+          locale,
+          channel: c.name,
+          request: f.planner.request,
+          members: this.relayPeers(c, '').filter(x => local.has(x.name)),
+          auto: f.planner.auto,
+          mention: f.planner.mention,
+          ...(handover ? { handover } : {}),
+        })
+        const planner = { ...f.planner, memberId, taskId: null, settings }
+        this.updateFlow(channelId, messageId, x => ({ ...x, status: 'planning', planner }))
+        const taskId = this.flowTask(
+          c,
+          m,
+          memberId,
+          this.plannerTaskName(f.title, f.planner.auto, f.planner.mention),
+          '',
+          prompt,
+        )
+        this.updateFlow(channelId, messageId, x => ({ ...x, planner: { ...x.planner!, taskId } }))
+        void this.pump(memberId)
         break
       }
       case 'answer': {

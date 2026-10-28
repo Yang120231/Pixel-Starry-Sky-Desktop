@@ -21,7 +21,7 @@ const KINDS: readonly FlowStepKind[] = ['work', 'review', 'summary']
 
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
-function cleanSettings(raw: unknown): FlowStepSettings | null {
+export function cleanSettings(raw: unknown): FlowStepSettings | null {
   const r = (raw ?? {}) as Record<string, unknown>
   const out: FlowStepSettings = {}
   if (typeof r.model === 'string' && r.model.trim()) out.model = r.model.trim().slice(0, 200)
@@ -141,6 +141,8 @@ export function planSteps(raw: unknown, byName: (name: string) => string | null)
         deps: Array.isArray(r.deps) ? r.deps.map(ref).filter(Boolean) : [],
         kind: r.kind,
         target: ref(r.target),
+        // 拟计划时建议的推理强度（不在可选范围里的丢掉）
+        settings: { effort: r.effort },
       }
     }),
   )
@@ -164,7 +166,7 @@ export function cleanBrief(raw: unknown, by: string): FlowBrief | null {
   const facts = items(r.facts).flatMap(f => {
     const k = text(f.k, BRIEF_KEY_MAX)
     const v = text(f.v, BRIEF_TEXT_MAX)
-    return k && v ? [{ k, v, by: text(f.by, 64) || by }] : []
+    return k && v ? [{ k, v, by: text(f.by, 64) || by, ...(f.suggested === true ? { suggested: true } : {}) }] : []
   })
   const open = items(r.open).flatMap(o => {
     const q = text(o.q, BRIEF_TEXT_MAX)
@@ -174,12 +176,40 @@ export function cleanBrief(raw: unknown, by: string): FlowBrief | null {
   return goal || facts.length || open.length ? { goal, facts, open } : null
 }
 
-/** 成员交回的新要点：和旧要点里一模一样的结论沿用原来的「谁定的」，其余记 by（成员交回的 by 不可信，一律不认） */
-export function attributeBrief(next: FlowBrief, prev: FlowBrief | null | undefined, by: string): FlowBrief {
+/**
+ * 成员交回的新要点：和旧要点里一模一样的结论沿用原来的「谁定的」，其余记 by；它替你定的（suggested）记成它自己。
+ * 成员交回的 by 不可信，一律不认
+ */
+export function attributeBrief(
+  next: FlowBrief,
+  prev: FlowBrief | null | undefined,
+  by: string,
+  planner?: string,
+): FlowBrief {
   return {
     ...next,
-    facts: next.facts.map(f => ({ ...f, by: prev?.facts.find(p => p.k === f.k && p.v === f.v)?.by ?? by })),
+    facts: next.facts.map(f => ({
+      ...f,
+      by: prev?.facts.find(p => p.k === f.k && p.v === f.v)?.by ?? (f.suggested && planner ? planner : by),
+    })),
   }
+}
+
+const QUESTIONS_MAX = 6
+const OPTIONS_MAX = 4
+
+/** 拟计划的成员一次问完的问题（task_done 的 questions，不可信）：最多 6 个，每个最多 4 个选项 */
+export function cleanQuestions(raw: unknown): { q: string; options: string[] }[] {
+  if (!Array.isArray(raw)) return []
+  return raw.slice(0, QUESTIONS_MAX).flatMap(x => {
+    const r = (x && typeof x === 'object' ? x : {}) as Record<string, unknown>
+    const q = text(r.q, BRIEF_TEXT_MAX)
+    const options = (Array.isArray(r.options) ? r.options : [])
+      .map(o => text(o, BRIEF_KEY_MAX))
+      .filter(Boolean)
+      .slice(0, OPTIONS_MAX)
+    return q ? [{ q, options }] : []
+  })
 }
 
 /** 开工前还没定的必答项 */

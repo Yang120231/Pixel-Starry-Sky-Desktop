@@ -58,6 +58,8 @@ async function open(channelTools = true, extra: Partial<ChannelsDeps> = {}): Pro
     locale: () => 'zh-CN',
     now: () => ++now,
     channelTools,
+    // @ 派活先出计划在 flow.service.test 里测；这里沿用直接派活
+    planFirst: false,
     alertTimer: false,
     ...extra,
   })

@@ -18,7 +18,9 @@ import type {
   FlowStepSettings,
 } from '../../../../shared/types/channels'
 import { MemberAvatar } from './ChannelMessage'
+import { PlannerSwitch, QuestionsForm } from './PlanParts'
 import { GateActions } from './GateActions'
+import { StartDialog } from './StartDialog'
 import { formatCardCost, formatTokens, costHint } from '@/features/usage/format'
 import { scheduleToInput } from './model'
 import { channelActions, useChannels } from './store'
@@ -30,7 +32,7 @@ const AUTOSAVE_MS = 600
 type Members = ReadonlyMap<string, ChannelMember>
 
 /** 流程操作：失败（校验不过、状态不对）用 toast 说明 */
-function useFlowRun(channelId: string) {
+export function useFlowRun(channelId: string) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const run = (action: FlowAction): Promise<boolean> => {
@@ -468,7 +470,7 @@ function DraftEditor({
   const patchStep = (id: string, patch: Partial<FlowStepInput>) =>
     edit(list => list.map(s => (s.id === id ? { ...s, ...patch } : s)))
   // 标题清空时先不存标题（主进程会拒绝整次更新），步骤照存
-  const action = (): FlowAction => ({
+  const action = (): Extract<FlowAction, { type: 'update' }> => ({
     type: 'update',
     messageId: message.id,
     ...(title.trim() ? { title } : {}),
@@ -502,9 +504,13 @@ function DraftEditor({
   // 切走频道时还没存的改动也存上
   useEffect(() => () => save.current(), [])
 
-  const start = async () => {
+  // 开始运行先弹「开工」选这次用哪些 AI；确认后按选好的分工和设置存一次再开始
+  const [starting, setStarting] = useState(false)
+  const start = async (final: FlowStepInput[]) => {
     pending.current = false
-    if (await run(action())) await run({ type: 'start', messageId: message.id })
+    if (!(await run({ ...action(), steps: final }))) return
+    setStarting(false)
+    await run({ type: 'start', messageId: message.id })
   }
   const agentOptions: SelectOption<string>[] = agents.map(a => ({ value: a.id, label: a.name }))
   const kinds: { value: FlowStepKind; label: string }[] = [
@@ -699,10 +705,20 @@ function DraftEditor({
           <Button disabled={busy} onClick={() => void run({ type: 'discard', messageId: message.id })}>
             {tr('channels.flow.discard')}
           </Button>
-          <Button variant="primary" disabled={busy || steps.length === 0 || left > 0} onClick={() => void start()}>
+          <Button variant="primary" disabled={busy || steps.length === 0 || left > 0} onClick={() => setStarting(true)}>
             {left > 0 ? tr('channels.flow.startLeft', { n: left }) : tr('channels.flow.start')}
           </Button>
         </div>
+      )}
+      {starting && (
+        <StartDialog
+          steps={steps}
+          agents={agents}
+          membersById={membersById}
+          busy={busy}
+          onConfirm={final => void start(final)}
+          onCancel={() => setStarting(false)}
+        />
       )}
     </>
   )
@@ -748,6 +764,11 @@ function BriefSection({
                 <dt className="text-fg-muted">{f.k}</dt>
                 <dd className="min-w-0 text-fg">
                   {f.v}
+                  {f.suggested && (
+                    <span className="ml-1.5 rounded-sm bg-subtle px-1 text-fg-muted">
+                      {tr('channels.plan.suggested')}
+                    </span>
+                  )}
                   {by && <span className="ml-1.5 text-fg-faint">· {by}</span>}
                 </dd>
               </Fragment>
@@ -966,7 +987,23 @@ export function ChannelFlowCard({
           highlight && 'search-hit',
         )}
       >
-        {flow.status === 'draft' ? (
+        {flow.planner && (flow.status === 'draft' || flow.status === 'planning') && (
+          <div className="mb-1.5">
+            <PlannerSwitch
+              message={message}
+              flow={flow}
+              agents={agents}
+              membersById={membersById}
+              readOnly={readOnly}
+            />
+          </div>
+        )}
+        {flow.status === 'draft' && flow.questions?.some(q => !q.answer) ? (
+          <>
+            <span className="text-ui font-semibold text-fg">{flow.title}</span>
+            <QuestionsForm key={flow.questions.length} message={message} flow={flow} readOnly={readOnly} />
+          </>
+        ) : flow.status === 'draft' ? (
           <DraftEditor
             key={flow.rev ?? 0}
             message={message}
