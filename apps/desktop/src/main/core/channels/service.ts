@@ -15,6 +15,7 @@ import {
   type HostEvent,
   type MessageInput,
   type OpenedSession,
+  type PermissionMode,
   type ProjectRecord,
   type SessionRecord,
   type SessionSummary,
@@ -1813,7 +1814,11 @@ export class Channels {
             current.flow
               ? current.flow.stepId
                 ? (this.flowStepOf(current)?.settings ?? null)
-                : (this.flowMessage(current.channelId, current.flow.messageId)?.flow.planner?.settings ?? null)
+                : // 拟计划一律开计划模式（只读，不管哪个引擎、哪个模型），开工后的步骤才按成员的权限做
+                  {
+                    ...this.flowMessage(current.channelId, current.flow.messageId)?.flow.planner?.settings,
+                    permissionMode: 'plan',
+                  }
               : undefined,
             ws?.copyId,
           )
@@ -1848,7 +1853,7 @@ export class Channels {
   private async createSession(
     member: AgentConfig,
     title: string,
-    flow?: FlowStepSettings | null,
+    flow?: (FlowStepSettings & { permissionMode?: PermissionMode }) | null,
     copyId?: string,
   ): Promise<string> {
     const copy = copyId ?? member.copyId
@@ -2349,6 +2354,7 @@ export class Channels {
     stepId: string,
     prompt: string,
     plan?: CopyPlan,
+    attach?: string[],
   ): string {
     const now = this.now()
     const flow = { messageId: m.id, stepId }
@@ -2389,6 +2395,7 @@ export class Channels {
       notice: null,
       flow,
       ...(plan ? { copyPlan: plan } : {}),
+      ...(attach?.length ? { attach } : {}),
     })
     this.saveRuns()
     return task.id
@@ -3175,8 +3182,6 @@ export class Channels {
     if (!c.lead || !this.flowMemberCheck(c)(c.lead)?.local) return false
     if (m.mentions?.length || m.threadId || m.replyToId || text.length < LEAD_MIN_CHARS || text.startsWith('/'))
       return false
-    // 带图片 / 文件的：拆流程只带文字，看不到附件，照旧只是留言
-    if (m.attached?.images.length || m.attached?.files.length) return false
     if (this.leading.has(c.id)) return false
     return !(this.store.messages.get(c.id) ?? []).some(x => x.kind === 'message' && x.flow?.status === 'planning')
   }
@@ -3226,11 +3231,10 @@ export class Channels {
     return en ? `Plan the flow: ${title}` : `拆流程：${title}`
   }
 
-  /** @ 了一个 AI 的新需求要不要先出计划：频道开着、本机有频道工具、不在讨论串 / 回复里、不带附件（拟计划只看文字） */
+  /** @ 了一个 AI 的新需求要不要先出计划：频道开着、本机有频道工具、不在讨论串 / 回复里（带的图片和文件跟着交给它） */
   private planTakes(c: StoredChannel, m: ChannelTextMessage, agents: string[]): boolean {
     if (agents.length !== 1 || m.threadId || m.replyToId || m.text.trim().startsWith('/')) return false
     if (!(c.planFirst ?? this.deps.planFirst ?? true)) return false
-    if (m.attached?.images.length || m.attached?.files.length) return false
     return !!this.flowMemberCheck(c)(agents[0])?.local
   }
 
@@ -3253,6 +3257,7 @@ export class Channels {
         { type: 'create', title: this.titleWithoutMentions(c, m.text), planner: { memberId, request: m.text } },
         false,
         true,
+        m,
       )
     } catch (e) {
       this.deps.log?.('先出计划失败', e)
@@ -3267,6 +3272,8 @@ export class Channels {
         c.id,
         { type: 'create', title: m.text, planner: { memberId: c.lead, request: m.text } },
         true,
+        false,
+        m,
       )
     } catch (e) {
       this.deps.log?.('牵头拆流程失败', e)
@@ -3276,7 +3283,14 @@ export class Channels {
   }
 
   /** 流程卡上的操作（channels:flow）：建草稿（手写或让成员拆）、改草稿、开始、暂停、继续、停止、丢弃 */
-  async flowAction(channelId: string, raw: unknown, auto = false, mention = false): Promise<{ messageId: string }> {
+  /** source：牵头 / 被 @ 的成员按这条消息拟计划时，消息带的图片和文件跟着交给它 */
+  async flowAction(
+    channelId: string,
+    raw: unknown,
+    auto = false,
+    mention = false,
+    source?: ChannelTextMessage,
+  ): Promise<{ messageId: string }> {
     if (this.isTeam(channelId)) throw new Error('团队频道暂时不支持流程')
     const c = this.writable(channelId)
     const a = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
@@ -3339,7 +3353,8 @@ export class Channels {
           mention,
         })
         const name = this.plannerTaskName(title, auto, mention)
-        const taskId = this.flowTask(c, message, planner.memberId, name, '', prompt)
+        const attach = source?.attached ? [source.id] : undefined
+        const taskId = this.flowTask(c, message, planner.memberId, name, '', prompt, undefined, attach)
         this.updateFlow(channelId, message.id, f => ({ ...f, planner: { ...f.planner!, taskId } }))
         void this.pump(planner.memberId)
       }
