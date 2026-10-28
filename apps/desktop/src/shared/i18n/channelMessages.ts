@@ -715,6 +715,14 @@ export const channelMessages = {
     zh: '@ 成员直接派活。在频道设置里设一个牵头成员，不 @ 的需求就会先出分工提案、商量好再开工',
     en: '@ a member to assign work. Set a lead in channel settings and requests without @ get a plan proposal first',
   },
+  'channels.hint.planLead': {
+    zh: '@ 谁就由谁先出计划，你确认开工才动手 · 不 @：先和 {name} 商量出分工提案',
+    en: '@ a member: they draft a plan first and start only after you confirm · No @: {name} drafts a plan proposal first',
+  },
+  'channels.hint.planNoLead': {
+    zh: '@ 谁就由谁先出计划，你确认开工才动手 · 不 @：只是留言',
+    en: '@ a member: they draft a plan first and start only after you confirm · No @: just a message',
+  },
   'channels.task.chipTo': { zh: '交给 {name}', en: 'To {name}' },
   'channels.flow.cancel': { zh: '取消', en: 'Cancel' },
   'channels.flow.start': { zh: '开始运行', en: 'Start' },
@@ -762,6 +770,17 @@ export const channelMessages = {
   },
   'channels.plan.switchConfirm': { zh: '交给 {name}', en: 'Give it to {name}' },
   'channels.plan.suggested': { zh: '建议', en: 'Suggested' },
+  'channels.plan.planner': { zh: '{name} 拟计划', en: '{name} is planning' },
+  'channels.plan.readOnly': { zh: '计划模式 · 只读', en: 'Plan mode · read-only' },
+  'channels.plan.phase.planning': { zh: '拟计划中', en: 'Planning' },
+  'channels.plan.phase.asking': { zh: '等你回答 · {n} 件', en: 'Waiting for you · {n}' },
+  'channels.plan.phase.draft': { zh: '计划草稿 · 第 {n} 版', en: 'Draft plan · v{n}' },
+  'channels.plan.phase.running': { zh: '进行中 · {done} / {total}', en: 'Running · {done} / {total}' },
+  'channels.plan.reading': { zh: '{name} 在看需求…', en: '{name} is reading the request…' },
+  'channels.plan.note': {
+    zh: '只看不改。看完会先把要你定的一次问完，再出完整计划。',
+    en: 'Read-only. It will ask everything you need to decide in one go, then write the full plan.',
+  },
   'channels.dialog.planFirst': { zh: '@ 派活先出计划', en: 'Plan before @ assignments' },
   'channels.dialog.planFirstHint': {
     zh: '@ 一个 AI 派新活时，它先问清楚、出计划，你确认开工才动手',
