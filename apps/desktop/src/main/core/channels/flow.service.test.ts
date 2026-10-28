@@ -1232,7 +1232,8 @@ describe('@ 派活先出计划', () => {
     expect(second.assigneeId).toBe(b)
     expect(second.title).toContain('出计划')
     const created = calls.filter(x => x.channel === 'engine:createSession').at(-1)!.args[0] as Record<string, unknown>
-    expect(created).toMatchObject({ model: 'big', effort: 'xhigh' })
+    // 拟计划一律在计划模式里（只读）
+    expect(created).toMatchObject({ model: 'big', effort: 'xhigh', permissionMode: 'plan' })
     // 旧的那一轮迟到的交付不算数
     expect(() => c.toolDone(first.sessionId!, { summary: 'x', steps: [{ title: 'x', member: '画师' }] })).toThrow()
 
@@ -1247,7 +1248,26 @@ describe('@ 派活先出计划', () => {
     expect(lastTo(tasks(c, ch).at(-1)!.sessionId!).text).toContain('哪种？：管理软件')
   })
 
-  it('不先出计划的情况：频道关了、带附件、@ 了两个、在讨论串里；只是问题时它直接回答，流程不留', async () => {
+  it('带截图 @ 也先出计划：图片跟着交给拟计划的成员', async () => {
+    const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    const image = {
+      id: 'i',
+      name: 'i.png',
+      mediaType: 'image/png' as const,
+      bytes: 70,
+      width: 1,
+      height: 1,
+      dataBase64: PNG,
+    }
+    const { c, a, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 看图，这个界面怎么改', clientId: 'p1', attachments: [image] })
+    await settle()
+    expect(flowOf(c, ch)).toMatchObject({ status: 'planning', planner: { memberId: a, mention: true } })
+    const sent = lastTo(tasks(c, ch)[0].sessionId!) as unknown as { attachments?: unknown[] }
+    expect(sent.attachments).toHaveLength(1)
+  })
+
+  it('不先出计划的情况：频道关了、@ 了两个；只是问题时它直接回答，流程不留', async () => {
     const { c, a, b, ch } = await setup({ planFirst: true })
     const flows = () => c.messages(ch).messages.filter(m => m.kind === 'message' && m.flow)
     await c.post(ch, { text: '@画师 @程序员 一起看看', clientId: 'p1' })
