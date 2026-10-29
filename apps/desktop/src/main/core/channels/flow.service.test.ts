@@ -2,7 +2,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EngineEvent, HostEvent, ProjectRecord, SessionSummary, UsageRecord } from '@pixelsky/protocol'
 import type { AgentInput, ChannelFlow, ChannelTask, ChannelTextMessage } from '../../../shared/types/channels'
 import { ChannelStore } from './store'
@@ -1135,6 +1135,35 @@ describe('分工提案和问用户', () => {
     expect(lastTo(s1).text).toContain('0.5 秒')
     expect(flowOf(c, ch).brief?.facts.map(f => f.v)).toEqual(['8 秒', '0.5 秒'])
   })
+
+  it('回归：回答写进讨论串的同时这一轮结束了：照样把回答发给它，运行记录不被改回旧的', async () => {
+    const { c, a, ch } = await setup()
+    const { messageId } = await c.flowAction(ch, {
+      type: 'create',
+      title: '问用户',
+      steps: [{ id: 's1', title: '做法术', memberId: a, deps: [], kind: 'work' }],
+    })
+    await c.flowAction(ch, { type: 'start', messageId })
+    await settle()
+    const s1 = sessionOf(c, ch, 's1')
+    await c.toolUserAsk(s1, '持续时间多少？')
+    // 回答写进讨论串那一下卡住，这期间这一轮结束
+    const store = (c as unknown as { store: ChannelStore }).store
+    let release!: () => void
+    const gate = new Promise<void>(resolve => (release = resolve))
+    const append = store.append.bind(store)
+    vi.spyOn(store, 'append').mockImplementationOnce(async m => {
+      await gate
+      return append(m)
+    })
+    const answering = c.flowAction(ch, { type: 'answer', messageId, stepId: 's1', text: '8 秒' })
+    await endTurn(c, s1, '等你回答')
+    release()
+    await answering
+    await settle()
+    expect(stepOf(c, ch, 's1')).toMatchObject({ status: 'running', question: null })
+    expect(lastTo(s1).text).toContain('8 秒')
+  })
 })
 
 describe('@ 派活先出计划', () => {
@@ -1330,12 +1359,35 @@ describe('@ 派活先出计划', () => {
       height: 1,
       dataBase64: PNG,
     }
-    const { c, a, ch } = await setup({ planFirst: true })
+    const { c, a, b, ch } = await setup({ planFirst: true })
     await c.post(ch, { text: '@画师 看图，这个界面怎么改', clientId: 'p1', attachments: [image] })
     await settle()
     expect(flowOf(c, ch)).toMatchObject({ status: 'planning', planner: { memberId: a, mention: true } })
     const sent = lastTo(tasks(c, ch)[0].sessionId!) as unknown as { attachments?: unknown[] }
     expect(sent.attachments).toHaveLength(1)
+
+    // 换人拟计划：新成员也收到原消息带的图（回归：以前只有文字）
+    const messageId = c.messages(ch).messages.find(m => m.kind === 'message' && m.flow)!.id
+    await c.flowAction(ch, { type: 'replan', messageId, memberId: b })
+    await settle()
+    const again = lastTo(tasks(c, ch).at(-1)!.sessionId!) as unknown as { text: string; attachments?: unknown[] }
+    expect(again.text).toContain('看图，这个界面怎么改')
+    expect(again.attachments).toHaveLength(1)
+  })
+
+  it('回归：拟计划期间补充的要求，换人拟计划后新成员照样看得到（排着没处理的也不丢）', async () => {
+    const { c, b, ch } = await setup({ planFirst: true })
+    await c.post(ch, { text: '@画师 先设计一个界面', clientId: 'p1' })
+    await settle()
+    const messageId = c.messages(ch).messages.find(m => m.kind === 'message' && m.flow)!.id
+    // 画师这一轮还没结束：补充排在后面
+    await c.post(ch, { text: '必须支持离线运行，数据不能上传到服务器', clientId: 'p2' })
+    await settle()
+    await c.flowAction(ch, { type: 'replan', messageId, memberId: b })
+    await settle()
+    const text = lastTo(tasks(c, ch).at(-1)!.sessionId!).text
+    expect(text).toContain('先设计一个界面')
+    expect(text).toContain('必须支持离线运行，数据不能上传到服务器')
   })
 
   it('不先出计划的情况：频道关了、@ 了两个；只是问题时它直接回答，流程不留', async () => {

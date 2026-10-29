@@ -2959,6 +2959,7 @@ export class Channels {
     for (const q of f.questions ?? []) if (q.answer) lines.push(`- ${q.q}：${q.answer}`)
     f.steps.forEach((s, i) => lines.push(`${i + 1}. ${s.title} · ${this.nameOf(s.memberId)}`))
     for (const x of f.brief?.facts ?? []) lines.push(`- ${x.k}：${x.v}`)
+    for (const n of f.planner?.notes ?? []) lines.push(`- ${n.from} 补充：${n.text}`)
     return lines.join('\n')
   }
 
@@ -3260,7 +3261,13 @@ export class Channels {
     const planner = draft.flow.planner!
     if (!this.flowMemberCheck(c)(planner.memberId)?.local) return false
     const f = draft.flow
-    this.updateFlow(c.id, draft.id, x => (x.status === 'draft' ? { ...x, status: 'planning' } : x))
+    // 记下原话：排着的补充是拼好的提示词，换人拟计划时会清掉，交接靠这份
+    const note = { from: this.nameOf(m.authorId), text: m.text }
+    this.updateFlow(c.id, draft.id, x => ({
+      ...x,
+      status: x.status === 'draft' ? 'planning' : x.status,
+      planner: x.planner ? { ...x.planner, notes: [...(x.planner.notes ?? []), note].slice(-20) } : x.planner,
+    }))
     this.flowRound(
       planner.taskId!,
       flowRefinePrompt({
@@ -3536,26 +3543,32 @@ export class Channels {
           this.store.runs.set(old, { ...oldRun, followUps: [], inbox: [] })
           await this.runAction(old, 'stop').catch(e => this.deps.log?.('停止拟计划失败', e))
         }
+        // 停的期间可能又补充了：按最新的流程交接
+        const now = this.flowMessage(channelId, messageId)?.flow
+        if (!now?.planner) break
         const local = new Set(c.memberIds.filter(id => this.flowMemberCheck(c)(id)?.local).map(this.nameOf))
-        const handover = this.planHandover(f)
+        const handover = this.planHandover(now)
         const prompt = flowPlanPrompt({
           locale,
           channel: c.name,
-          request: f.planner.request,
+          request: now.planner.request,
           members: this.relayPeers(c, '').filter(x => local.has(x.name)),
-          auto: f.planner.auto,
-          mention: f.planner.mention,
+          auto: now.planner.auto,
+          mention: now.planner.mention,
           ...(handover ? { handover } : {}),
         })
-        const planner = { ...f.planner, memberId, taskId: null, settings }
+        const planner = { ...now.planner, memberId, taskId: null, settings }
         this.updateFlow(channelId, messageId, x => ({ ...x, status: 'planning', planner }))
+        // 原消息带的图、文件也交给新成员
         const taskId = this.flowTask(
           c,
           m,
           memberId,
-          this.plannerTaskName(f.title, f.planner.auto, f.planner.mention),
+          this.plannerTaskName(now.title, now.planner.auto, now.planner.mention),
           '',
           prompt,
+          undefined,
+          oldRun?.attach,
         )
         this.updateFlow(channelId, messageId, x => ({ ...x, planner: { ...x.planner!, taskId } }))
         void this.pump(memberId)
@@ -3585,8 +3598,11 @@ export class Channels {
           ...(x.since ? { since: { ...x.since, at: this.now() } } : {}),
         }))
         await this.threadNote(c.id, step.taskId, SELF_ID, text)
-        if (run.phase !== 'ended') {
-          this.store.runs.set(step.taskId, { ...run, answer: { from: SELF_ID, text } })
+        // 写讨论串期间这一轮可能结束了：按最新的运行记录判断、写回（旧拷贝会把 ended 改回去，回答就发不出去）
+        const now = this.store.runs.get(step.taskId)
+        if (!now) break
+        if (now.phase !== 'ended') {
+          this.store.runs.set(step.taskId, { ...now, answer: { from: SELF_ID, text } })
           this.saveRuns()
         } else {
           this.updateFlow(channelId, messageId, x => withStep(x, step.id, { status: 'running' }))

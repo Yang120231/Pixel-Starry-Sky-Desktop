@@ -1040,6 +1040,20 @@ describe('EngineHost + Claude（假引擎）', () => {
     expect(host.open(record.id).record.thinkingSummaries).toBe(false)
   })
 
+  it('回归：显示思考摘要没发成功：不当成已生效，下次再改照样发', async () => {
+    const fail = join(root, 'thinking.fail')
+    const host = makeHost(60_000, { FAKE_CLAUDE_THINKING_FAIL_FILE: fail })
+    const { record } = setup(host)
+    await host.send(record.id, '你好')
+    await waitFor(() => turnsDone(record.id) === 1)
+    writeFileSync(fail, '')
+    await host.update(record.id, { thinkingSummaries: false })
+    rmSync(fail)
+    expect(thinkingLog()).toEqual(['summarized'])
+    await host.update(record.id, { thinkingSummaries: false })
+    expect(thinkingLog()).toEqual(['summarized', 'omitted'])
+  })
+
   it('子智能体：子智能体条、工具行标出子智能体、智能体追踪的总数', async () => {
     const host = makeHost()
     const { record } = setup(host)

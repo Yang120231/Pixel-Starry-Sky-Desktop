@@ -766,10 +766,10 @@ export class ClaudeSession implements EngineSession {
     const { ultracode, fast, thinkingSummaries } = rec
     if (ultracode) await proc.request('apply_flag_settings', { settings: { ultracode: true } }).catch(() => undefined)
     const fastOn = fast ? await this.applyFast(proc, true) : fast
-    await this.applyThinking(proc, thinkingSummaries)
+    const thinkingOn = await this.applyThinking(proc, thinkingSummaries)
     const ultracodeOn = await this.syncSettings(proc)
     // 记 CLI 实际生效的值：被拒的 Fast / Ultracode 下次再开要重新发
-    this.applied = { ...this.applied, ultracode: ultracodeOn ?? ultracode, fast: fastOn, thinkingSummaries }
+    this.applied = { ...this.applied, ultracode: ultracodeOn ?? ultracode, fast: fastOn, thinkingSummaries: thinkingOn }
     // 启动期间用户又改了设置（模型、权限模式等）：在发第一条消息之前补上
     const late = this.lateSettings
     if (late) {
@@ -804,11 +804,12 @@ export class ClaudeSession implements EngineSession {
     }
   }
 
-  /** 显示思考摘要：summarized / omitted */
-  private async applyThinking(proc: ClaudeProcess, on: boolean): Promise<void> {
-    await proc
-      .request('set_max_thinking_tokens', { thinking_display: on ? 'summarized' : 'omitted' })
-      .catch(() => undefined)
+  /** 显示思考摘要：summarized / omitted。返回生效的值，没发成功返回 undefined（下次再改要重新发） */
+  private async applyThinking(proc: ClaudeProcess, on: boolean): Promise<boolean | undefined> {
+    return proc.request('set_max_thinking_tokens', { thinking_display: on ? 'summarized' : 'omitted' }).then(
+      () => on,
+      () => undefined,
+    )
   }
 
   /** 问 CLI 实际生效的设置（get_settings），同步 Ultracode 的可用性和开关；返回 Ultracode 实际开没开，老版本不知道 */
@@ -1020,7 +1021,8 @@ export class ClaudeSession implements EngineSession {
         await proc.request('apply_flag_settings', { settings: { ultracode: patch.ultracode } })
       }
       if (patch.fast !== undefined) patch.fast = await this.applyFast(proc, patch.fast)
-      if (patch.thinkingSummaries !== undefined) await this.applyThinking(proc, patch.thinkingSummaries)
+      if (patch.thinkingSummaries !== undefined)
+        patch.thinkingSummaries = await this.applyThinking(proc, patch.thinkingSummaries)
       // 换模型可能改变能不能开 Ultracode
       if ('model' in patch || patch.ultracode !== undefined)
         patch.ultracode = (await this.syncSettings(proc)) ?? patch.ultracode
