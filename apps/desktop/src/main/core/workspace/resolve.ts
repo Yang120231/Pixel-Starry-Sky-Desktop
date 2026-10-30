@@ -1,7 +1,7 @@
 // 本机（或远端辅助进程所在机器）上的项目 / 会话 → 工作目录。别的机器的目标由 app 层的 machines.target 解析
 import { basename } from 'node:path'
 import type { EngineHost } from '@pixelsky/engine'
-import type { ProjectFolder } from '@pixelsky/protocol'
+import { isChatProject, type ProjectFolder } from '@pixelsky/protocol'
 import type { WorkspaceRef, WorkspaceTarget } from '../../../shared/types/workspace'
 
 /** 附加文件夹 → 目标里的 folders（显示名缺省用文件夹名）；没有时不写（docs/ui/multi-root-projects.md §3.4） */
@@ -30,7 +30,8 @@ export function resolveLocalWorkspace(host: EngineHost, ref: WorkspaceRef): Work
     return {
       ref: durableRef,
       path: record.cwd,
-      name: project?.name ?? record.cwd.split(/[\\/]/).pop() ?? record.title,
+      name:
+        project?.name ?? (isChatProject(record.projectId) ? '对话' : (record.cwd.split(/[\\/]/).pop() ?? record.title)),
       ...folders,
     }
   }

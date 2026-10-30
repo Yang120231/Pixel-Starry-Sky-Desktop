@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import type { HostEvent } from '@pixelsky/protocol'
+import { CHAT_PROJECT_ID, type HostEvent } from '@pixelsky/protocol'
 import { EngineHost } from '../src'
 
 let root: string
@@ -104,4 +104,18 @@ it('附加文件夹：不存在的目录、格式不对、项目不存在都拒�
   expect(() => host.setProjectFolders(project.id, [{ path: 3 }])).toThrow('项目文件夹不对')
   expect(() => host.setProjectFolders('missing', [])).toThrow('项目不存在')
   expect(host.projects()[0].folders).toEqual([{ path: a }])
+})
+
+it('不用项目的对话：每个对话在 chats/<会话 ID> 下有自己的空文件夹，不进项目列表，删对话时文件夹一起删', async () => {
+  const host = makeHost()
+  const a = host.createSession({ projectId: CHAT_PROJECT_ID })
+  const b = host.createSession({ projectId: CHAT_PROJECT_ID })
+  expect(a.projectId).toBe(CHAT_PROJECT_ID)
+  expect(a.cwd).toBe(join(root, 'data', 'chats', a.id))
+  expect(b.cwd).not.toBe(a.cwd)
+  expect(existsSync(a.cwd)).toBe(true)
+  expect(host.projects()).toEqual([])
+  await host.deleteSession(a.id)
+  expect(existsSync(a.cwd)).toBe(false)
+  expect(existsSync(b.cwd)).toBe(true)
 })

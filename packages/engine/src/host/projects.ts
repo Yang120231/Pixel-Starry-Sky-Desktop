@@ -1,8 +1,9 @@
 // 项目列表：添加、改名、移除（不动磁盘上的文件夹）
 import { randomUUID } from 'node:crypto'
-import { basename, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { statSync } from 'node:fs'
 import {
+  CHAT_PROJECT_ID,
   normalizeProjectName,
   type AddProjectsResult,
   type ProjectFolder,
@@ -25,8 +26,15 @@ export class HostProjects {
     this.list = ctx.store.loadProjects()
   }
 
+  /** 找得到「对话」这个内置项目（不在 projects() 里）：路径是各对话文件夹的上一级 */
   find(id: string): ProjectRecord | undefined {
+    if (id === CHAT_PROJECT_ID) return { id, name: '对话', path: this.chatRoot(), addedAt: 0 }
     return this.list.find(p => p.id === id)
+  }
+
+  /** 不用项目的对话放在这里，每个对话一个子文件夹 */
+  chatRoot(): string {
+    return join(this.ctx.opts.dataDir, 'chats')
   }
 
   projects(): ProjectRecord[] {

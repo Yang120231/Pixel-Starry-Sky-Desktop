@@ -251,6 +251,8 @@ export {
   sessionTitle as normalizeSessionTitle,
   bottomOrder,
   pinnedOrder,
+  CHAT_PROJECT_ID,
+  isChatProject,
   PROJECT_NAME_LIMIT,
   projectName as normalizeProjectName,
 } from './session-metadata'

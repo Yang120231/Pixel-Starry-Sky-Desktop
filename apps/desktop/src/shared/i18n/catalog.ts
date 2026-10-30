@@ -1784,6 +1784,18 @@ export const catalog = {
     zh: '项目',
     en: 'Projects',
   },
+  'sidebar.Sidebar.chats': {
+    zh: '对话',
+    en: 'Chats',
+  },
+  'sidebar.Sidebar.newChat': {
+    zh: '新对话（不用项目）',
+    en: 'New chat (no project)',
+  },
+  'sidebar.Sidebar.chatLabel': {
+    zh: '对话 · 不用项目',
+    en: 'Chat · no project',
+  },
   'sidebar.Sidebar.noProjectsYet': {
     zh: '还没有项目',
     en: 'No projects yet',

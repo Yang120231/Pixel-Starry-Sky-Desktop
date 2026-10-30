@@ -3,6 +3,8 @@
 // 演示模式（--demo）不连接引擎：会话快照一开始装着演示的对话展示（docs/ui/demo-conversation.md），其余一直是空的，界面照旧显示 mock/demo.ts。
 import { useSyncExternalStore } from 'react'
 import {
+  CHAT_PROJECT_ID,
+  isChatProject,
   reduce,
   type EngineConfig,
   type EngineDefaults,
@@ -148,6 +150,8 @@ export function useEngineState<T>(selector: (s: EngineState) => T): T {
 function pickProject(projects: ProjectRecord[], sessions: SessionSummary[], current: string | null): string | null {
   projects = projects.filter(p => machineOf(p.id) === getMachines().currentId)
   if (current && projects.some(p => p.id === current)) return current
+  // 选了「不用项目」的对话：留着，直到用户换成某个项目
+  if (current && isChatProject(current) && machineOf(current) === getMachines().currentId) return current
   const recent = sessions.find(s => projects.some(p => p.id === s.record.projectId))
   return recent?.record.projectId ?? projects[0]?.id ?? null
 }
@@ -307,6 +311,11 @@ export async function refreshDefaults(): Promise<void> {
 
 export function setCurrentProject(id: string): void {
   set({ currentProjectId: id })
+}
+/** 新对话不用项目：当前机器上的「对话」内置项目（远端机器带机器前缀） */
+export function chooseChat(): void {
+  const machine = getMachines().currentId
+  set({ currentProjectId: machine === 'local' ? CHAT_PROJECT_ID : `${machine}~${CHAT_PROJECT_ID}` })
 }
 export async function refreshMachineEngine(machine: string): Promise<void> {
   if (!bridge) return
