@@ -21,6 +21,17 @@ export function pinnedOrder(a: { pinnedAt?: number | null }, b: { pinnedAt?: num
   return (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0)
 }
 
+/**
+ * 不用项目的对话（像 Codex 的无项目对话）：所有这类会话挂在这个内置项目下，它不在项目列表里。
+ * 每个对话在数据目录的 chats/<会话 ID> 下有一个自己的空文件夹。远端机器上的 ID 带机器前缀（ssh-…~chat）
+ */
+export const CHAT_PROJECT_ID = 'chat'
+
+/** 是不是「对话」这个内置项目（本机或远端机器的） */
+export function isChatProject(id: string | null | undefined): boolean {
+  return id === CHAT_PROJECT_ID || (!!id && id.endsWith('~' + CHAT_PROJECT_ID))
+}
+
 export const PROJECT_NAME_LIMIT = 100
 
 /** 项目显示名：只影响侧栏显示，不改磁盘上的文件夹名 */

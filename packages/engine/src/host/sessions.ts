@@ -1,6 +1,9 @@
 // 会话：创建、打开（懒创建运行时）、改设置、改名、置底、回退、归档、删除
 import { randomUUID } from 'node:crypto'
+import { mkdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import {
+  CHAT_PROJECT_ID,
   EFFORT_PANEL_KEYS,
   emptySnapshot,
   normalizeSessionTitle,
@@ -51,15 +54,19 @@ export class HostSessions {
     const m = ctx.m
     const project = m.projects.find(opts.projectId)
     if (!project) throw new Error('项目不存在')
+    const id = randomUUID()
+    // 不用项目的对话：在数据目录下给它开一个自己的空文件夹
+    if (project.id === CHAT_PROJECT_ID) workspacePath = join(project.path, id)
     if (m.guard.isLocked(workspacePath ?? project.path)) throw new Error('工作目录正在维护，请稍后重试')
     const engine = opts.engine ?? m.settings.file.defaults.engine
     if (opts.platform && opts.provider) throw new Error('额度来源无效')
     if (opts.provider && (typeof opts.provider.id !== 'string' || !PROVIDER_ID.test(opts.provider.id)))
       throw new Error('无效的自定义接口')
     const d = m.settings.engineDefaults(engine)
+    if (project.id === CHAT_PROJECT_ID) mkdirSync(workspacePath!, { recursive: true })
     const now = Date.now()
     const record: SessionRecord = {
-      id: randomUUID(),
+      id,
       projectId: project.id,
       cwd: workspacePath ?? project.path,
       ...(project.folders?.length ? { extraDirs: project.folders.map(f => f.path) } : {}),
@@ -430,6 +437,13 @@ export class HostSessions {
       } finally {
         m.events.broadcastSessions()
       }
+      // 不用项目的对话：它自己的文件夹跟着删（只删 chats/<会话 ID>，删不掉不影响）
+      if (record?.projectId === CHAT_PROJECT_ID && record.cwd === join(m.projects.chatRoot(), id))
+        try {
+          rmSync(record.cwd, { recursive: true, force: true, maxRetries: 2 })
+        } catch {
+          // 被别的程序占着之类：留下空壳文件夹也无妨
+        }
     } finally {
       ctx.changingSessions.delete(id)
     }

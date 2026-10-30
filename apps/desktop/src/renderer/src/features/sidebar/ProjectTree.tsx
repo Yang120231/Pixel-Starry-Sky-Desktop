@@ -625,7 +625,7 @@ function ProjectStatus({
 }
 
 /** 对话下面的小字行：「还有 N 个对话 ›」/「收起」文字、「已归档 N 个」图标均与会话标题左侧对齐 */
-function MoreRow({
+export function MoreRow({
   label,
   open,
   onClick,

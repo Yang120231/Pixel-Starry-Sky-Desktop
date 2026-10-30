@@ -1,6 +1,7 @@
-import { bottomOrder, pinnedOrder, type ProjectRecord, type SessionSummary } from '@pixelsky/protocol'
+import { bottomOrder, isChatProject, pinnedOrder, type ProjectRecord, type SessionSummary } from '@pixelsky/protocol'
 import type { Project, RecentItem, Session, SessionStatus } from '@/data/types'
 import type { DemoSessionChange } from '@/data/types'
+import { tr } from '@/i18n/core'
 /** 运行中，或这一轮说完了但后台子智能体还在跑（docs/ui/notifications.md §7） */
 export const busy = (s: SessionSummary): boolean => s.state !== 'idle' || !!s.background
 /** 侧栏「置顶」分组里的会话：带上所属项目名 */
@@ -37,6 +38,8 @@ export function sidebarData(
   frozen?: RecencyFreeze | null,
 ): {
   projects: Project[]
+  /** 不用项目的对话（没归档、没置顶的），按最近活动排 */
+  chats: Session[]
   pinned: PinnedSession[]
   recent: Array<RecentItem & { status: SessionStatus }>
 } {
@@ -58,7 +61,13 @@ export function sidebarData(
     ),
   )
   const active = sessions.filter(s => !s.record.archivedAt),
-    names = Object.fromEntries(projects.map(p => [p.id, p.name]))
+    names: Record<string, string> = Object.fromEntries(projects.map(p => [p.id, p.name]))
+  const nameOf = (projectId: string): string | undefined =>
+    names[projectId] ?? (isChatProject(projectId) ? tr('sidebar.Sidebar.chats') : undefined)
+  const chats = active
+    .filter(s => isChatProject(s.record.projectId) && !s.record.pinnedAt)
+    .map(row)
+    .sort(bottomOrder)
   const result = projects.map(p => {
     const list = sessions.filter(s => s.record.projectId === p.id)
     return {
@@ -86,17 +95,18 @@ export function sidebarData(
     .slice(0, 8)
     .map(s => ({
       ...row(s),
-      project: names[s.record.projectId],
+      project: nameOf(s.record.projectId),
       projectId: s.record.projectId,
       time: time(s.record.updatedAt),
     }))
     .sort(bottomOrder)
   const pinned = active
     .filter(s => s.record.pinnedAt)
-    .map(s => ({ ...row(s), project: names[s.record.projectId], projectId: s.record.projectId }))
+    .map(s => ({ ...row(s), project: nameOf(s.record.projectId), projectId: s.record.projectId }))
     .sort(pinnedOrder)
   return {
     projects: result,
+    chats,
     pinned,
     recent,
   }
@@ -190,6 +200,7 @@ export function demoSidebarData(
   )
   return {
     projects: result,
+    chats: [] as Session[],
     pinned,
     recent: [...restored, ...recent]
       .filter(s => !deleted(s.id) && (!allIds.has(s.id) || active.has(s.id)))

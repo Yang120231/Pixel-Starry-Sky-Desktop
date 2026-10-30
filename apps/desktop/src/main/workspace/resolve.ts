@@ -1,4 +1,5 @@
 // 项目 / 会话 → 工作目录：远端机器的由 machines.target 解析，本机的交给 core（docs/restructure.md §8.3 P6）
+import { isChatProject } from '@pixelsky/protocol'
 import type { WorkspaceRef, WorkspaceTarget } from '../../shared/types/workspace'
 import type { AppContext } from '../app/context'
 import { createToolsHost } from '../core/project-tools/tools'
@@ -46,6 +47,8 @@ export function resolveTerminalTarget(ctx: AppContext, ref: WorkspaceRef): Termi
   }
   const record = host.record(ref.sessionId)
   if (!record) throw new Error('会话已不存在')
+  // 不用项目的对话：终端开在这个对话自己的文件夹里
+  if (isChatProject(record.projectId)) return { projectId: record.projectId, projectName: '对话', cwd: record.cwd }
   const project = host.projects().find(item => item.id === record.projectId)
   if (!project) throw new Error('项目已不存在')
   return { projectId: project.id, projectName: project.name, cwd: record.cwd }

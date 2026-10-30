@@ -10,6 +10,7 @@ import {
   ENGINES,
   GOAL_NO_ENGINE,
   GOAL_NO_PROCESS,
+  isChatProject,
   parseCodedError,
   type Effort,
   type EffortPanelDefaults,
@@ -34,6 +35,7 @@ import {
   sessionTitle as demoTitle,
   type Project,
   type RecentItem,
+  type Session,
   type SessionStatus,
 } from '@/data'
 import { engineAccent, fastBlockedText, fastHintText, relativeTime, selfModelOptions } from './labels'
@@ -117,6 +119,8 @@ export function useSessionTitle(id: string | null): string {
 
 export interface SidebarData {
   projects: Project[]
+  /** 不用项目的对话（侧栏「对话」分组） */
+  chats: Session[]
   /** 置顶的会话（侧栏最上面的「置顶」分组），后置顶的在前 */
   pinned: PinnedSession[]
   recent: Array<RecentItem & { status?: SessionStatus }>
@@ -1076,13 +1080,15 @@ export function useStatusBar(sessionId: string | null, draftKey?: string): Statu
                 : project.name,
             path: snap?.record.cwd ?? project.path,
           }
-        : snap
-          ? {
-              id: snap.record.projectId,
-              name: snap.record.cwd.split(/[\\/]/).pop() || snap.record.cwd,
-              path: snap.record.cwd,
-            }
-          : null,
+        : isChatProject(pid)
+          ? { id: pid!, name: tr('sidebar.Sidebar.chatLabel'), path: snap?.record.cwd ?? '' }
+          : snap
+            ? {
+                id: snap.record.projectId,
+                name: snap.record.cwd.split(/[\\/]/).pop() || snap.record.cwd,
+                path: snap.record.cwd,
+              }
+            : null,
     projects,
     // 新会话，或者从工作区选择里刚打开、还没发过消息的会话（显示欢迎页）才能换；已经开始的会话只显示（issue #11）
     canPickProject: !sessionId || (!!snap && snap.items.length === 0 && snap.state === 'idle'),
