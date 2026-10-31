@@ -56,6 +56,8 @@ export interface EngineHostOptions {
   checkpoints?: boolean
   /** 保存数据的目录（Electron 里是 userData/engine） */
   dataDir: string
+  /** 删「对话」时它的文件夹里有文件：移到回收站（本机系统回收站，远端数据目录 trash/）；不给就直接删 */
+  trash?: (path: string) => Promise<void>
   /** 广播事件给界面 */
   emit(event: HostEvent): void
   /** 当前账号的额度快照变了（docs/ui/account-quota.md §4.4）：主进程广播给所有窗口；远程机器上不传，只静默合并 */

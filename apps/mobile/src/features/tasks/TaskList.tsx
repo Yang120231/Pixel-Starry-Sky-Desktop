@@ -6,7 +6,16 @@ import { CloudOff, Inbox, Laptop, MonitorSmartphone, Plus, SearchX, ShieldOff, S
 import type { SessionSummary } from '@pixelsky/protocol'
 import type { Pairing } from '@/connection'
 import { useContentSearch, useDesktop } from '@/data/hooks'
-import { RECENT_STEP, ago, filterTasks, sessionList, sessionStatus, taskProjects, taskTitle } from '@/data/tasks'
+import {
+  RECENT_STEP,
+  ago,
+  filterTasks,
+  projectNameOf,
+  sessionList,
+  sessionStatus,
+  taskProjects,
+  taskTitle,
+} from '@/data/tasks'
 import { L } from '@/i18n'
 import { linkStateLabel } from '@/i18n/labels'
 import { Button, Dot, Empty, IconButton, Screen, Spinner } from '@/ui'
@@ -29,7 +38,7 @@ export function TaskList({
   const [query, setQuery] = useState('')
   const [project, setProject] = useState('')
   const [recentLimit, setRecentLimit] = useState(RECENT_STEP)
-  const projectName = (s: SessionSummary) => projects.find(p => p.id === s.record.projectId)?.name ?? ''
+  const projectName = (s: SessionSummary) => projectNameOf(projects, s.record.projectId)
   const withTasks = taskProjects(sessions, projects)
   // 筛的项目没有任务了（被删、归档）就回到全部
   const projectId = withTasks.some(p => p.id === project) ? project : null

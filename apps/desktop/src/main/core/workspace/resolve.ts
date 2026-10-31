@@ -8,12 +8,12 @@ import type { WorkspaceRef, WorkspaceTarget } from '../../../shared/types/worksp
 const foldersOf = (folders: readonly ProjectFolder[] | undefined): Pick<WorkspaceTarget, 'folders'> =>
   folders?.length ? { folders: folders.map(f => ({ path: f.path, name: f.name || basename(f.path) || f.path })) } : {}
 
-/** 桌面文件与编辑器只读取已有的目标，不启动或重建会话引擎。 */
-export function resolveLocalWorkspace(host: EngineHost, ref: WorkspaceRef): WorkspaceTarget {
+/** 桌面文件与编辑器只读取已有的目标，不启动或重建会话引擎。chatName：「对话」的显示名（core 读不到界面语言，由 app 层传） */
+export function resolveLocalWorkspace(host: EngineHost, ref: WorkspaceRef, chatName = '对话'): WorkspaceTarget {
   // 指名了附加文件夹（Git 面板切到别的仓库）：工作区就是那个文件夹，它自己没有附加文件夹
   if (ref.folder) {
     const { folder, ...base } = ref
-    const whole = resolveLocalWorkspace(host, base as WorkspaceRef)
+    const whole = resolveLocalWorkspace(host, base as WorkspaceRef, chatName)
     const picked = whole.folders?.[folder - 1]
     if (!picked) throw new Error('项目里没有这个文件夹')
     return { ref: { ...whole.ref, folder }, path: picked.path, name: `${whole.name} · ${picked.name}` }
@@ -31,7 +31,8 @@ export function resolveLocalWorkspace(host: EngineHost, ref: WorkspaceRef): Work
       ref: durableRef,
       path: record.cwd,
       name:
-        project?.name ?? (isChatProject(record.projectId) ? '对话' : (record.cwd.split(/[\\/]/).pop() ?? record.title)),
+        project?.name ??
+        (isChatProject(record.projectId) ? chatName : (record.cwd.split(/[\\/]/).pop() ?? record.title)),
       ...folders,
     }
   }

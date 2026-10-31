@@ -1,7 +1,7 @@
 // 会话：创建、打开（懒创建运行时）、改设置、改名、置底、回退、归档、删除
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, readdirSync, rmSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import {
   CHAT_PROJECT_ID,
   EFFORT_PANEL_KEYS,
@@ -428,7 +428,23 @@ export class HostSessions {
       m.queue.forget(id)
       // 记录删掉之后：一轮结束时的快照不会再开始，等正在跑的 git 结束再删目录
       await m.checkpoints.forget(id)
+      // 不用项目的对话：文件夹跟着走。分叉共用 chats/<原会话 ID>，最后一个用它的（含归档）删了才处理
+      const folder =
+        record?.projectId === CHAT_PROJECT_ID &&
+        dirname(record.cwd) === m.projects.chatRoot() &&
+        ![...ctx.records.values()].some(r => r.cwd === record.cwd)
+          ? record.cwd
+          : null
+      let full = false
       try {
+        full = !!folder && readdirSync(folder).length > 0
+      } catch {
+        // 已经不在了
+      }
+      const trash = full ? ctx.opts.trash : undefined
+      try {
+        // 有文件先回收：回收失败就报错、会话放回列表（对话框说的是移到回收站，不能留下找不到的文件夹）
+        if (trash) await trash(folder!)
         ctx.store.deleteSession(id)
       } catch (error) {
         // 目录没删掉（被别的程序占着之类）：会话放回列表，可以再删一次，不会变成「会话已不存在」
@@ -437,12 +453,11 @@ export class HostSessions {
       } finally {
         m.events.broadcastSessions()
       }
-      // 不用项目的对话：它自己的文件夹跟着删（只删 chats/<会话 ID>，删不掉不影响）
-      if (record?.projectId === CHAT_PROJECT_ID && record.cwd === join(m.projects.chatRoot(), id))
+      if (folder && !trash)
         try {
-          rmSync(record.cwd, { recursive: true, force: true, maxRetries: 2 })
+          rmSync(folder, { recursive: true, force: true, maxRetries: 2 })
         } catch {
-          // 被别的程序占着之类：留下空壳文件夹也无妨
+          // 空文件夹被占着之类：留下也无妨
         }
     } finally {
       ctx.changingSessions.delete(id)

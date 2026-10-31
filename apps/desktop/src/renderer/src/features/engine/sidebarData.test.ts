@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProjectRecord, SessionSummary } from '@pixelsky/protocol'
 import { captureRecency, demoSidebarData, freezeRecency, recentSpansProjects, sidebarData } from './sidebarData'
 describe('侧栏归档分组', () => {
-  it('不用项目的对话单独列在 chats 里，不挂在项目下；归档和置顶的不列，最近任务里项目名写「对话」', () => {
+  it('不用项目的对话单独列在 chats 里，不挂在项目下；归档的列在 chatsArchived，置顶的不列，最近任务里项目名写「对话」', () => {
     const projects: ProjectRecord[] = [{ id: 'p', name: '项目', path: 'test', addedAt: 1 }]
     const at = (id: string, projectId: string, extra: object = {}) => ({
       record: { id, projectId, title: id, updatedAt: 1, ...extra },
@@ -11,11 +11,16 @@ describe('侧栏归档分组', () => {
     const sessions = [
       at('a', 'chat'),
       at('b', 'p'),
-      at('c', 'chat', { archivedAt: 1 }),
+      at('c', 'chat', { archivedAt: 1, bottomedAt: 1 }),
       at('d', 'chat', { pinnedAt: 1 }),
+      at('e', 'ssh-1a2b~chat', { archivedAt: 1, pinnedAt: 1 }),
+      at('f', 'p', { archivedAt: 1 }),
     ] as SessionSummary[]
     const data = sidebarData(projects, sessions, {}, String)
     expect(data.chats.map(s => s.id)).toEqual(['a'])
+    // 和项目的归档一样：置顶的也列，置底的排后面
+    expect(data.chatsArchived.map(s => s.id)).toEqual(['e', 'c'])
+    expect(data.projects[0].archived?.map(s => s.id)).toEqual(['f'])
     expect(data.projects[0].sessions.map(s => s.id)).toEqual(['b'])
     expect(data.recent.find(r => r.id === 'a')).toMatchObject({ projectId: 'chat', project: '对话' })
     expect(data.pinned.map(s => s.id)).toEqual(['d'])

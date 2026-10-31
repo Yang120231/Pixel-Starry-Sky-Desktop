@@ -1,4 +1,4 @@
-import { IPC_CONTRACT, type IpcChannelSpec } from '@pixelsky/protocol'
+import { CHAT_PROJECT_ID, IPC_CONTRACT, type IpcChannelSpec } from '@pixelsky/protocol'
 
 /** Resource IDs carry machine ownership; user text, file contents and native engine IDs do not. */
 export function machineOf(id: unknown): string {
@@ -31,16 +31,23 @@ const fields = new Set([
   'ownerId',
 ])
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
-const resourceId = /^(ssh|wsl)-[a-f0-9-]+~[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
+// 内置「对话」项目的 ID 是 chat，不是 uuid（远端的写成 ssh-…~chat）
+const resourceId = /^(ssh|wsl)-[a-f0-9-]+~(?:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}|chat)$/i
 const opaque = new Set(['input', 'output', 'content', 'env', 'arguments', 'schema', 'metadata'])
 export function remoteIds<T>(value: T, machine: string, encode: boolean, field = ''): T {
   if (opaque.has(field)) return value
   const prefix = machine + '~'
   if (typeof value === 'string') {
-    if (encode) return (fields.has(field) && uuid.test(value) ? prefix + value : value) as T
+    if (encode)
+      return (
+        fields.has(field) && (uuid.test(value) || (field === 'projectId' && value === CHAT_PROJECT_ID))
+          ? prefix + value
+          : value
+      ) as T
+    const rest = value.slice(prefix.length)
     return (
-      (!field || fields.has(field)) && value.startsWith(prefix) && uuid.test(value.slice(prefix.length))
-        ? value.slice(prefix.length)
+      (!field || fields.has(field)) && value.startsWith(prefix) && (uuid.test(rest) || rest === CHAT_PROJECT_ID)
+        ? rest
         : value
     ) as T
   }

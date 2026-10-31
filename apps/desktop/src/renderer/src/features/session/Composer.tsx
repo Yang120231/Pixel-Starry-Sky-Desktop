@@ -20,6 +20,7 @@ import {
   MAX_IMAGE_BYTES,
   MAX_IMAGE_COUNT,
   MAX_IMAGE_TOTAL,
+  isChatProject,
   parseGoalCommand,
   type FileAttachment,
 } from '@pixelsky/protocol'
@@ -56,7 +57,7 @@ import { getFiles } from '@/features/files/store'
 import { MentionMenu, useMentionEntries } from './MentionMenu'
 import { applyMention, folderMention, insertAt, insertMention, mentionAt } from './mention'
 import { machineOf } from '@/features/machines/store'
-import { composerWorkspace } from './composerWorkspace'
+import { composerWorkspace, folderWorkspace } from './composerWorkspace'
 import { useResumeCommand } from '@/features/resume/useResumeCommand'
 import { parseResumeCommand } from '@/features/resume/model'
 import { openResumePicker } from '@/features/resume/store'
@@ -182,7 +183,11 @@ export function Composer({
   // 「/resume」是像素星空自己的命令（接着终端里的 Claude Code / Codex 会话）：执行者是 Claude Code 或 Codex 才有；引擎哪天也给了同名命令就丢掉它的
   const resumeWorkspace = composerWorkspace(live?.sessionId, status, draftKey)
   const resumeEngineId = (live ?? demoSource).engine?.id
-  const resumeCommand = useResumeCommand(resumeEngineId, resumeWorkspace?.sessionId ?? resumeWorkspace?.projectId)
+  // 对话没有项目目录：接终端会话会扫到所有对话的文件夹（命令面板、欢迎页提示也不给）
+  const resumeCommand = useResumeCommand(
+    isChatProject(status?.project?.id) ? null : resumeEngineId,
+    resumeWorkspace?.sessionId ?? resumeWorkspace?.projectId,
+  )
   const menuCommands = useMemo(
     () => [
       ...(resumeCommand ? commands.filter(c => !(c.name === 'resume' && c.invocation !== 'skill')) : commands),
@@ -214,7 +219,7 @@ export function Composer({
   const [caret, setCaret] = useState<number | null>(null)
   const [mentionDismissed, setMentionDismissed] = useState(false)
   const [mentionIndex, setMentionIndex] = useState(0)
-  const mentionTarget = canMention ? composerWorkspace(live?.sessionId, status, draftKey) : null
+  const mentionTarget = canMention ? folderWorkspace(live?.sessionId, status, draftKey) : null
   const mention =
     mentionTarget && caret !== null && commandQuery === undefined && !mentionDismissed ? mentionAt(text, caret) : null
   const mentions = useMentionEntries(mentionTarget, mention?.query ?? null)
@@ -815,7 +820,7 @@ export function Composer({
       <ComposerStatusBar
         live={status}
         extra={statusExtra}
-        git={live ? composerWorkspace(live.sessionId, status, draftKey) : null}
+        git={live ? folderWorkspace(live.sessionId, status, draftKey) : null}
       />
       <div data-composer-style={style} className={cn('composer-shell relative', chatgpt && CARD_STYLE)}>
         <div

@@ -5,15 +5,31 @@ import { EmptyState, PanelCard } from './PanelSurface'
 import { tr, translateMessage } from '@/i18n/core'
 import { useI18n } from '@/i18n/I18nProvider'
 import { onStoredChange, readStoredJson } from '@/features/settings/storedValue'
+import { useFolderlessChat } from '@/features/editor/target'
 export const FIELD =
   'h-8 w-full min-w-0 rounded-md border border-line bg-surface px-2.5 text-list text-fg outline-none focus-visible:border-accent'
 export const CARD = 'shrink-0 rounded-lg border border-line-card bg-surface p-3 shadow-sm'
-export function NoProject() {
+/** chat：已经开始的对话（按项目保存的功能用不了） */
+export function NoProject({ chat: started = false }: { chat?: boolean }) {
   useI18n()
+  // 欢迎页选了「对话」：不是没选项目，是发第一条消息前还没有文件夹
+  const chat = useFolderlessChat()
   return (
     <div className="flex min-h-0 flex-1 p-3">
       <PanelCard>
-        <EmptyState icon={Box} title={tr('projectTools.noProject')} hint={tr('projectTools.noProjectHint')} />
+        <EmptyState
+          icon={Box}
+          title={tr(
+            started ? 'projectTools.chatUnsupported' : chat ? 'projectTools.chatNoFolder' : 'projectTools.noProject',
+          )}
+          hint={tr(
+            started
+              ? 'projectTools.chatUnsupportedHint'
+              : chat
+                ? 'projectTools.chatNoFolderHint'
+                : 'projectTools.noProjectHint',
+          )}
+        />
       </PanelCard>
     </div>
   )

@@ -1,3 +1,4 @@
+import { draftWorkspace } from '@/features/machines/drafts'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../../i18n/core'
 import { memo, useLayoutEffect, useRef, useState } from 'react'
@@ -5,7 +6,7 @@ import { Columns2, Ellipsis, Folder, Maximize2, Minimize2, MousePointerClick, Pl
 import { IconButton, Popover, PopoverItem, Spinner, cn } from '@/ui'
 import { ActionMenu, type MenuAction } from '@/ui/ActionMenu'
 import { isLive, useEngineState, useSessionTitle } from '@/features/engine'
-import { busy } from '@/features/engine/sidebarData'
+import { busy, orChat } from '@/features/engine/sidebarData'
 import { SPLIT_DOWN, SPLIT_RIGHT, ZOOM_PANE, withShortcut } from '@/features/layout/shortcuts'
 import { flipFrom } from './motion'
 import { TabSlot } from './tabHost'
@@ -40,9 +41,13 @@ function useTabInfo(tab: string | null): TabInfo {
   const title = useSessionTitle(sessionId)
   const summary = useEngineState(s => (sessionId ? s.sessions.find(x => x.record.id === sessionId) : undefined))
   const project = useEngineState(s => {
-    if (summary) return s.projects.find(p => p.id === summary.record.projectId)?.name ?? null
-    // 新对话标签还没有会话记录：写当前项目（原来顶栏也是这样，useActiveWorkspace）
-    if (tab && isNewTab(tab)) return s.projects.find(p => p.id === s.currentProjectId)?.name ?? null
+    if (summary)
+      return orChat(s.projects.find(p => p.id === summary.record.projectId)?.name, summary.record.projectId) ?? null
+    // 新对话标签还没有会话记录：写这个标签绑的项目（和发消息、状态栏一致），没绑时写当前项目
+    if (tab && isNewTab(tab)) {
+      const id = draftWorkspace(tab)?.projectId ?? s.currentProjectId
+      return orChat(s.projects.find(p => p.id === id)?.name, id) ?? null
+    }
     return null
   })
   const demoProject =

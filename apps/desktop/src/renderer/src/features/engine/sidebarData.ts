@@ -2,6 +2,9 @@ import { bottomOrder, isChatProject, pinnedOrder, type ProjectRecord, type Sessi
 import type { Project, RecentItem, Session, SessionStatus } from '@/data/types'
 import type { DemoSessionChange } from '@/data/types'
 import { tr } from '@/i18n/core'
+/** 会话所属项目的显示名：内置「对话」写「对话」；项目已移除时 undefined */
+export const orChat = (name: string | undefined, projectId: string | null | undefined): string | undefined =>
+  name ?? (isChatProject(projectId) ? tr('sidebar.Sidebar.chat') : undefined)
 /** 运行中，或这一轮说完了但后台子智能体还在跑（docs/ui/notifications.md §7） */
 export const busy = (s: SessionSummary): boolean => s.state !== 'idle' || !!s.background
 /** 侧栏「置顶」分组里的会话：带上所属项目名 */
@@ -40,6 +43,8 @@ export function sidebarData(
   projects: Project[]
   /** 不用项目的对话（没归档、没置顶的），按最近活动排 */
   chats: Session[]
+  /** 归档了的不用项目的对话（「对话」分组底下的「已归档 N 个」） */
+  chatsArchived: Session[]
   pinned: PinnedSession[]
   recent: Array<RecentItem & { status: SessionStatus }>
 } {
@@ -62,10 +67,13 @@ export function sidebarData(
   )
   const active = sessions.filter(s => !s.record.archivedAt),
     names: Record<string, string> = Object.fromEntries(projects.map(p => [p.id, p.name]))
-  const nameOf = (projectId: string): string | undefined =>
-    names[projectId] ?? (isChatProject(projectId) ? tr('sidebar.Sidebar.chats') : undefined)
+  const nameOf = (projectId: string): string | undefined => orChat(names[projectId], projectId)
   const chats = active
     .filter(s => isChatProject(s.record.projectId) && !s.record.pinnedAt)
+    .map(row)
+    .sort(bottomOrder)
+  const chatsArchived = sessions
+    .filter(s => isChatProject(s.record.projectId) && s.record.archivedAt)
     .map(row)
     .sort(bottomOrder)
   const result = projects.map(p => {
@@ -107,6 +115,7 @@ export function sidebarData(
   return {
     projects: result,
     chats,
+    chatsArchived,
     pinned,
     recent,
   }
@@ -201,6 +210,7 @@ export function demoSidebarData(
   return {
     projects: result,
     chats: [] as Session[],
+    chatsArchived: [] as Session[],
     pinned,
     recent: [...restored, ...recent]
       .filter(s => !deleted(s.id) && (!allIds.has(s.id) || active.has(s.id)))

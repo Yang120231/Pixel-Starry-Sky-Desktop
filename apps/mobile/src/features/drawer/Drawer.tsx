@@ -22,7 +22,7 @@ import {
   SquarePen,
   type LucideIcon,
 } from 'lucide-react'
-import type { ProjectRecord, SessionSummary } from '@pixelsky/protocol'
+import { CHAT_PROJECT_ID, type ProjectRecord, type SessionSummary } from '@pixelsky/protocol'
 import { connections } from '@/connection'
 import { desktopLists } from '@/data/desktop'
 import { formatBalance } from '@/data/account'
@@ -32,6 +32,7 @@ import {
   filterTasks,
   groupTasks,
   projectGroups,
+  projectNameOf,
   sessionList,
   sessionStatus,
   taskTitle,
@@ -140,7 +141,7 @@ export function Drawer(props: DrawerProps) {
   const tools = ready && !!link?.hello?.tools
   const searching = !!query.trim()
   const content = useContentSearch(deviceId, query, null)
-  const projectName = (s: SessionSummary) => projects.find(p => p.id === s.record.projectId)?.name ?? ''
+  const projectName = (s: SessionSummary) => projectNameOf(projects, s.record.projectId)
   const list = sessionList(filterTasks(sessions, query, null, projectName), searching ? Infinity : limit)
   const rows = [...list.waiting, ...list.rest]
   const waiting = groupTasks(sessions).waiting.length
@@ -278,7 +279,8 @@ export function Drawer(props: DrawerProps) {
             <span className="truncate">{name}</span>
             <ChevronRight size={16} className={cn('shrink-0 transition-transform', open && 'rotate-90')} />
           </button>
-          {g.project && (
+          {/* 「对话」组不给新建：新对话页只能在项目里选（选不到「对话」） */}
+          {g.project && g.project.id !== CHAT_PROJECT_ID && (
             <button
               type="button"
               disabled={!canAct}

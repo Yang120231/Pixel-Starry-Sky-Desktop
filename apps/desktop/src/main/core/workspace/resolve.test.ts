@@ -14,6 +14,7 @@ const project: ProjectRecord = {
 const sessions: Record<string, Partial<SessionRecord>> = {
   main: { id: 'main', projectId: 'p1', cwd: 'D:/work/app', extraDirs: ['D:/old'], title: 't' },
   copy: { id: 'copy', projectId: 'p1', cwd: 'D:/work/app-copy', extraDirs: ['D:/old'], title: 't' },
+  chat: { id: 'chat1', projectId: 'chat', cwd: 'D:/data/chats/chat1', title: '问个事' },
 }
 const host = {
   projects: () => [project],
@@ -46,6 +47,14 @@ describe('resolveLocalWorkspace：多文件夹项目（docs/ui/multi-root-projec
       name: '应用 · 共享',
     })
     expect(() => resolveLocalWorkspace(host, { projectId: 'p1', folder: 3 })).toThrow('没有这个文件夹')
+  })
+  it('不用项目的对话：路径是它自己的文件夹，名字用传进来的显示名（缺省「对话」）', () => {
+    expect(resolveLocalWorkspace(host, { sessionId: 'chat' })).toEqual({
+      ref: { sessionId: 'chat' },
+      path: 'D:/data/chats/chat1',
+      name: '对话',
+    })
+    expect(resolveLocalWorkspace(host, { sessionId: 'chat' }, 'Chat').name).toBe('Chat')
   })
   it('workspaceRef 只收 1–20 的整数编号', () => {
     expect(workspaceRef({ projectId: 'p', folder: 2 })).toEqual({ projectId: 'p', folder: 2 })

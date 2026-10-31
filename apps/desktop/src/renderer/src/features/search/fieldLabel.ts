@@ -1,5 +1,6 @@
 // 搜索结果的字段名（docs/ui/workbench-ux-3.md §2.5）：协议和引擎给的是中文原文（旧的远端辅助进程也是），
 // 界面显示时按当前语言换。不用按原文整句翻译：同样的字在别处有别的英文（「会话标题」是搜索范围「Conversation titles」）
+import { isChatProject } from '@pixelsky/protocol'
 import { tr, type TranslationKey } from '@/i18n/core'
 
 const FIELDS: Record<string, TranslationKey> = {
@@ -26,7 +27,8 @@ export function fieldLabel(field: string): string {
   return key ? tr(key) : field
 }
 
-/** 引擎给已经移除的项目写「已移除的项目」；真实的项目名照原样 */
-export function projectLabel(name: string): string {
+/** 引擎给已经移除的项目写「已移除的项目」（「对话」不在项目列表里，旧引擎也这么写）；真实的项目名照原样 */
+export function projectLabel(name: string, projectId?: string): string {
+  if (isChatProject(projectId)) return tr('sidebar.Sidebar.chat')
   return name === '已移除的项目' ? tr('search.field.removedProject') : name
 }

@@ -10,7 +10,7 @@ import type {
   UsageRecord,
   UsageSummary,
 } from '@pixelsky/protocol'
-import { estimateCost, officialPrice } from '@pixelsky/protocol'
+import { CHAT_PROJECT_ID, estimateCost, officialPrice } from '@pixelsky/protocol'
 import { settleUsage } from '../billing'
 import { backfillRows, clockOffset, matchCalls, type BackfillTurn } from '../backfill'
 import type { UsageQuery } from '../usage'
@@ -82,7 +82,8 @@ export class HostUsage {
     if (record.provider && !record.platform) usage = this.customEstimate(record, usage)
     this.platformRequests.delete(key)
     const endedAt = Date.now()
-    const project = ctx.m.projects.find(record.projectId)?.name ?? null
+    // 对话不算项目：写 null，用量页显示「未归属项目」（存的名字不随界面语言变）
+    const project = record.projectId === CHAT_PROJECT_ID ? null : (ctx.m.projects.find(record.projectId)?.name ?? null)
     const rows: UsageRecord[] = Object.entries(usage.models).map(([model, m]) => ({
       v: 1,
       id: `${id}:${turnId}:${model}`,

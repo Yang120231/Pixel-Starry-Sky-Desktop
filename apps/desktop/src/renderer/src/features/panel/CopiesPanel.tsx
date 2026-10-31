@@ -1,3 +1,4 @@
+import { isChatProject } from '@pixelsky/protocol'
 import { useEffect, useState } from 'react'
 import { Copy, FolderOpen, MessageSquare } from 'lucide-react'
 import { Button, IconButton, Select } from '@/ui'
@@ -13,10 +14,10 @@ import { demo as demoData } from '@/data/demo'
 const blank: CopyInput = { name: '', branch: '', base: 'HEAD', existingBranch: false }
 export function CopiesPanel() {
   const ctx = useProjectContext()
-  return ctx.projectId ? (
+  return ctx.projectId && !isChatProject(ctx.projectId) ? (
     <CopiesBody key={ctx.projectId} projectId={ctx.projectId} name={ctx.name} demo={ctx.demo} />
   ) : (
-    <NoProject />
+    <NoProject chat={isChatProject(ctx.projectId)} />
   )
 }
 function CopiesBody({ projectId, name, demo }: { projectId: string; name: string; demo: boolean }) {

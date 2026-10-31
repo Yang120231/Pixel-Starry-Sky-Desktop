@@ -3,6 +3,7 @@ import { createInterface } from 'node:readline'
 import { setImmediate as yieldThread } from 'node:timers/promises'
 import { join } from 'node:path'
 import {
+  CHAT_PROJECT_ID,
   SEARCH_SCOPES,
   compareSearchResults,
   containsTerms,
@@ -115,7 +116,8 @@ export async function searchSessions(
     itemId,
     title: record.title,
     projectId: record.projectId,
-    projectName: projects.get(record.projectId)?.name ?? '已移除的项目',
+    projectName:
+      projects.get(record.projectId)?.name ?? (record.projectId === CHAT_PROJECT_ID ? '对话' : '已移除的项目'),
     engine: record.engine,
     updatedAt: record.updatedAt,
     ...match,

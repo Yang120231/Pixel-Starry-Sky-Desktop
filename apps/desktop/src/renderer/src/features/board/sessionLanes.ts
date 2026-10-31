@@ -4,6 +4,7 @@
 import type { ApprovalRequest, QueueSummary, SessionSummary } from '@pixelsky/protocol'
 import type { SessionDigest } from '@/features/engine/sessionDigest'
 import type { InboxItem } from '@/features/panel/inbox/inboxModel'
+import { orChat } from '@/features/engine/sidebarData'
 
 export type SessionLane = 'waiting' | 'failed' | 'paused' | 'unread' | 'running'
 /** 等你列 / 胶囊列表里的先后：等你处理 > 出错 > 已暂停 > 新回复，最后是运行中 */
@@ -65,7 +66,7 @@ export function sessionCards(input: {
       id,
       title: s.record.title,
       projectId: s.record.projectId,
-      project: input.projectNames[s.record.projectId] ?? '',
+      project: orChat(input.projectNames[s.record.projectId], s.record.projectId) ?? '',
       at: item?.at ?? s.record.updatedAt,
       lane,
       request: item?.request ?? null,

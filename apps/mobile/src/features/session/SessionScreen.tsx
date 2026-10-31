@@ -12,6 +12,7 @@ import { useDesktop, useSession } from '@/data/hooks'
 import { contextLabel, contextUsage } from '@/data/context'
 import { attemptFor, sendKey, type SendAttempt } from '@/data/retry'
 import { toolError, type ToolId } from '@/data/tools'
+import { projectNameOf } from '@/data/tasks'
 import { retryMessage, retryNoticeId, timeDividers } from '@/data/turns'
 import { L } from '@/i18n'
 import { Banner, Dot, Screen, Spinner, cn } from '@/ui'
@@ -69,7 +70,7 @@ export function SessionScreen({
   const entries = useMemo(() => foldTurns(items ?? [], running), [items, running])
   const dividers = useMemo(() => timeDividers(items ?? []), [items])
   const record = snapshot?.record ?? summary?.record
-  const project = projects.find(p => p.id === record?.projectId)?.name
+  const project = projectNameOf(projects, record?.projectId)
   const engine = record?.engine ?? 'claude'
   // 空闲（等你回复）时不写状态，只剩「引擎 · 项目」
   const status = pending
