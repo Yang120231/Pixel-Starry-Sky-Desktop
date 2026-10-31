@@ -43,7 +43,10 @@ process.once('exit', () => {
 const peer = new RpcPeer(process.stdin, process.stdout, async (method, args) => (await runtime).call(method, args))
 // 第三个参数是桌面端装好的像素星空命令行入口；路径必须是本机固定位置的固定格式，其他一律忽略（桌面端传来的也不盲信）
 const cliArg = process.argv[3]
-const pixelCli = cliArg && isRemoteCliEntry(cliArg, homedir()) && existsSync(cliArg) ? cliArg : undefined
+const pixelCli =
+  cliArg && isRemoteCliEntry(cliArg, homedir(), undefined, process.platform === 'win32') && existsSync(cliArg)
+    ? cliArg
+    : undefined
 const runtime = createRemoteRuntime(peer, dir, pixelCli ? { pixelCli } : {})
 let closing = false
 const close = () => {
