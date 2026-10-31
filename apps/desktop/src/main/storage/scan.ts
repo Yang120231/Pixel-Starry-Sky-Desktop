@@ -76,6 +76,8 @@ export interface ScanInput {
   root: string
   /** 引擎的会话目录（每个会话一个子目录，名字是会话 ID） */
   sessionsDir: string
+  /** 不用项目的对话的工作目录（同样每个会话一个子目录，名字是会话 ID）；删会话时引擎会一起移走 */
+  chatsDir?: string
   /** 日志目录；在数据目录外也算进来 */
   logsDir: string | null
   sessions: Array<Omit<StorageSession, 'bytes'>>
@@ -87,17 +89,21 @@ export interface ScanInput {
 export async function scanUsage(input: ScanInput): Promise<StorageUsage> {
   const parts: Record<StoragePartKey, number> = { sessions: 0, archived: 0, copies: 0, cache: 0, logs: 0, other: 0 }
   const cacheDirs = CACHE_DIRS.map(name => join(input.root, name))
-  const separate = new Set([...cacheDirs, input.sessionsDir, ...(input.logsDir ? [input.logsDir] : [])].map(norm))
+  const perSession = [input.sessionsDir, ...(input.chatsDir ? [input.chatsDir] : [])]
+  const separate = new Set([...cacheDirs, ...perSession, ...(input.logsDir ? [input.logsDir] : [])].map(norm))
 
+  // 会话目录和对话目录都按会话 ID 分子目录，同一个 ID 的加在一起
   const sessionBytes = new Map<string, number>()
-  let names: string[] = []
-  try {
-    names = await readdir(input.sessionsDir)
-  } catch {
-    // 还没有会话目录
+  for (const dir of perSession) {
+    let names: string[] = []
+    try {
+      names = await readdir(dir)
+    } catch {
+      // 还没有这个目录
+    }
+    const sizes = await mapLimit(names, 8, name => dirSize(join(dir, name)))
+    names.forEach((name, i) => sessionBytes.set(name, (sessionBytes.get(name) ?? 0) + sizes[i]))
   }
-  const sizes = await mapLimit(names, 8, name => dirSize(join(input.sessionsDir, name)))
-  names.forEach((name, i) => sessionBytes.set(name, sizes[i]))
 
   const sessions: StorageSession[] = input.sessions.map(s => {
     const bytes = sessionBytes.get(s.id) ?? 0

@@ -7,6 +7,7 @@ import type { AppContext } from '../app/context'
 import { logService } from '../app/logging'
 import * as ipc from '../ipc/guard'
 import type { StorageDeleteResult, StorageUsage } from '../../shared/types/storage'
+import { removeSessions } from './remove'
 import { cacheSize, scanUsage } from './scan'
 
 /** 一分钟内重复打开设置页直接用上次的结果（项目副本可能很大，统计要几秒） */
@@ -51,6 +52,7 @@ export function initStorage(ctx: AppContext): void {
       const usage = await scanUsage({
         root,
         sessionsDir: join(root, 'engine', 'sessions'),
+        chatsDir: join(root, 'engine', 'chats'),
         logsDir: logService()?.files.dir ?? null,
         sessions,
         copies,
@@ -90,26 +92,7 @@ export function initStorage(ctx: AppContext): void {
     const host = ctx.engine
     if (!host) throw new Error('引擎还没准备好')
     const list = ids(raw)
-    const states = new Map(host.sessions().map(s => [s.record.id, s]))
-    const result: StorageDeleteResult = { done: [], failed: [] }
-    for (const id of list) {
-      const s = states.get(id)
-      if (!s) {
-        result.failed.push({ id, message: '会话不存在' })
-        continue
-      }
-      // 列表是打开对话框时取的，删之前再看一次：这期间可能又开始跑了
-      if (s.state !== 'idle' || s.background) {
-        result.failed.push({ id, message: '会话正在运行' })
-        continue
-      }
-      try {
-        await host.deleteSession(id)
-        result.done.push(id)
-      } catch (error) {
-        result.failed.push({ id, message: String((error as Error)?.message ?? error) })
-      }
-    }
+    const result = await removeSessions(host, list)
     log.info('删除会话', { done: result.done.length, failed: result.failed.length })
     last = null
     return result

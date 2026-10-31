@@ -84,6 +84,34 @@ describe('scanUsage', () => {
     expect(await cacheSize(root)).toBe(250)
   })
 
+  it('adds the chat folder of a chat without a project to its session', async () => {
+    const root = join(base, 'data')
+    const sessionsDir = join(root, 'engine', 'sessions')
+    const chatsDir = join(root, 'engine', 'chats')
+    write(join(sessionsDir, 'c1', 'items.jsonl'), 10)
+    write(join(chatsDir, 'c1', 'notes.md'), 300)
+    write(join(chatsDir, 'c2', 'out.txt'), 20)
+    write(join(chatsDir, 'orphan', 'x.txt'), 4)
+
+    const usage = await scanUsage({
+      root,
+      sessionsDir,
+      chatsDir,
+      logsDir: null,
+      sessions: [
+        { id: 'c1', title: 'chat', projectName: null, updatedAt: 1, archivedAt: null, pinned: false, busy: false },
+        { id: 'c2', title: 'old', projectName: null, updatedAt: 2, archivedAt: 3, pinned: false, busy: false },
+      ],
+      copies: [],
+    })
+
+    expect(usage.sessions.map(s => [s.id, s.bytes])).toEqual([
+      ['c1', 310],
+      ['c2', 20],
+    ])
+    expect(usage.parts).toEqual({ sessions: 310, archived: 20, copies: 0, cache: 0, logs: 0, other: 4 })
+  })
+
   it('works before anything exists', async () => {
     const root = join(base, 'empty')
     const usage = await scanUsage({
