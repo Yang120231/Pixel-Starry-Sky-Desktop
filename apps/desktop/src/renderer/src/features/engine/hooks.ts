@@ -10,6 +10,7 @@ import {
   ENGINES,
   GOAL_NO_ENGINE,
   GOAL_NO_PROCESS,
+  isChatProject,
   parseCodedError,
   type Effort,
   type EffortPanelDefaults,
@@ -34,6 +35,7 @@ import {
   sessionTitle as demoTitle,
   type Project,
   type RecentItem,
+  type Session,
   type SessionStatus,
 } from '@/data'
 import { engineAccent, fastBlockedText, fastHintText, relativeTime, selfModelOptions } from './labels'
@@ -117,6 +119,10 @@ export function useSessionTitle(id: string | null): string {
 
 export interface SidebarData {
   projects: Project[]
+  /** 不用项目的对话（侧栏「对话」分组） */
+  chats: Session[]
+  /** 归档了的不用项目的对话（「对话」分组底下的「已归档 N 个」） */
+  chatsArchived: Session[]
   /** 置顶的会话（侧栏最上面的「置顶」分组），后置顶的在前 */
   pinned: PinnedSession[]
   recent: Array<RecentItem & { status?: SessionStatus }>
@@ -1065,24 +1071,27 @@ export function useStatusBar(sessionId: string | null, draftKey?: string): Statu
   const pid = chosen?.projectId ?? snap?.record.projectId ?? (sessionId ? null : currentProjectId)
   const project = projects.find(p => p.id === pid) ?? null
   return {
-    project: chosen
-      ? { id: chosen.projectId, name: chosen.name, path: chosen.path }
-      : project
-        ? {
-            id: project.id,
-            name:
-              snap && snap.record.cwd.toLowerCase() !== project.path.toLowerCase()
-                ? project.name + ' / ' + (snap.record.cwd.split(/[\\/]/).pop() || '')
-                : project.name,
-            path: snap?.record.cwd ?? project.path,
-          }
-        : snap
+    // 对话排在最前：草稿里存的名字是空的，按当前语言显示
+    project: isChatProject(pid)
+      ? { id: pid!, name: tr('sidebar.Sidebar.chatLabel'), path: snap?.record.cwd ?? '' }
+      : chosen
+        ? { id: chosen.projectId, name: chosen.name, path: chosen.path }
+        : project
           ? {
-              id: snap.record.projectId,
-              name: snap.record.cwd.split(/[\\/]/).pop() || snap.record.cwd,
-              path: snap.record.cwd,
+              id: project.id,
+              name:
+                snap && snap.record.cwd.toLowerCase() !== project.path.toLowerCase()
+                  ? project.name + ' / ' + (snap.record.cwd.split(/[\\/]/).pop() || '')
+                  : project.name,
+              path: snap?.record.cwd ?? project.path,
             }
-          : null,
+          : snap
+            ? {
+                id: snap.record.projectId,
+                name: snap.record.cwd.split(/[\\/]/).pop() || snap.record.cwd,
+                path: snap.record.cwd,
+              }
+            : null,
     projects,
     // 新会话，或者从工作区选择里刚打开、还没发过消息的会话（显示欢迎页）才能换；已经开始的会话只显示（issue #11）
     canPickProject: !sessionId || (!!snap && snap.items.length === 0 && snap.state === 'idle'),

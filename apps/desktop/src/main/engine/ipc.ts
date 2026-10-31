@@ -7,11 +7,11 @@
 // 同时按原顺序带起依赖引擎的模块：平台额度、SSH 机器、扩展、终端、产物面板的本机操作。
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
-import { app, BrowserWindow, dialog, net, powerMonitor, session, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, net, powerMonitor, session, shell, type IpcMainInvokeEvent } from 'electron'
 import * as ipc from '../ipc/guard'
 import { nativeText, windowLocale } from '../app/ui-language'
 import { EngineHost } from '@pixelsky/engine'
-import type { HostEvent, OpenedSession, SessionRecord } from '@pixelsky/protocol'
+import { isChatProject, type HostEvent, type OpenedSession, type SessionRecord } from '@pixelsky/protocol'
 import type { AppContext } from '../app/context'
 import { platformCalls, platformCharges, accountCalls, accountSummary } from '../platform/billing'
 import { onAccountChange, signedInEmail } from '../account/account'
@@ -42,7 +42,7 @@ import { initTerminalIpc, localTerminals } from '../terminal/ipc'
 import { initMachines } from '../machines/service'
 import { machineOf } from '../machines/identity'
 import { initArtifacts } from '../artifacts/ipc'
-import { resolveTerminalTarget, workspaceToolsHost } from '../workspace/resolve'
+import { chatName, resolveTerminalTarget, workspaceToolsHost } from '../workspace/resolve'
 import { ENGINE_OPS, addProjectPaths, type EngineOpContext } from '../core/engine/ops'
 import { openedForDesktop } from '../core/engine/desktop-images'
 import { listImportCandidates } from '../core/importProjects'
@@ -115,6 +115,8 @@ export async function initEngine(ctx: AppContext): Promise<void> {
       fetch: (url, init) => net.fetch(url, init),
     }),
     dataDir: join(app.getPath('userData'), 'engine'),
+    // 删对话时它的文件夹里有文件：移到系统回收站
+    trash: path => shell.trashItem(path),
     checkpoints: true,
     pixelCli: bundledPixelCli(),
     // 有 SSH 机器时由它合并本机与远端的项目 / 会话再广播
@@ -233,7 +235,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
       label: 'Claude Code',
       sessionId,
       projectId: record.projectId,
-      projectName: project?.name ?? record.projectId,
+      projectName: project?.name ?? (isChatProject(record.projectId) ? chatName() : record.projectId),
     })
     h.setTuiTerminal(sessionId, term.id)
     return { terminalId: term.id, engineSessionId: launch.engineSessionId }

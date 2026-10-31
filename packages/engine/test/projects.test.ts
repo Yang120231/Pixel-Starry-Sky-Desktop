@@ -1,15 +1,15 @@
 // 项目列表的重命名与移除：只改显示名 / 列表，不碰磁盘上的文件夹
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
-import type { HostEvent } from '@pixelsky/protocol'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { CHAT_PROJECT_ID, type HostEvent } from '@pixelsky/protocol'
 import { EngineHost } from '../src'
 
 let root: string
 let events: HostEvent[]
-const makeHost = (): EngineHost =>
-  new EngineHost({ dataDir: join(root, 'data'), emit: e => events.push(e), adapters: {} })
+const makeHost = (trash?: (path: string) => Promise<void>): EngineHost =>
+  new EngineHost({ dataDir: join(root, 'data'), emit: e => events.push(e), adapters: {}, trash })
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'pixelsky-projects-'))
@@ -104,4 +104,51 @@ it('附加文件夹：不存在的目录、格式不对、项目不存在都拒�
   expect(() => host.setProjectFolders(project.id, [{ path: 3 }])).toThrow('项目文件夹不对')
   expect(() => host.setProjectFolders('missing', [])).toThrow('项目不存在')
   expect(host.projects()[0].folders).toEqual([{ path: a }])
+})
+
+it('不用项目的对话：每个对话在 chats/<会话 ID> 下有自己的空文件夹，不进项目列表，删对话时文件夹一起删', async () => {
+  const host = makeHost()
+  const a = host.createSession({ projectId: CHAT_PROJECT_ID })
+  const b = host.createSession({ projectId: CHAT_PROJECT_ID })
+  expect(a.projectId).toBe(CHAT_PROJECT_ID)
+  expect(a.cwd).toBe(join(root, 'data', 'chats', a.id))
+  expect(b.cwd).not.toBe(a.cwd)
+  expect(existsSync(a.cwd)).toBe(true)
+  expect(host.projects()).toEqual([])
+  await host.deleteSession(a.id)
+  expect(existsSync(a.cwd)).toBe(false)
+  expect(existsSync(b.cwd)).toBe(true)
+})
+
+it('删对话：文件夹有文件就交给 trash，引擎不自己删；trash 失败时报错、对话和文件夹都留着', async () => {
+  const trash = vi.fn(async (_path: string) => {})
+  const host = makeHost(trash)
+  const a = host.createSession({ projectId: CHAT_PROJECT_ID })
+  writeFileSync(join(a.cwd, 'note.md'), 'x')
+  await host.deleteSession(a.id)
+  expect(trash).toHaveBeenCalledWith(a.cwd)
+  expect(existsSync(join(a.cwd, 'note.md'))).toBe(true)
+
+  trash.mockRejectedValueOnce(new Error('回收站不可用'))
+  const b = host.createSession({ projectId: CHAT_PROJECT_ID })
+  writeFileSync(join(b.cwd, 'note.md'), 'x')
+  await expect(host.deleteSession(b.id)).rejects.toThrow('回收站不可用')
+  expect(host.sessions().some(s => s.record.id === b.id)).toBe(true)
+  expect(existsSync(join(b.cwd, 'note.md'))).toBe(true)
+  // 再删一次（回收站好了）就照常删掉
+  await host.deleteSession(b.id)
+  expect(host.sessions().some(s => s.record.id === b.id)).toBe(false)
+})
+
+it('删对话：分叉共用文件夹，删原对话时留着，最后一个删了才删', async () => {
+  const trash = vi.fn(async (_path: string) => {})
+  const host = makeHost(trash)
+  const a = host.createSession({ projectId: CHAT_PROJECT_ID })
+  const fork = (await host.forkSession(a.id, null)).record
+  expect(fork.cwd).toBe(a.cwd)
+  await host.deleteSession(a.id)
+  expect(existsSync(a.cwd)).toBe(true)
+  await host.deleteSession(fork.id)
+  expect(existsSync(a.cwd)).toBe(false)
+  expect(trash).not.toHaveBeenCalled()
 })

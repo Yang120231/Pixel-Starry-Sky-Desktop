@@ -1,3 +1,4 @@
+import { isChatProject } from '@pixelsky/protocol'
 import { Wordmark } from '@/ui'
 import { isDemo } from '@/data'
 import { useEngineState, type ComposerController, type StatusBarController } from '@/features/engine'
@@ -8,7 +9,7 @@ import { ResumeHintLink } from '@/features/resume/ResumeHintLink'
 import { Composer } from './Composer'
 import { ComposerArea } from './ComposerArea'
 import { starters } from './starters'
-import { composerWorkspace } from './composerWorkspace'
+import { folderWorkspace } from './composerWorkspace'
 import { focusComposer } from './composerTarget'
 import { useI18n } from '@/i18n/I18nProvider'
 
@@ -31,10 +32,12 @@ export function WelcomeView({
   const projectId = status?.project?.id
   const hasConversations = useEngineState(s => !!projectId && s.sessions.some(x => x.record.projectId === projectId))
   const needProject = !!status && !status.project
+  // 选了「对话」：没有文件夹，不查 Git、不给项目起点、不提示终端里的旧会话
+  const chat = isChatProject(projectId)
   const key = draftKey ?? live?.sessionId ?? (live ? 'new-session' : 'demo')
   const [draft, setDraft] = useComposerDraft(key)
   // 演示模式用演示数据里的 Git 状态
-  const ref = status ? composerWorkspace(live?.sessionId, status, draftKey) : isDemo ? { projectId: 'demo' } : null
+  const ref = status ? folderWorkspace(live?.sessionId, status, draftKey) : isDemo ? { projectId: 'demo' } : null
   const git = useGitSummary(ref)
   const choose = (prompt: string): void => {
     setDraft(prompt)
@@ -54,7 +57,7 @@ export function WelcomeView({
             {needProject ? text('先选择一个项目文件夹，然后描述你要做的事') : text('在这台电脑上开始一个新任务')}
           </p>
           {/* 这个项目在终端里有原来的 AI 会话：给个入口接着聊；没找到 / 查失败时给「重新查找」（远程项目 / 演示不显示） */}
-          {!isDemo && projectId && !hasConversations && (
+          {!isDemo && projectId && !chat && !hasConversations && (
             <ResumeHintLink
               projectId={projectId}
               separator="comma"
@@ -71,6 +74,11 @@ export function WelcomeView({
         </div>
         {/* 占住高度：开始打字时起点消失，输入框不跟着动 */}
         <div className="mt-3 flex min-h-8 flex-wrap justify-center gap-2 px-6">
+          {chat && (
+            <p className="self-center text-center text-meta text-fg-faint">
+              {tr('session.WelcomeView.chatNotSandbox')}
+            </p>
+          )}
           {ref && !draft.trim() && (
             <div role="group" aria-label={tr('session.WelcomeView.starters')} className="contents">
               {starters(git?.changed ?? 0).map(s => (

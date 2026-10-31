@@ -1,6 +1,9 @@
 // 会话：创建、打开（懒创建运行时）、改设置、改名、置底、回退、归档、删除
 import { randomUUID } from 'node:crypto'
+import { mkdirSync, readdirSync, rmSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import {
+  CHAT_PROJECT_ID,
   EFFORT_PANEL_KEYS,
   emptySnapshot,
   normalizeSessionTitle,
@@ -51,15 +54,19 @@ export class HostSessions {
     const m = ctx.m
     const project = m.projects.find(opts.projectId)
     if (!project) throw new Error('项目不存在')
+    const id = randomUUID()
+    // 不用项目的对话：在数据目录下给它开一个自己的空文件夹
+    if (project.id === CHAT_PROJECT_ID) workspacePath = join(project.path, id)
     if (m.guard.isLocked(workspacePath ?? project.path)) throw new Error('工作目录正在维护，请稍后重试')
     const engine = opts.engine ?? m.settings.file.defaults.engine
     if (opts.platform && opts.provider) throw new Error('额度来源无效')
     if (opts.provider && (typeof opts.provider.id !== 'string' || !PROVIDER_ID.test(opts.provider.id)))
       throw new Error('无效的自定义接口')
     const d = m.settings.engineDefaults(engine)
+    if (project.id === CHAT_PROJECT_ID) mkdirSync(workspacePath!, { recursive: true })
     const now = Date.now()
     const record: SessionRecord = {
-      id: randomUUID(),
+      id,
       projectId: project.id,
       cwd: workspacePath ?? project.path,
       ...(project.folders?.length ? { extraDirs: project.folders.map(f => f.path) } : {}),
@@ -421,7 +428,23 @@ export class HostSessions {
       m.queue.forget(id)
       // 记录删掉之后：一轮结束时的快照不会再开始，等正在跑的 git 结束再删目录
       await m.checkpoints.forget(id)
+      // 不用项目的对话：文件夹跟着走。分叉共用 chats/<原会话 ID>，最后一个用它的（含归档）删了才处理
+      const folder =
+        record?.projectId === CHAT_PROJECT_ID &&
+        dirname(record.cwd) === m.projects.chatRoot() &&
+        ![...ctx.records.values()].some(r => r.cwd === record.cwd)
+          ? record.cwd
+          : null
+      let full = false
       try {
+        full = !!folder && readdirSync(folder).length > 0
+      } catch {
+        // 已经不在了
+      }
+      const trash = full ? ctx.opts.trash : undefined
+      try {
+        // 有文件先回收：回收失败就报错、会话放回列表（对话框说的是移到回收站，不能留下找不到的文件夹）
+        if (trash) await trash(folder!)
         ctx.store.deleteSession(id)
       } catch (error) {
         // 目录没删掉（被别的程序占着之类）：会话放回列表，可以再删一次，不会变成「会话已不存在」
@@ -430,6 +453,12 @@ export class HostSessions {
       } finally {
         m.events.broadcastSessions()
       }
+      if (folder && !trash)
+        try {
+          rmSync(folder, { recursive: true, force: true, maxRetries: 2 })
+        } catch {
+          // 空文件夹被占着之类：留下也无妨
+        }
     } finally {
       ctx.changingSessions.delete(id)
     }

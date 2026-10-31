@@ -532,7 +532,7 @@ export function SearchDialog({
                     {terms.length ? <Fragments parts={titleFragments(r.title, terms)} /> : r.title}
                   </span>
                   <span className="mt-0.5 block truncate text-label text-fg-faint">
-                    {projectLabel(r.projectName)} ·{' '}
+                    {projectLabel(r.projectName, r.projectId)} ·{' '}
                     {r.id.startsWith('manual-task:') ? tr('projectTools.myTasks') : ENGINES[r.engine].name} ·{' '}
                     {new Date(r.updatedAt).toLocaleString(getLocale(), {
                       month: 'numeric',

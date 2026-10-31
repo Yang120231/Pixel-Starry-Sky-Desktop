@@ -13,7 +13,7 @@ import { dirtyFile, getFiles, removeFile } from '@/features/files/store'
 import { bindDraftWorkspace, draftWorkspace } from '@/features/machines/drafts'
 import { getEngineState, setCurrentProject } from '@/features/engine/store'
 import { hasAttachmentDraft } from '@/features/session/attachments/drafts'
-import type { SessionRecord } from '@pixelsky/protocol'
+import { isChatProject, type SessionRecord } from '@pixelsky/protocol'
 import type { WorkspaceChoice } from '../../../../shared/types/machines'
 import { getMachines } from '@/features/machines/store'
 import { showWorkbench } from '@/features/layout/page'
@@ -146,6 +146,16 @@ export function tabInUse(tab: string): boolean {
  * 否则用这台机器上次选的工作目录（同一个项目时），再不然用项目目录。
  */
 function bindNewTab(tab: string, record: SessionRecord | null, projectId: string | null, explicit: boolean): void {
+  // 不用项目的对话：标签记住自己是对话；没有工作目录，发第一条消息时引擎给它建自己的文件夹
+  if (isChatProject(projectId)) {
+    bindDraftWorkspace(
+      tab,
+      { projectId: projectId!, name: '', path: '', copyId: null, branch: null, error: null },
+      explicit,
+    )
+    if (explicit) setCurrentProject(projectId!)
+    return
+  }
   const engine = getEngineState()
   const project = engine.projects.find(p => p.id === projectId)
   if (!project) return

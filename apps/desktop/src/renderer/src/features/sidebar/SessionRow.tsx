@@ -9,6 +9,7 @@ import {
   CircleDot,
   Columns2,
   Copy,
+  FolderOpen,
   GitBranch,
   GitMerge,
   Hash,
@@ -27,6 +28,8 @@ import { paneActions } from '@/features/panes/store'
 import { useSessionActions, type SessionTarget } from './SessionActions'
 import { channelActions, channelsLive, useChannels, useSessionBindings } from '@/features/channels/store'
 import { translateMessage } from '@/i18n/core'
+import { isChatProject } from '@pixelsky/protocol'
+import { machineOf } from '@/features/machines/store'
 import {
   branchParent,
   branchReadOnly,
@@ -82,6 +85,9 @@ export function SessionRow({
   const branchable = !isLive || canBranch(record)
   const readOnly = branchReadOnly(record)
   const parent = branchParent(record)
+  // 不用项目的对话：能打开它自己的文件夹（只本机）；频道要项目，不给加入
+  const chat = isChatProject(record?.projectId),
+    remote = machineOf(target.id) !== 'local'
   const meta = !record?.branch
     ? t('branch.menu.metaMain')
     : record.branch.copyId
@@ -121,7 +127,8 @@ export function SessionRow({
     }
   }, [position])
   useLayoutEffect(() => {
-    if (coords) menu.current?.querySelector<HTMLButtonElement>('[role=menuitem]')?.focus({ preventScroll: true })
+    if (coords)
+      menu.current?.querySelector<HTMLButtonElement>('[role=menuitem]:not(:disabled)')?.focus({ preventScroll: true })
   }, [coords])
   return (
     <div
@@ -224,7 +231,7 @@ export function SessionRow({
               visibility: coords ? 'visible' : 'hidden',
             }}
             onKeyDown={event => {
-              const items = [...menu.current!.querySelectorAll<HTMLButtonElement>('[role=menuitem]')],
+              const items = [...menu.current!.querySelectorAll<HTMLButtonElement>('[role=menuitem]:not(:disabled)')],
                 i = items.indexOf(document.activeElement as HTMLButtonElement)
               if (event.key === 'Escape') {
                 event.preventDefault()
@@ -313,7 +320,7 @@ export function SessionRow({
               disabled={actions.busy}
               onClick={() => run(() => actions.request('rename', target))}
             />
-            {channelsLive && !target.archived && (
+            {channelsLive && !target.archived && !chat && (
               <MenuItem
                 icon={Hash}
                 label={t('channels.join.menu')}
@@ -344,6 +351,22 @@ export function SessionRow({
               onClick={() => run(() => actions.request(target.archived ? 'restore' : 'archive', target))}
             />
             <MenuSeparator />
+            {chat && (
+              <MenuItem
+                icon={FolderOpen}
+                label={t('project.reveal')}
+                disabled={remote}
+                title={remote ? t('path.revealRemote') : undefined}
+                onClick={() =>
+                  run(
+                    () =>
+                      void window
+                        .pixelsky!.files.reveal({ sessionId: target.id })
+                        .catch(e => toast(translateMessage((e as Error).message) || t('session.retry'))),
+                  )
+                }
+              />
+            )}
             <MenuItem icon={Copy} label={t('session.copyId')} onClick={() => run(() => actions.copyId(target))} />
             <MenuItem
               icon={Trash2}

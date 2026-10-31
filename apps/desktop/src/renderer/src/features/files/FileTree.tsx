@@ -885,6 +885,12 @@ export function FileTree({
                     rootPath={project.path}
                   />
                 ))
+              ) : active.chat ? (
+                // 欢迎页选了「对话」：发第一条消息前还没有文件夹，不是没添加项目
+                <p className="px-4 py-6 text-meta text-fg-muted">
+                  {tr('projectTools.chatNoFolder')}
+                  <span className="block">{tr('projectTools.chatNoFolderHint')}</span>
+                </p>
               ) : (
                 <p className="px-4 py-6 text-meta text-fg-muted">{tr('files.FileTree.noProjectYetAdd')}</p>
               )}

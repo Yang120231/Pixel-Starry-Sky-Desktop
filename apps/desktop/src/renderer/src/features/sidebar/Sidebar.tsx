@@ -11,6 +11,7 @@ import {
   FolderInput,
   FolderPlus,
   Import,
+  MessageSquarePlus,
   X,
 } from 'lucide-react'
 import { IconButton, cn, useComingSoon, useToast } from '@/ui'
@@ -24,7 +25,8 @@ import {
 } from '@/features/appearance/sidebar'
 import { getSidebarIcon } from '@/features/appearance/sidebarIcons'
 import { addProject, isLive, recentSpansProjects, useSidebarData, useSidebarFreezeOn } from '@/features/engine'
-import { addProjectPaths, importProjects } from '@/features/engine/store'
+import { addProjectPaths, chatProjectId, importProjects } from '@/features/engine/store'
+import { newChatInProject } from '@/features/coding/workspace'
 import { useSettings } from '@/features/settings/SettingsProvider'
 import { SidebarHeader } from './SidebarHeader'
 import { SidebarNav } from './SidebarNav'
@@ -33,6 +35,7 @@ import { PinnedList } from './PinnedList'
 import { PinnedTasks } from './PinnedTasks'
 import { TASK_DRAG_TYPE, draggedTask, pinTask } from '@/features/panel/pinnedTasks'
 import { ProjectTree } from './ProjectTree'
+import { ChatList } from './ChatList'
 import { openArchiveOld } from './archiveOldData'
 import { arrangeProjects, groupKey } from './projectGroups'
 import { RecentItem } from './RecentItem'
@@ -63,7 +66,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   const recentShown = recentOpen(prefs, useShortWindow())
   const recentId = useId()
   // 演示模式是 mock 数据，否则是引擎里的真实项目和会话
-  const { projects, pinned: pinnedSessions, recent } = useSidebarData()
+  const { projects, chats, chatsArchived, pinned: pinnedSessions, recent } = useSidebarData()
   const toast = useToast()
   const onAddProject = isLive ? () => void addProject() : () => comingSoon(tr('sidebar.Sidebar.addProject'))
   // 「项目」标题右边的「＋」：添加项目文件夹（可多选）/ 从一个文件夹导入（docs/ui/multi-root-projects.md §2）
@@ -76,6 +79,8 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   // 「项目」标题右边的「⋯」：归档旧会话（范围是全部项目）
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null)
   const onNewTask = isLive ? () => onSelectSession(null) : undefined
+  // 「对话」标题右边的「＋」：开一个不用项目的新对话（欢迎页上项目换成「对话」）
+  const onNewChat = (): void => void newChatInProject(chatProjectId())
   const AddProjectIcon = getSidebarIcon('addProject', prefs.icons)
   // 把任务清单里的任务拖到侧栏任意位置松开：固定到「固定任务」（docs/ui/files-search-terminal-pins.md §5）
   const [dropping, setDropping] = useState(false)
@@ -100,6 +105,7 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   const cardById = useMemo(() => cardsOf(cards), [cards])
   const shownProjects = runFilter && lanes ? filterProjects(projects, lanes, runFilter) : projects
   const shownPinned = runFilter && lanes ? filterSessions(pinnedSessions, lanes, runFilter) : pinnedSessions
+  const shownChats = runFilter && lanes ? filterSessions(chats, lanes, runFilter) : chats
   useEffect(() => {
     if (runFilter && !cards.length) setRunFilter(null)
   }, [runFilter, cards.length])
@@ -116,10 +122,12 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
   useSidebarFreezeOn(root)
   const order = useMemo(
     () =>
-      [...projects.flatMap(p => p.sessions.map(s => `${p.id}/${s.id}`)), ...recent.map(r => `recent/${r.id}`)].join(
-        '|',
-      ),
-    [projects, recent],
+      [
+        ...chats.map(s => `chat/${s.id}`),
+        ...projects.flatMap(p => p.sessions.map(s => `${p.id}/${s.id}`)),
+        ...recent.map(r => `recent/${r.id}`),
+      ].join('|'),
+    [chats, projects, recent],
   )
   useFlip(root, order, !useReducedMotion())
   return (
@@ -187,6 +195,31 @@ export function Sidebar({ selectedSessionId, onSelectSession, onCollapse }: Side
         )}
 
         {!runFilter && <PinnedTasks dropping={dropping} />}
+
+        {/* 不用项目的对话：有对话（筛选时看符合的）或有归档的才显示；一个都没有时从工作区选择窗口开新对话 */}
+        {isLive && (shownChats.length > 0 || (!runFilter && chatsArchived.length > 0)) && (
+          <SidebarSection
+            title={tr('sidebar.Sidebar.chats')}
+            count={chats.length || undefined}
+            action={
+              <IconButton
+                icon={MessageSquarePlus}
+                label={tr('sidebar.Sidebar.newChat')}
+                size={22}
+                iconSize={14}
+                onClick={onNewChat}
+              />
+            }
+          >
+            <ChatList
+              chats={shownChats}
+              archived={runFilter ? [] : chatsArchived}
+              selectedSessionId={selectedSessionId}
+              onSelectSession={onSelectSession}
+              filtering={!!runFilter}
+            />
+          </SidebarSection>
+        )}
 
         <SidebarSection
           title={tr('sidebar.Sidebar.projects')}

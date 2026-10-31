@@ -67,9 +67,27 @@ export const sessionMessages = {
     zh: '对话记录会从本机删除，不能恢复。项目文件和 Claude Code 自己的会话记录会保留。',
     en: 'This app’s conversation history will be permanently removed from this computer. Project files and Claude Code’s own session records will be kept.',
   },
+  // 删「对话」：它的文件夹跟着走（分叉共用时最后一个删的才处理）
+  'session.deleteChatDescription': {
+    zh: '对话记录会从本机删除，不能恢复。Claude Code 自己的会话记录会保留。',
+    en: 'This app’s conversation history will be permanently removed from this computer. Claude Code’s own session records will be kept.',
+  },
+  'session.deleteChatFiles': {
+    zh: '这个对话的文件夹里有 {count} 项（{names}），会一起移到回收站，可以找回。',
+    en: 'This chat’s folder holds {count} item(s) ({names}). They will be moved to the trash and can be restored.',
+  },
+  'session.deleteChatFilesRemote': {
+    zh: '这个对话的文件夹里有 {count} 项（{names}），会一起移到软件数据目录里的回收目录。',
+    en: 'This chat’s folder holds {count} item(s) ({names}). They will be moved to the app’s trash folder on the remote machine.',
+  },
+  'session.deleteChatEmpty': { zh: '这个对话没有写过文件。', en: 'This chat hasn’t written any files.' },
+  'session.deleteChatShared': {
+    zh: '文件夹还有分叉的对话在用，会保留。',
+    en: 'Its folder is still used by a forked chat and will be kept.',
+  },
   'session.archiveDescription': {
-    zh: '对话记录会保留，可从项目下的已归档列表重新打开。',
-    en: 'Conversation history will be kept. Reopen it from the project’s archived list.',
+    zh: '对话记录会保留，可从侧栏的已归档列表重新打开。',
+    en: 'Conversation history will be kept. Reopen it from the archived list in the sidebar.',
   },
   'session.stopDescription': {
     zh: '这个会话正在运行，会先停止。未发送的排队消息会暂停。',

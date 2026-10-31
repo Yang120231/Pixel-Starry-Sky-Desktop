@@ -1,5 +1,6 @@
 // 任务 › 待处理 的分栏规则（docs/ui/tasks-inbox.md §3）。纯函数，不依赖 window。
 import type { ApprovalRequest, ProjectRecord, QueueSummary, SessionSnapshot, SessionSummary } from '@pixelsky/protocol'
+import { orChat } from '@/features/engine/sidebarData'
 
 export type InboxLane = 'waiting' | 'failed' | 'paused'
 export const LANES: InboxLane[] = ['waiting', 'failed', 'paused']
@@ -76,7 +77,7 @@ export function buildInbox(input: {
     items.push({
       sessionId: summary.record.id,
       title: summary.record.title,
-      project: names.get(summary.record.projectId) ?? '',
+      project: orChat(names.get(summary.record.projectId), summary.record.projectId) ?? '',
       lane,
       at: summary.record.updatedAt,
       request: snapshot?.pending[0] ?? null,

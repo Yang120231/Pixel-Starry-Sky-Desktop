@@ -1,11 +1,17 @@
 // 项目 / 会话 → 工作目录：远端机器的由 machines.target 解析，本机的交给 core（docs/restructure.md §8.3 P6）
+import { isChatProject } from '@pixelsky/protocol'
+import { allMessages } from '../../shared/i18n/translate'
 import type { WorkspaceRef, WorkspaceTarget } from '../../shared/types/workspace'
 import type { AppContext } from '../app/context'
+import { windowLocale } from '../app/ui-language'
 import { createToolsHost } from '../core/project-tools/tools'
 import type { ToolsHost } from '../core/project-tools/common'
 import { resolveLocalWorkspace } from '../core/workspace/resolve'
 import { machineOf } from '../machines/identity'
 import type { TerminalTarget } from '../terminal/manager'
+
+/** 「对话」（不用项目的会话）按界面语言的显示名 */
+export const chatName = (): string => allMessages['sidebar.Sidebar.chat'][windowLocale() === 'en-US' ? 'en' : 'zh']
 
 /** 桌面文件、编辑器、扩展、项目工具共用的工作区解析 */
 export function resolveWorkspace(ctx: AppContext, ref: WorkspaceRef): WorkspaceTarget {
@@ -15,7 +21,7 @@ export function resolveWorkspace(ctx: AppContext, ref: WorkspaceRef): WorkspaceT
     throw new Error('SSH_NOT_CONNECTED')
   }
   if (!ctx.engine) throw new Error('项目尚未加载')
-  return resolveLocalWorkspace(ctx.engine, ref)
+  return resolveLocalWorkspace(ctx.engine, ref, chatName())
 }
 
 /** Project tools only create sessions in worktrees already validated by their manager. */
@@ -46,6 +52,8 @@ export function resolveTerminalTarget(ctx: AppContext, ref: WorkspaceRef): Termi
   }
   const record = host.record(ref.sessionId)
   if (!record) throw new Error('会话已不存在')
+  // 不用项目的对话：终端开在这个对话自己的文件夹里
+  if (isChatProject(record.projectId)) return { projectId: record.projectId, projectName: chatName(), cwd: record.cwd }
   const project = host.projects().find(item => item.id === record.projectId)
   if (!project) throw new Error('项目已不存在')
   return { projectId: project.id, projectName: project.name, cwd: record.cwd }

@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'n
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Item, SearchQuery } from '@pixelsky/protocol'
+import { CHAT_PROJECT_ID, type Item, type SearchQuery } from '@pixelsky/protocol'
 import { EngineHost } from '../src/host'
 import { searchQuery, searchSessions } from '../src/search'
 
@@ -199,6 +199,15 @@ describe('本机会话搜索', () => {
       controller.signal,
     )
     expect(results.results).toEqual([])
+  })
+
+  it('不用项目的对话写「对话」，项目移除了才写「已移除的项目」', async () => {
+    const chat = host.createSession({ projectId: CHAT_PROJECT_ID })
+    const gone = record('旧项目的会话')
+    host.removeProject(gone.projectId)
+    const names = new Map((await host.search(query(''))).results.map(r => [r.sessionId, r.projectName]))
+    expect(names.get(chat.id)).toBe('对话')
+    expect(names.get(gone.id)).toBe('已移除的项目')
   })
 
   it('无数据目录保持空结果；输入不接受越界路径或任意正则范围', async () => {

@@ -7,7 +7,10 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { machineErrors } from '../../../../shared/i18n/machineMessages'
 import type { MachineInput, WorkspaceChoice } from '../../../../shared/types/machines'
 import { useEngineState, addProject } from '@/features/engine'
-import { useActiveWorkspace } from '@/features/editor/target'
+import { chatProjectId } from '@/features/engine/store'
+import { projectOfTab, useActiveWorkspace } from '@/features/editor/target'
+import { newChatInProject } from '@/features/coding/workspace'
+import { isChatProject } from '@pixelsky/protocol'
 import { openRightTab } from '@/features/panel/workspaceStore'
 import { initMachines, machineOf, selectMachine, selectWorkspace, useMachines } from './store'
 import { cachedWorkspaces, loadWorkspaces } from './workspaceList'
@@ -484,6 +487,22 @@ export function MachineDialogs() {
                   onChange={e => setQuery(e.target.value)}
                 />
                 <div className="max-h-72 space-y-1 overflow-auto">
+                  {/* 不用项目的对话（这台机器上的）；搜索时不列，演示模式开不了 */}
+                  {!isDemo && !query && (
+                    <button
+                      disabled={busy}
+                      className="block w-full rounded-lg border border-line bg-surface px-3 py-2 text-left hover:bg-hover disabled:opacity-50"
+                      onClick={() => {
+                        newChatInProject(chatProjectId(state.currentId))
+                        setView(null)
+                      }}
+                    >
+                      <span className="block break-words text-ui font-medium">
+                        {t('machines.chat')}
+                        {active.chat || isChatProject(projectOfTab(active.key)) ? ' ✓' : ''}
+                      </span>
+                    </button>
+                  )}
                   {workspaces
                     .filter(w => (w.name + w.path + w.branch).toLowerCase().includes(query.toLowerCase()))
                     .map(w => (

@@ -180,6 +180,20 @@ describe('查看别的会话 MCP 服务', () => {
     for (const hidden of ['登录接口', '归档的会话', '远程会话', `id=${ME}`]) expect(text).not.toContain(hidden)
   })
 
+  it('不用项目的对话：「同一个项目」时每个对话只算它自己，看不到别的对话', async () => {
+    seed()
+    const chatA = id(7)
+    sessions[0] = summary(record(ME, { projectId: 'chat' }))
+    sessions.push(summary(record(chatA, { projectId: 'chat', title: '另一个对话' })))
+    const client = await connect()
+    expect((await call(client, 'list_threads')).text).toContain('这个对话里没有其他会话')
+    const result = await call(client, 'read_thread', { id: chatA })
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain('（这个对话）')
+    engineConfig = config('all')
+    expect((await call(client, 'list_threads')).text).toContain('「另一个对话」')
+  })
+
   it('本机所有：别的项目也列出，失败的写错误摘要；按标题筛选和数量上限', async () => {
     seed()
     engineConfig = config('all')

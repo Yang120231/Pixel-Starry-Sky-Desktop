@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { Spinner, cn } from '@/ui'
 import { ActionMenu } from '@/ui/ActionMenu'
-import type { Project } from '@/data'
+import type { Project, Session } from '@/data'
 import { useSessionCards } from '@/features/board/useSessionCards'
 import {
   setProjectArrangement,
@@ -98,7 +98,6 @@ export function ProjectTree({
   const saved = prefs.order ?? []
   const [showAll, setShowAll] = useState<Record<string, boolean>>({})
   const [archivedOpen, setArchivedOpen] = useState<Record<string, boolean>>({})
-  // 展开的归档列到第几个（每点一次「还有 N 个」多列 ARCHIVED_PAGE 个）
   const [archivedShown, setArchivedShown] = useState<Record<string, number>>({})
   // Ctrl / Shift 选中的项目（准备组成分区）；Esc 或普通点击清掉
   const [picked, setPicked] = useState<string[]>([])
@@ -329,40 +328,15 @@ export function ProjectTree({
                 onClick={() => setShowAll(state => ({ ...state, [p.id]: !state[p.id] }))}
               />
             )}
-            {!!p.archived?.length && (
-              <>
-                <MoreRow
-                  icon
-                  label={tr('session.archivedCount', { count: p.archived.length })}
-                  open={!!archivedOpen[p.id]}
-                  onClick={() => setArchivedOpen(state => ({ ...state, [p.id]: !state[p.id] }))}
-                />
-                {archivedOpen[p.id] &&
-                  (() => {
-                    const limit = archivedShown[p.id] ?? ARCHIVED_PAGE
-                    const { shown: archived, hidden: more } = visibleArchived(p.archived, limit, selectedSessionId)
-                    return (
-                      <>
-                        {archived.map(session => (
-                          <SessionItem
-                            key={session.id}
-                            session={session}
-                            selected={session.id === selectedSessionId}
-                            onSelect={onSelectSession}
-                          />
-                        ))}
-                        {more > 0 && (
-                          <MoreRow
-                            label={tr('sidebar.tree.more', { count: more })}
-                            open={false}
-                            onClick={() => setArchivedShown(state => ({ ...state, [p.id]: limit + ARCHIVED_PAGE }))}
-                          />
-                        )}
-                      </>
-                    )
-                  })()}
-              </>
-            )}
+            <ArchivedRows
+              archived={p.archived ?? []}
+              selectedSessionId={selectedSessionId}
+              onSelectSession={onSelectSession}
+              open={!!archivedOpen[p.id]}
+              onToggle={() => setArchivedOpen(state => ({ ...state, [p.id]: !state[p.id] }))}
+              limit={archivedShown[p.id]}
+              onMore={limit => setArchivedShown(state => ({ ...state, [p.id]: limit }))}
+            />
           </div>
         )}
       </div>
@@ -624,8 +598,54 @@ function ProjectStatus({
   )
 }
 
+/**
+ * 「已归档 N 个」，展开后列归档的会话（项目下面、「对话」分组下面共用）。
+ * 开没开、列到第几个由调用方记着：收起项目、切换筛选后再展开还是原样
+ */
+export function ArchivedRows({
+  archived,
+  selectedSessionId,
+  onSelectSession,
+  open,
+  onToggle,
+  limit = ARCHIVED_PAGE,
+  onMore,
+}: {
+  archived: Session[]
+  selectedSessionId: string | null
+  onSelectSession: (id: string) => void
+  open: boolean
+  onToggle: () => void
+  /** 展开的归档列到第几个（每点一次「还有 N 个」多列 ARCHIVED_PAGE 个） */
+  limit?: number
+  onMore: (limit: number) => void
+}) {
+  if (!archived.length) return null
+  const { shown, hidden: more } = open ? visibleArchived(archived, limit, selectedSessionId) : { shown: [], hidden: 0 }
+  return (
+    <>
+      <MoreRow icon label={tr('session.archivedCount', { count: archived.length })} open={open} onClick={onToggle} />
+      {shown.map(session => (
+        <SessionItem
+          key={session.id}
+          session={session}
+          selected={session.id === selectedSessionId}
+          onSelect={onSelectSession}
+        />
+      ))}
+      {more > 0 && (
+        <MoreRow
+          label={tr('sidebar.tree.more', { count: more })}
+          open={false}
+          onClick={() => onMore(limit + ARCHIVED_PAGE)}
+        />
+      )}
+    </>
+  )
+}
+
 /** 对话下面的小字行：「还有 N 个对话 ›」/「收起」文字、「已归档 N 个」图标均与会话标题左侧对齐 */
-function MoreRow({
+export function MoreRow({
   label,
   open,
   onClick,

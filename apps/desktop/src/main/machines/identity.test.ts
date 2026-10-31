@@ -97,6 +97,20 @@ describe('machine resource ownership', () => {
     expect(remoteIds({ ids: [machine + '~' + id] }, machine, false)).toEqual({ ids: [id] })
     expect(remoteIds(null, machine, true)).toBeNull()
   })
+  it('prefixes the built-in chat project id (not a uuid) only in projectId fields', () => {
+    const chat = machine + '~chat'
+    expect(remoteIds({ record: { id, projectId: 'chat' }, id: 'chat' }, machine, true)).toEqual({
+      record: { id: machine + '~' + id, projectId: chat },
+      id: 'chat',
+    })
+    expect(remoteArguments('engine:createSession', [{ projectId: chat }], machine)).toEqual([{ projectId: 'chat' }])
+    expect(remoteArguments('engine:createSession', [{ projectId: 'ssh-other~chat' }], machine)).toEqual([
+      { projectId: 'ssh-other~chat' },
+    ])
+    expect(argumentMachine([chat])).toBe(machine)
+    expect(argumentMachine([{ projectId: chat }])).toBe(machine)
+    expect(argumentMachine(['chat'])).toBeNull()
+  })
   it('routes object arguments by sessionId, projectId, then id', () => {
     expect(argumentMachine([{ sessionId: machine + '~' + id }])).toBe(machine)
     expect(argumentMachine([{ id: machine + '~' + id }])).toBe(machine)

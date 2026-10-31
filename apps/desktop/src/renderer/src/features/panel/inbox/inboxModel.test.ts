@@ -68,6 +68,16 @@ describe('待处理分栏', () => {
     ])
     expect(items[1]).toMatchObject({ error: '额度不足', project: '项目' })
   })
+  it('「对话」的项目名写对话；已移除的项目留空', () => {
+    const items = build([
+      summary('chat', { projectId: 'chat' }, 'waiting'),
+      summary('gone', { projectId: 'gone', updatedAt: 5 }, 'waiting'),
+    ])
+    expect(items.map(i => [i.sessionId, i.project])).toEqual([
+      ['chat', '对话'],
+      ['gone', ''],
+    ])
+  })
   it('等限流恢复自动继续的会话（有 limitAt）不算出错；已暂停的照旧', () => {
     const items = build([
       summary('wait', { lastOutcome: 'failed' }, 'idle', { queued: 1, failed: 0, paused: false, limitAt: 5_000 }),
