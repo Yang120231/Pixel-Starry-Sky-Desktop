@@ -120,6 +120,19 @@ describe('Store 读取 data-v1', () => {
     expect(items.map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['completed', 'interrupted', 'completed'])
   })
 
+  it('整个重写条目：一条一条写、攒够约 1 MB 写一次，读出和写入的一致', () => {
+    const store = new Store(data())
+    const S5 = '55555555-5555-4555-8555-555555555555'
+    // 每条 40 万字：第三条时攒过 1 MB 写一次，第四条留到最后写
+    const items = [0, 1, 2, 3].map(
+      i => ({ kind: 'assistant', id: `a${i}`, text: `${i}${'字'.repeat(400_000)}`, status: 'completed' }) as const,
+    )
+    store.replaceItems(S5, items)
+    expect(store.loadItems(S5)).toEqual(items)
+    store.replaceItems(S5, items.slice(0, 1))
+    expect(store.loadItems(S5)).toEqual(items.slice(0, 1))
+  })
+
   it('对话条目：以前存下的 Codex 配置类警告（警告或灰色提示）读出时去掉；别的警告不变', () => {
     const store = new Store(data())
     const S4 = '44444444-4444-4444-8444-444444444444'

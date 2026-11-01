@@ -10,6 +10,7 @@
 import {
   appendFileSync,
   closeSync,
+  copyFileSync,
   createReadStream,
   existsSync,
   fstatSync,
@@ -332,8 +333,35 @@ export class Store {
     mkdirSync(dir, { recursive: true })
     const file = join(dir, 'items.jsonl'),
       tmp = `${file}.tmp`
-    writeFileSync(tmp, items.map(item => JSON.stringify(item) + '\n').join(''), 'utf8')
+    // 一条一条写、攒到约 1 MB 写一次：整个对话拼成一个字符串时几百 MB 的对话内存翻几倍，超过约 512 MB 直接报错
+    const fd = openSync(tmp, 'w')
+    try {
+      let chunk = ''
+      for (const item of items) {
+        chunk += JSON.stringify(item) + '\n'
+        if (chunk.length >= 1 << 20) {
+          writeFileSync(fd, chunk, 'utf8')
+          chunk = ''
+        }
+      }
+      if (chunk) writeFileSync(fd, chunk, 'utf8')
+    } finally {
+      closeSync(fd)
+    }
     replaceFile(tmp, file)
+  }
+
+  /** 分叉带上整个会话：直接复制来源的条目文件（先复制到临时文件再改名），不用把几百 MB 的对话重新序列化。来源没有条目文件时返回 false */
+  copyItems(fromId: string, toId: string): boolean {
+    const from = join(this.sessionDir(fromId), 'items.jsonl')
+    if (!existsSync(from)) return false
+    const dir = this.sessionDir(toId)
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, 'items.jsonl'),
+      tmp = `${file}.tmp`
+    copyFileSync(from, tmp)
+    replaceFile(tmp, file)
+    return true
   }
 
   /**

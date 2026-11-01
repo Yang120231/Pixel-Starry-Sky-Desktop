@@ -426,8 +426,9 @@ export class HostBranch {
     if (userItemId === null) this.assertIdle(id)
     const { index, target } =
       userItemId === null ? { index: rt.snapshot.items.length, target: null } : this.userItem(id, userItemId)
-    const items = rt.snapshot.items.slice(0, index)
-    const later = rt.snapshot.items.slice(index).flatMap(item => (item.kind === 'user' ? [item.id] : []))
+    const all = rt.snapshot.items
+    const items = all.slice(0, index)
+    const later = all.slice(index).flatMap(item => (item.kind === 'user' ? [item.id] : []))
     const adapter = ctx.adapters[source.engine]
     // 来源是还没启动的分叉会话（Codex）时，从它要 fork 的原线程里算截断点
     const thread = source.engineSessionId ?? source.pendingFork?.from ?? null
@@ -504,7 +505,15 @@ export class HostBranch {
         : []
     ctx.records.set(record.id, record)
     ctx.store.saveRecord(record)
-    ctx.store.replaceItems(record.id, [...items, ...notice])
+    // 带上整个会话、上面等的期间来源的条目没变（还是同一份）：空闲时磁盘上的文件就是这些条目，直接复制，
+    // 几百 MB 的对话不用重新序列化；变了（又发了消息）就按取条目时的那份写
+    const copied =
+      userItemId === null &&
+      ctx.runtimes.get(id) === rt &&
+      rt.snapshot.items === all &&
+      ctx.store.copyItems(id, record.id)
+    if (copied) for (const item of notice) ctx.store.appendItem(record.id, item)
+    else ctx.store.replaceItems(record.id, [...items, ...notice])
     m.events.broadcastSessions()
     if (!target) return { record, text: '' }
     return {
