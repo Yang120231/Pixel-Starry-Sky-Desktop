@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { codexMcp, ExtensionService } from './service'
+import { codexMcp, codexMcpNames, ExtensionService } from './service'
 import { MASKED_SECRET } from '@pixelsky/engine'
 import type { ExtensionScope } from '@pixelsky/protocol'
 let root: string, service: ExtensionService, project: string
@@ -69,7 +69,7 @@ describe('管理配置与凭据', () => {
       cc = service.launch(project, 'claude')
     expect(cx.pluginDirs).toEqual([])
     expect(cx.skillRoots).toHaveLength(1)
-    expect(cx.codexConfig?.['mcp_servers."codex-tools"']).toMatchObject({
+    expect(cx.codexConfig?.['mcp_servers.codex-tools']).toMatchObject({
       command: process.execPath,
       env: {},
       env_vars: ['TOKEN'],
@@ -195,7 +195,7 @@ describe('管理配置与凭据', () => {
     expect(existsSync(cc.mcpFile!)).toBe(false)
 
     const cx = service.launch(project, 'codex', {}, history(5001))
-    expect(cx.codexConfig?.['mcp_servers."pixelsky_history"']).toMatchObject({
+    expect(cx.codexConfig?.['mcp_servers.pixelsky_history']).toMatchObject({
       url: 'http://127.0.0.1:5001/mcp',
       env_http_headers: { Authorization: expect.stringMatching(/^PIXELSKY_MCP_SECRET_\d+$/) },
     })
@@ -550,17 +550,29 @@ describe('codexMcp', () => {
       },
       { HOME_X: 'theirs' },
     )
-    expect(r.codexConfig['mcp_servers."a"']).toEqual({
+    expect(r.codexConfig['mcp_servers.a']).toEqual({
       command: 'a',
       args: [],
       env: { SHARED: '1', HOME_X: 'mine' },
       env_vars: ['ONLY_A'],
     })
-    expect(r.codexConfig['mcp_servers."b"']).toEqual({ command: 'b', args: [], env: { SHARED: '2' } })
-    expect(r.codexConfig['mcp_servers."h"']).toEqual({
+    expect(r.codexConfig['mcp_servers.b']).toEqual({ command: 'b', args: [], env: { SHARED: '2' } })
+    expect(r.codexConfig['mcp_servers.h']).toEqual({
       url: 'https://m.example/mcp',
       env_http_headers: { Authorization: 'PIXELSKY_MCP_SECRET_0' },
     })
     expect(r.env).toEqual({ ONLY_A: 'x', PIXELSKY_MCP_SECRET_0: 'Bearer s3cret' })
+  })
+  it('名字写裸键（Codex 不认引号、按点号切路径）；不合规的换成 _，不挤掉本来合规的名字', () => {
+    const http = { type: 'http' as const, url: 'http://127.0.0.1:1/mcp' }
+    const r = codexMcp({ 'pixelsky.channel': http, pixelsky_channel: http, 'a b': http, a_b: http }, {})
+    expect(Object.keys(r.codexConfig).sort()).toEqual([
+      'mcp_servers.a_b',
+      'mcp_servers.a_b_2',
+      'mcp_servers.pixelsky_channel',
+      'mcp_servers.pixelsky_channel_2',
+    ])
+    expect(codexMcpNames(['pixelsky.channel', 'pixelsky_channel']).get('pixelsky_channel')).toBe('pixelsky_channel')
+    for (const k of Object.keys(r.codexConfig)) expect(k).toMatch(/^mcp_servers\.[a-zA-Z0-9_:@/-]+$/)
   })
 })

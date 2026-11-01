@@ -700,6 +700,29 @@ export class ExtensionService {
 }
 
 /**
+ * `-c mcp_servers.<名字>` 里的名字：Codex 按 `.` 直接切路径、不认引号（写成 `"a"` 名字就带上了引号，
+ * 不合 ^[a-zA-Z0-9_:@/.-]+$ 整个服务起不来），所以只能写裸名字。本来就合规的名字原样用、先占位
+ * （内置的 pixelsky_channel 等不会被别的扩展挤掉）；点号和别的字符换成 `_`，换完撞名的加序号
+ */
+export function codexMcpNames(names: string[]): Map<string, string> {
+  const ok = (n: string): boolean => /^[a-zA-Z0-9_:@/-]+$/.test(n)
+  const used = new Set(names.filter(ok)),
+    keys = new Map<string, string>()
+  for (const name of names) {
+    if (ok(name)) {
+      keys.set(name, name)
+      continue
+    }
+    const base = name.replace(/[^a-zA-Z0-9_:@/-]/g, '_') || '_'
+    let key = base
+    for (let i = 2; used.has(key); i++) key = `${base}_${i}`
+    used.add(key)
+    keys.set(name, key)
+  }
+  return keys
+}
+
+/**
  * Codex 的 MCP 配置经 `-c` 进命令行，进程列表、崩溃报告都看得到；凭据（stdio 的 env、HTTP 的请求头）
  * 改成放进 Codex 进程的环境，配置里只写变量名（`env_vars` / `env_http_headers`）。
  * stdio 的变量名必须和服务要的一致：和别的服务或已有环境同名不同值时，这一个仍写在配置里，不去改别人看到的值。
@@ -724,7 +747,9 @@ export function codexMcp(
       owner.set(name, seen === undefined || seen === value ? value : '\0conflict')
     }
   let header = 0
+  const keys = codexMcpNames(Object.keys(servers))
   for (const [name, c] of Object.entries(servers)) {
+    const key = keys.get(name)!
     if (c.type === 'sse') throw new Error('Codex MCP 仅支持 stdio 或 HTTP，请修改传输方式')
     if (c.type === 'stdio') {
       const inline: Record<string, string> = {},
@@ -736,7 +761,7 @@ export function codexMcp(
           forwarded.push(k)
         } else inline[k] = v
       }
-      codexConfig[`mcp_servers.${JSON.stringify(name)}`] = {
+      codexConfig[`mcp_servers.${key}`] = {
         command: c.command,
         args: c.args ?? [],
         env: inline,
@@ -750,7 +775,7 @@ export function codexMcp(
         env[variable] = v
         headers[k] = variable
       }
-      codexConfig[`mcp_servers.${JSON.stringify(name)}`] = {
+      codexConfig[`mcp_servers.${key}`] = {
         url: c.url,
         ...(Object.keys(headers).length ? { env_http_headers: headers } : {}),
       }
