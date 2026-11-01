@@ -85,6 +85,26 @@ describe('本机会话搜索', () => {
     expect((await host.search(query('还未发送'))).results).toEqual([])
   })
 
+  it('打开的会话：截过的长输出中间的词从磁盘搜到，省略说明不算；还在跑的条目搜内存里流式的文字', async () => {
+    const command = (id: string, output: string, status: 'completed' | 'running' = 'completed'): Item => ({
+      kind: 'command',
+      id,
+      command: 'build',
+      description: null,
+      output,
+      exitCode: null,
+      status,
+    })
+    const r = record('长输出', [command('c1', `${'x'.repeat(6000)}中间的关键字${'y'.repeat(6000)}`)])
+    await reopen()
+    const items = host.open(r.id).items
+    expect(items[0]).toMatchObject({ cut: true })
+    expect((await host.search(query('中间的关键字'))).results[0]).toMatchObject({ itemId: 'c1', field: '命令输出' })
+    expect((await host.search(query('中间省略'))).results).toEqual([])
+    host.open(r.id).items = [...items, command('c2', '流式中的输出', 'running')]
+    expect((await host.search(query('流式中的输出'))).results[0]).toMatchObject({ itemId: 'c2' })
+  })
+
   it('范围和项目筛选正确，标题完全匹配优先于更新的正文', async () => {
     const path = join(root, 'another-project')
     mkdirSync(path)
@@ -194,7 +214,14 @@ describe('本机会话搜索', () => {
     await reopen()
     const controller = new AbortController()
     const results = await searchSessions(
-      { dataDir: root, records: [r], projects: host.projects(), liveItems: () => undefined, exists: () => false },
+      {
+        dataDir: root,
+        records: [r],
+        projects: host.projects(),
+        liveItems: () => undefined,
+        body: (_, item) => item,
+        exists: () => false,
+      },
       query('目标'),
       controller.signal,
     )

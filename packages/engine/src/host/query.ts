@@ -20,6 +20,7 @@ export class HostQuery {
         records: [...ctx.records.values()],
         projects: ctx.m.projects.projects(),
         liveItems: id => ctx.runtimes.get(id)?.snapshot.items,
+        body: (id, item) => ctx.store.body(id, item),
         exists: id => ctx.records.has(id),
       },
       searchQuery(value),

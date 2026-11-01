@@ -32,7 +32,8 @@ import { TraceContext, type TraceTarget } from './live/trace'
 import { PathLinksProvider } from '@/features/files/PathLinksProvider'
 import { ConversationFind, useFindShortcut, type FoldedMatches } from '@/features/search/ConversationFind'
 import { expandItems } from '@/features/search/expand'
-import { foldedMatches } from './live/foldedText'
+import { countFull, foldedMatches } from './live/foldedText'
+import { fullItem } from './live/itemBody'
 import { RetryStatus } from './live/RetryStatus'
 import { RateLimitCard } from './live/RateLimitCard'
 import { ReconnectStatus } from './live/ReconnectStatus'
@@ -180,6 +181,16 @@ function LiveSessionView({
   useFindShortcut(mainRef, !!sessionId, () => setFind(n => (n ?? 0) + 1))
   // 折叠着的条目里的命中（docs/ui/conversation-ux.md §2.6）：哪些折叠着看页面上的 data-fold，文字从会话数据里取
   const items = snapshot?.items
+  // 截过的长输出（cutChars）：先按截过的数，再逐条取完整内容补算（只记数字），算完让搜索框重数；换了词、关了搜索就停
+  const counting = useRef<{ term: string } | null>(null)
+  const [fullCounted, setFullCounted] = useState(0)
+  const finding = find !== null
+  useEffect(
+    () => () => {
+      counting.current = null
+    },
+    [finding],
+  )
   const folded = useCallback<FoldedMatches>(
     term => {
       const stream = mainRef.current?.querySelector('[data-conversation-stream]')
@@ -192,10 +203,25 @@ function LiveSessionView({
         const id = el.closest<HTMLElement>('[data-search-item]')?.dataset.searchItem
         if (id) closed.add(id)
       }
-      const { ids, count } = foldedMatches(items, [term], closed, hidden)
+      const { ids, count, missing } = foldedMatches(items, [term], closed, hidden)
+      if (missing.length && counting.current?.term !== term) {
+        const job = { term }
+        counting.current = job
+        void (async () => {
+          for (const item of missing) {
+            if (counting.current !== job) return
+            countFull(item, await fullItem(item, sessionId), [term])
+          }
+          if (counting.current !== job) return
+          counting.current = null
+          setFullCounted(n => n + 1)
+        })()
+      }
       return { count, expand: () => expandItems(sessionId, ids) }
     },
-    [items, sessionId],
+    // fullCounted 变了：补算完了，换一个函数让搜索框重数
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, sessionId, fullCounted],
   )
 
   const runs = snapshot?.runs

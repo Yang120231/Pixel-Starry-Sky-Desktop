@@ -140,6 +140,7 @@ const engine: EngineBridge = {
   createSession: opts => call('engine:createSession', opts),
   openSession: id => call('engine:openSession', id),
   image: (id, itemId, imageId) => call('engine:image', id, itemId, imageId),
+  item: (id, itemId) => call('engine:item', id, itemId),
   send: (id, text) => call('engine:send', id, text),
   context: (id, detail) => call('engine:context', id, detail),
   compact: id => call('engine:compact', id),

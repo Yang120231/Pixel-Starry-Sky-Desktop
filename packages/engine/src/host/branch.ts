@@ -309,7 +309,7 @@ export class HostBranch {
     const old = record.engineSessions
     const oldEntry = old?.[record.engine]
     const oldSeen = oldEntry ? oldEntry.seen : old ? null : lastItemId(rt.snapshot.items)
-    // 留着回退前的条目文件：撤销时放回的条目从它补回截掉的图片数据
+    // 留着回退前的条目文件：撤销时放回的条目从它补回截掉的大字段
     ctx.store.replaceItems(id, kept, { keepOld: true })
     m.events.apply(id, { type: 'items_truncated', fromItemId: userItemId })
     m.cache.reset(id)

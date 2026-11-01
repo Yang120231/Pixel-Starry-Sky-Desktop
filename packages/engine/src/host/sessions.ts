@@ -115,7 +115,7 @@ export class HostSessions {
     if (!record) throw new Error('会话不存在')
     const snapshot = emptySnapshot(record, ctx.store.loadItems(id))
     const adapter = ctx.adapters[record.engine]
-    // 补出来的条目（Codex 旧版只存路径的看图条目）落盘完整的，内存里留截掉图片数据的
+    // 补出来的条目（Codex 旧版只存路径的看图条目）落盘完整的，内存里留截过的
     if (adapter?.restoreItem)
       snapshot.items = snapshot.items.map(item => {
         const restored = adapter.restoreItem!(record, item)
@@ -177,7 +177,7 @@ export class HostSessions {
   }
 
   /**
-   * 按 id 取一条完整条目（截掉的图片数据从磁盘补回）：已载入的从快照里找，补不回来给截过的那条；
+   * 按 id 取一条完整条目（截掉的图片数据、长输出从磁盘补回）：已载入的从快照里找，补不回来给截过的那条；
    * 没载入的从磁盘读，不建运行时。没有这一条为 null
    */
   item(id: string, itemId: string): Item | null {

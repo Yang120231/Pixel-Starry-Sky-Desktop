@@ -35,7 +35,7 @@ import type { SearchRegistry } from '../search-registry'
 import { workspaceRef } from '../workspace-files'
 import { readArtifact } from '../artifact-files'
 import { itemDetail, sessionTail, tailOptions } from './tail'
-import { imageOf } from './desktop-images'
+import { imageOf, itemWithoutImageData } from './desktop-images'
 
 export interface EngineOpContext {
   host: EngineHost
@@ -227,8 +227,13 @@ export const ENGINE_OPS = {
   'engine:openSession': (c, id) => c.host.openSession(str(id, 'id')),
   // 手机端（docs/mobile-remote.md §5.2）：只取最后一段条目，点开某一条时再取完整内容
   'engine:openSessionTail': (c, id, opts) => sessionTail(c.host.openSession(str(id, 'id')), tailOptions(opts)),
-  // 这两个按 id 取一条（图片数据从磁盘补回），没载入的会话不载入
+  // 这几个按 id 取一条（截掉的图片数据、长输出从磁盘补回），没载入的会话不载入
   'engine:itemDetail': (c, id, itemId) => itemDetail(c.host.item(str(id, 'id'), str(itemId, 'itemId'))),
+  // 桌面界面展开、复制截过的长输出时取完整的一条；图片数据仍不带（按 engine:image 取）
+  'engine:item': (c, id, itemId) => {
+    const item = c.host.item(str(id, 'id'), str(itemId, 'itemId'))
+    return item && itemWithoutImageData(item)
+  },
   // 桌面界面按需取一张图的原图（快照里不带，desktop-images.ts）；手机传的是第几张
   'engine:image': (c, id, itemId, imageId) =>
     imageOf(

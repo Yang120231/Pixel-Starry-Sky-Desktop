@@ -123,4 +123,20 @@ describe('engine:image / engine:itemDetail', () => {
       ['s1', 'missing'],
     ])
   })
+
+  it('engine:item gives the full item from host.item without image data', async () => {
+    const { c, calls, user } = context()
+    const item = (await ENGINE_OPS['engine:item'](c, 's1', 'u1')) as Item
+    expect(item).toEqual({
+      ...user,
+      attachments: [{ ...(user as { attachments: object[] }).attachments[0], dataBase64: '' }],
+    })
+    expect(user).toMatchObject({ attachments: [{ dataBase64: 'QUJD' }] })
+    expect(await ENGINE_OPS['engine:item'](c, 's1', 'missing')).toBeNull()
+    await expect(async () => ENGINE_OPS['engine:item'](c, 's1', 3)).rejects.toThrow()
+    expect(calls).toEqual([
+      ['s1', 'u1'],
+      ['s1', 'missing'],
+    ])
+  })
 })

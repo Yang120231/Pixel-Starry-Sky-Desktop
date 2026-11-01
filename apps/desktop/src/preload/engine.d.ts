@@ -113,6 +113,11 @@ export interface EngineBridge {
   openSession(id: string): Promise<OpenedSession>
   /** 一张图的原图：桌面界面的快照里图片不带数据，显示、复制、重发时按需取；找不到为 null */
   image(id: string, itemId: string, imageId: string): Promise<import('@pixelsky/protocol').ImageAttachment | null>
+  /**
+   * 一条完整条目：快照里截过的（item.cut）长输出补回原文，不带 cut / cutChars；图片仍不带数据（按 image 取）。
+   * 展开、复制、导出时用；没有这一条为 null
+   */
+  item(id: string, itemId: string): Promise<import('@pixelsky/protocol').Item | null>
   send(id: string, input: string | MessageInput): Promise<SendReceipt>
   /** summary：最近请求加本地估算，不调接口；full（默认）：调 Token 计数接口 */
   context(

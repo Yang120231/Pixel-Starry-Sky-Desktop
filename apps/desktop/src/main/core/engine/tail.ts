@@ -77,7 +77,8 @@ export function sessionTail(opened: OpenedSession, options: TailOptions): Sessio
     if (window.length > 0 && bytes + itemBytes > options.maxBytes) break
     bytes += itemBytes
     window.push(item)
-    if (hit.cut) truncated.push(item.id)
+    // 宿主快照里输出只留了头尾的（cutChars）也算：itemDetail 经 host.item 取完整的；只去掉图片的不算
+    if (hit.cut || items[i].cutChars !== undefined) truncated.push(item.id)
   }
   window.reverse()
   const start = end - window.length

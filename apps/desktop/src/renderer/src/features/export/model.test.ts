@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Item } from '@pixelsky/protocol'
+import { CUT_EDGE, cutItem, type Item } from '@pixelsky/protocol'
 import {
   DETAIL_LIMIT,
   buildDoc,
@@ -89,6 +89,18 @@ describe('buildDoc', () => {
     expect(tool.kind === 'tool' && tool.detail.length).toBeLessThan(DETAIL_LIMIT + 80)
     const edit = doc.turns[1].parts[2]
     expect(edit.kind === 'tool' && edit.summary).toBe('src/a.ts (+3 -1)')
+  })
+
+  it('exports a cut output (snapshot keeps only head and tail) the same as the full one', () => {
+    const full = 'a'.repeat(CUT_EDGE) + 'b'.repeat(20_000)
+    const cut = cutItem(command('c', 'cat big', full))
+    const detail = (item: Item): string => {
+      const part = buildDoc([user('u', 'q'), item], record, 0).turns[0].parts[1]
+      return part.kind === 'tool' ? part.detail : ''
+    }
+    expect(cut.cutChars).toBe(full.length)
+    expect(detail(cut)).toBe(detail(command('c', 'cat big', full)))
+    expect(detail(cut)).toContain(String(full.length))
   })
 })
 

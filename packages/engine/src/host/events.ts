@@ -84,7 +84,7 @@ export class HostEvents {
     const before = rt.snapshot.items
     // 开始时也写一次：重开会话时条目按开始的先后排（和实时一致），没等到完成的也不会丢（读出时标成已中断）
     if (event.type === 'item_completed' || event.type === 'item_started') ctx.store.appendItem(id, event.item)
-    // 磁盘上写完整的，快照里留截掉图片数据的（docs/session-memory.md）；还在跑的不截。广播的仍是完整事件
+    // 磁盘上写完整的，快照里留截过的（图片数据、长输出）（docs/session-memory.md）；还在跑的不截。广播的仍是完整事件
     rt.snapshot = reduce(
       rt.snapshot,
       event.type === 'item_completed' || event.type === 'item_started'

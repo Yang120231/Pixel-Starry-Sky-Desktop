@@ -76,12 +76,17 @@ export function useItemLocation(
   // 命中的词标出来（docs/ui/content-highlight.md §2 E）：工具行会先自动展开，等两帧再找文字，3 秒后清掉
   useEffect(() => {
     if (!marked) return
+    const mark = () => setMarks('search-term', owner, findRanges(marked.el, marked.terms))
     let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => setMarks('search-term', owner, findRanges(marked.el, marked.terms)))
+      frame = requestAnimationFrame(mark)
     })
+    // 截过的长输出展开后才取回完整内容（itemBody.ts）：内容换了再标一次
+    const watch = new MutationObserver(mark)
+    watch.observe(marked.el, { childList: true, subtree: true, characterData: true })
     const timer = window.setTimeout(() => setMarked(null), MARK_MS)
     return () => {
       cancelAnimationFrame(frame)
+      watch.disconnect()
       window.clearTimeout(timer)
       setMarks('search-term', owner, [])
     }

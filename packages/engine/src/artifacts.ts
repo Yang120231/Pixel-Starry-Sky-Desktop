@@ -75,7 +75,7 @@ async function historyItems(
       try {
         const item = JSON.parse(line) as Item
         if (item && typeof item.id === 'string' && typeof item.kind === 'string') {
-          // 调用方（产物、对话历史工具）只看附件名：图片数据截掉，读大对话时不攒一整份图片
+          // 调用方（产物、对话历史工具）只看附件名、命令输出的末尾：图片数据截掉、长输出只留头尾，读大对话时不攒一整份
           if (!keep || keep.has(item.kind)) byId.set(item.id, cutItem(item))
         } else partial = true
       } catch {

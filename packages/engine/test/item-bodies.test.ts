@@ -225,6 +225,37 @@ describe('截掉的图片数据按 id 从磁盘读回', () => {
     expect(full.every(item => item && !item.cut)).toBe(true)
   })
 
+  it('内存：50 条各带 1 MB 输出的命令载入后只留头尾（拷成新串，不引用原串），body() 补回完整输出', () => {
+    const store = new Store(dir)
+    const command = (i: number, output: string): Item => ({
+      kind: 'command',
+      id: `c${i}`,
+      command: 'build',
+      description: null,
+      output,
+      exitCode: 0,
+      status: 'completed',
+    })
+    {
+      // 每条不一样：防止 V8 把相同的串合成一份
+      const lines = Array.from({ length: 50 }, (_, i) => JSON.stringify(command(i, `${i}:`.padEnd(1 << 20, 'x'))))
+      store.appendItem('s1', plain('first'))
+      appendFileSync(file('s1'), lines.join('\n') + '\n')
+    }
+    setFlagsFromString('--expose_gc')
+    const gc = runInNewContext('gc') as () => void
+    gc()
+    const before = process.memoryUsage().heapUsed
+    const items = store.loadItems('s1')
+    gc()
+    expect(items).toHaveLength(51)
+    expect(process.memoryUsage().heapUsed - before).toBeLessThan(15 * (1 << 20))
+    expect(items[1]).toMatchObject({ cut: true, cutChars: 1 << 20 })
+    const full = store.body('s1', items[1])
+    expect(full?.kind === 'command' && full.output).toBe('0:'.padEnd(1 << 20, 'x'))
+    expect(full).not.toHaveProperty('cutChars')
+  })
+
   it('按行读给出的字节起点和长度：行和中文跨块、结尾没换行、CRLF 都对得上', () => {
     const path = join(dir, 'lines.txt')
     const text = '第一行\n\nabc对话条目xyz\r\n' + '很长'.repeat(20) + '\n最后一行没换行'

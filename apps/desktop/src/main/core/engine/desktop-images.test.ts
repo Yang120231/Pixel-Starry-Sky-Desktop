@@ -49,6 +49,20 @@ describe('去掉图片数据', () => {
     expect((r.event.items[0] as Extract<Item, { kind: 'user' }>).attachments![0].dataBase64).toBe('')
     const other = { kind: 'session', sessionId: 's', seq: 4, event: { type: 'status', state: 'idle' } } as HostEvent
     expect(eventForDesktop(other)).toBe(other)
+    // 完成的长输出截成头尾，还在跑的不截
+    const long = 'x'.repeat(10000)
+    const command = (status: string) =>
+      ({
+        kind: 'session',
+        sessionId: 's',
+        seq: 5,
+        event: { type: 'item_completed', item: { kind: 'command', id: 'c', command: 'ls', output: long, status } },
+      }) as unknown as HostEvent
+    const done = eventForDesktop(command('completed')) as { event: { item: Item & { output: string } } }
+    expect(done.event.item.cutChars).toBe(10000)
+    expect(done.event.item.output.length).toBeLessThan(5000)
+    const running = command('running')
+    expect(eventForDesktop(running)).toBe(running)
   })
   it('按需取原图：在补过数据的条目里按图片 id 找', () => {
     const u = user('u1', [image('a'), image('b', 'REVG')]),

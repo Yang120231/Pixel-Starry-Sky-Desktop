@@ -9,7 +9,8 @@ import { useTerminalUi } from '@/features/terminal/TerminalProvider'
 import { useServices } from '../services'
 import type { CodingWorkspace } from '../workspace'
 import { useBottomState } from './aiCommands'
-import type { AiCommandEntry } from './aiCommandsModel'
+import { useItemBody } from '@/features/session/live/itemBody'
+import { entryOutput, type AiCommandEntry } from './aiCommandsModel'
 
 /** 输出页：选中终端的历史文字、选中服务的输出，或选中 AI 命令的纯文本 */
 export function OutputTab({
@@ -38,6 +39,10 @@ export function OutputTab({
   // 没选来源时看当前终端
   const source = output ?? (terminalUi.activeId ? { kind: 'terminal' as const, id: terminalUi.activeId } : null)
   const sourceKey = source ? JSON.stringify(source) : ''
+  const aiEntry =
+    source?.kind === 'ai' && source.sessionId === sessionId ? commands.find(c => c.id === source.itemId) : undefined
+  // 快照里截过的输出（cutChars）取完整的再留最后一段
+  const full = useItemBody(aiEntry?.item, true)
   const { title, text } = useMemo(() => {
     if (!source) return { title: '', text: '' }
     if (source.kind === 'terminal') {
@@ -54,14 +59,13 @@ export function OutputTab({
         text: service ? stripAnsi(service.output) : '',
       }
     }
-    const entry = source.sessionId === sessionId ? commands.find(c => c.id === source.itemId) : undefined
     return {
-      title: entry ? tr('coding.bottom.output.source.ai', { name: entry.command }) : '',
-      text: entry ? stripAnsi(entry.output) : '',
+      title: aiEntry ? tr('coding.bottom.output.source.ai', { name: aiEntry.command }) : '',
+      text: aiEntry ? stripAnsi(entryOutput(aiEntry, full)) : '',
     }
     // tick 变了说明终端历史有新输出
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceKey, store.terminals, services, commands, sessionId, tick])
+  }, [sourceKey, store.terminals, services, aiEntry, full, tick])
 
   return (
     <div

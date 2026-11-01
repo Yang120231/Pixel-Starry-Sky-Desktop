@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { Item } from '@pixelsky/protocol'
+import { cutItem, type Item } from '@pixelsky/protocol'
 import {
   MAX_COMMANDS,
   MAX_OUTPUT_CHARS,
   aiCommandEntries,
   clipOutput,
   commandTone,
+  entryOutput,
   summarizeAiCommands,
 } from './aiCommandsModel'
 
@@ -46,6 +47,16 @@ describe('aiCommandEntries', () => {
     expect(entry.output).toHaveLength(MAX_OUTPUT_CHARS)
     expect(entry.output.endsWith('END')).toBe(true)
     expect(clipOutput('abc', 10)).toBe('abc')
+  })
+  it('快照里截过的输出带上那一条，取到完整的后留末尾', () => {
+    const output = 'a'.repeat(MAX_OUTPUT_CHARS) + 'END'
+    const cut = cutItem(cmd('c', { output }))
+    const [entry, plain] = aiCommandEntries([cut, cmd('d')])
+    expect(entry.item).toBe(cut)
+    expect(plain.item.id).toBe('d')
+    // 没取到（还是截过的那条）用头尾；取到了用完整的末尾
+    expect(entryOutput(entry, cut)).toBe(entry.output)
+    expect(entryOutput(entry, cmd('c', { output }))).toBe(clipOutput(output))
   })
 })
 

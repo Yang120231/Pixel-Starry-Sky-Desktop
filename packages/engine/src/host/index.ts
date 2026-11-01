@@ -459,9 +459,14 @@ export class EngineHost {
     return this.m.sessions.open(id)
   }
 
-  /** 一条完整条目（快照里截掉的图片数据从磁盘补回）；没载入的会话不创建运行时。没有这一条为 null */
+  /** 一条完整条目（快照里截掉的图片数据、长输出从磁盘补回）；没载入的会话不创建运行时。没有这一条为 null */
   item(id: string, itemId: string): Item | null {
     return this.m.sessions.item(id, itemId)
+  }
+
+  /** 手上已经有这一条（快照里的）：直接从磁盘补回截掉的部分，不按 id 在整个快照里找；补不回来为 null */
+  body(id: string, item: Item): Item | null {
+    return this.ctx.store.body(id, item)
   }
 
   /** 已载入的会话的快照；没载入为 null（不创建运行时） */

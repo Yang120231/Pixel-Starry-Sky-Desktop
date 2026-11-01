@@ -158,6 +158,8 @@ export interface SearchOptions {
   query: string
   limit?: number
   fallbackEngine?: EngineId
+  /** 截过输出的命令（cutChars）按 id 补回完整的（EngineHost.item）；不给就搜截过的头尾 */
+  body?: (item: Item) => Item
 }
 
 /** 在用户、助手、命令、工具、文件改动里按关键词（不分大小写）找，每个条目最多给一处片段 */
@@ -173,7 +175,10 @@ export function historySearch(items: readonly Item[], options: SearchOptions): s
   for (const turn of historyTurns(items, options.fallbackEngine))
     for (const item of turn.items) {
       if (!(item.kind in SEARCH_KIND)) continue
-      const text = searchText(item)
+      // 截过的命令输出中间也要搜到；工具只搜名字和摘要，用不着补
+      const text = searchText(
+        item.kind === 'command' && item.cutChars !== undefined && options.body ? options.body(item) : item,
+      )
       const at = text.search(pattern)
       if (at < 0) continue
       total++

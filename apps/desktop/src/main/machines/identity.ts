@@ -52,9 +52,14 @@ export function remoteIds<T>(value: T, machine: string, encode: boolean, field =
     ) as T
   }
   if (Array.isArray(value))
-    // truncated：手机会话尾部里内容截过的条目 id（「查看完整」按它取）
+    // truncated：手机会话尾部里内容截过的条目 id（「查看完整」按它取）；pendingIds：会话列表里待批准的请求 id（和 pending.requestId 一致）
     return value.map(item =>
-      remoteIds(item, machine, encode, field === 'ids' || field === 'truncated' ? 'id' : field),
+      remoteIds(
+        item,
+        machine,
+        encode,
+        field === 'ids' || field === 'truncated' ? 'id' : field === 'pendingIds' ? 'requestId' : field,
+      ),
     ) as T
   if (value && typeof value === 'object')
     return Object.fromEntries(

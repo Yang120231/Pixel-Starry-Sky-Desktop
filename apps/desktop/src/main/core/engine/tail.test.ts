@@ -60,6 +60,22 @@ describe('sessionTail', () => {
     expect(JSON.stringify(tail.snapshot.queue)).not.toContain('AAAA')
   })
 
+  it('lists items whose output the host cut to head and tail (cutChars), not image-only cuts', () => {
+    const command = (id: string, extra: Partial<Item>): Item =>
+      ({
+        kind: 'command',
+        id,
+        command: 'ls',
+        description: null,
+        output: 'head…tail',
+        exitCode: 0,
+        status: 'completed',
+        ...extra,
+      }) as Item
+    const items = [command('c1', { cut: true, cutChars: 50_000 }), command('c2', { cut: true }), command('c3', {})]
+    expect(sessionTail(opened(items), tailOptions({})).truncated).toEqual(['c1'])
+  })
+
   it('always returns at least one item and clamps the limit', () => {
     const huge = sessionTail(opened([assistant(1, 'z'.repeat(400_000))]), { limit: 60, before: null, maxBytes: 10 })
     expect(huge.snapshot.items).toHaveLength(1)

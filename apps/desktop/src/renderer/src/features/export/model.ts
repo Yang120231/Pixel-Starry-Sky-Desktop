@@ -67,10 +67,16 @@ const oneLine = (text: string): string => {
   const line = text.trim().split('\n')[0] ?? ''
   return line.length > SUMMARY_LIMIT ? line.slice(0, SUMMARY_LIMIT) + '…' : line
 }
-const clip = (text: string): string =>
-  text.length > DETAIL_LIMIT
-    ? text.slice(0, DETAIL_LIMIT) + '\n' + tr('export.file.truncated', { n: text.length })
-    : text
+/**
+ * 只带开头 DETAIL_LIMIT 个字。快照里截过的长输出（cutChars）开头留了 CUT_EDGE（≥ DETAIL_LIMIT）个字，
+ * 截出来和完整输出一样，不用去取完整的；「原 N 字符」写原长度
+ */
+const clip = (item: { output: string; cutChars?: number }): string =>
+  item.output.length > DETAIL_LIMIT
+    ? item.output.slice(0, DETAIL_LIMIT) +
+      '\n' +
+      tr('export.file.truncated', { n: item.cutChars ?? item.output.length })
+    : item.output
 
 const TOOL_LABEL = {
   read: 'export.tool.read',
@@ -101,7 +107,7 @@ function partOf(item: Item): Part | null {
         id: item.id,
         label: tr('export.tool.command'),
         summary: oneLine(item.command),
-        detail: clip(item.output),
+        detail: clip(item),
         fileRead: false,
         failed: item.status === 'failed' || (item.exitCode !== null && item.exitCode !== 0),
       }
@@ -111,7 +117,7 @@ function partOf(item: Item): Part | null {
         id: item.id,
         label: item.tool === 'other' ? item.name : tr(TOOL_LABEL[item.tool]),
         summary: oneLine(item.title),
-        detail: clip(item.output),
+        detail: clip(item),
         fileRead: item.tool === 'read',
         failed: item.status === 'failed',
       }

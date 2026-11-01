@@ -9,7 +9,8 @@ import { useTerminalUi } from '@/features/terminal/TerminalProvider'
 import { terminalRunWhenReady, terminalState } from '@/features/terminal/store'
 import { codingLayout } from '../layoutStore'
 import { selectAiCommand, setOutputSource, useBottomState } from './aiCommands'
-import { commandTone, type AiCommandEntry } from './aiCommandsModel'
+import { useItemBody } from '@/features/session/live/itemBody'
+import { commandTone, entryOutput, type AiCommandEntry } from './aiCommandsModel'
 
 const TONE_COLOR = { running: 'bg-warn', failed: 'bg-danger', done: 'bg-success' } as const
 
@@ -38,7 +39,9 @@ export function AiCommandsTab({
     selected && selected.sessionId === sessionId ? commands.find(c => c.id === selected.itemId) : undefined
   // 没选过时默认看最后一条
   const entry = current ?? commands[commands.length - 1]
-  const text = useMemo(() => (entry ? stripAnsi(entry.output) : ''), [entry])
+  // 快照里截过的输出（cutChars）取完整的再留最后一段
+  const full = useItemBody(entry?.item, true)
+  const text = useMemo(() => (entry ? stripAnsi(entryOutput(entry, full)) : ''), [entry, full])
 
   const rerun = async (command: string): Promise<void> => {
     const before = new Set(terminalState().terminals.map(t => t.id))

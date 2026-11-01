@@ -105,6 +105,13 @@ describe('machine resource ownership', () => {
     expect(remoteIds(encoded, machine, false)).toEqual(tail)
     expect(remoteIds({ truncated: true }, machine, true)).toEqual({ truncated: true })
   })
+  it('prefixes pendingIds like pending.requestId, so the inbox signature matches before and after opening', () => {
+    const summary = { pending: { requestId: id }, pendingIds: [id] }
+    const encoded = remoteIds(summary, machine, true)
+    expect(encoded.pendingIds[0]).toBe(encoded.pending.requestId)
+    expect(encoded.pendingIds[0]).toBe(machine + '~' + id)
+    expect(remoteIds(encoded, machine, false)).toEqual(summary)
+  })
   it('prefixes the built-in chat project id (not a uuid) only in projectId fields', () => {
     const chat = machine + '~chat'
     expect(remoteIds({ record: { id, projectId: 'chat' }, id: 'chat' }, machine, true)).toEqual({

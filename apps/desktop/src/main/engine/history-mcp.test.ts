@@ -2,11 +2,12 @@ import { request } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import type { EngineSessionState, Item, SessionRecord } from '@pixelsky/protocol'
+import { cutItem, type EngineSessionState, type Item, type SessionRecord } from '@pixelsky/protocol'
 import { historyEnabled, historyServer, type HistoryServer } from './history-mcp'
 
 const ID_A = '11111111-1111-4111-8111-111111111111'
 const ID_B = '22222222-2222-4222-8222-222222222222'
+const ID_C = '33333333-3333-4333-8333-333333333333'
 const state = (id: string): EngineSessionState => ({ id, seen: null })
 const record = (id: string, extra: Partial<SessionRecord> = {}): SessionRecord =>
   ({
@@ -25,10 +26,21 @@ const user = (text: string, engine: 'claude' | 'codex'): Item => ({
   engine,
 })
 const assistant = (text: string): Item => ({ kind: 'assistant', id: `a${++n}`, text, status: 'completed' })
+// 长输出：快照里是截过的（只留头尾），完整的按 id 取（EngineHost.item）
+const longRun: Item = {
+  kind: 'command',
+  id: 'c-long',
+  command: 'npm test',
+  description: null,
+  output: `${'x'.repeat(6000)}中间的报错${'y'.repeat(6000)}`,
+  exitCode: 1,
+  status: 'failed',
+}
 
 const itemsOf: Record<string, Item[]> = {
   [ID_A]: [user('部署 staging 环境', 'claude'), assistant('已部署'), user('看下日志', 'codex'), assistant('日志正常')],
   [ID_B]: [user('另一个对话的秘密', 'claude'), assistant('不能被 A 看到')],
+  [ID_C]: [user('跑测试', 'claude'), cutItem(longRun)],
 }
 let server: HistoryServer | null = null
 let clients: Client[] = []
@@ -46,6 +58,7 @@ const start = () => {
         if (!items) throw new Error('会话不存在')
         return items
       },
+      body: (id, item) => (id === ID_C && item.id === longRun.id ? longRun : null),
     },
   })
   return server
@@ -147,6 +160,14 @@ describe('对话历史 MCP 服务', () => {
     itemsOf[ID_B].push(user('新来的一问', 'codex'), assistant('新答'))
     expect(textOf(await client.callTool({ name: 'outline', arguments: {} }))).toContain('#2 [Codex] 用户：新来的一问')
     itemsOf[ID_B].length = 2
+  })
+
+  it('search 对截过的命令输出按 id 取完整的：中间的词搜得到，省略说明不算', async () => {
+    const s = start()
+    const c = (await s.entry(record(ID_C)))!
+    const client = await connect(c.url, c.token)
+    expect(textOf(await client.callTool({ name: 'search', arguments: { query: '中间的报错' } }))).toContain('#1 [命令]')
+    expect(textOf(await client.callTool({ name: 'search', arguments: { query: '中间省略' } }))).toContain('没有找到')
   })
 
   it('参数不对时返回工具错误而不是抛出', async () => {

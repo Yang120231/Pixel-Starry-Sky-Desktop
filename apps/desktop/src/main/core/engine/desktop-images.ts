@@ -2,7 +2,7 @@
 // 用户发的图、工具结果里的图把 dataBase64 换成空串（名字、大小、宽高保留），界面显示、复制、重发时按需经 engine:image 取。
 // 实测界面快照里的图片有 174 MB，是界面内存里最大的一块。「打开会话」的快照在宿主里就截过了（cutItem，docs/session-memory.md）；
 // 事件里的条目是完整的，手机走自己的 slimForPhone。这里只做浅拷贝，不改原对象
-import type { HostEvent, ImageAttachment, Item } from '@pixelsky/protocol'
+import { cutItem, type HostEvent, type ImageAttachment, type Item } from '@pixelsky/protocol'
 
 const blank = (images: ImageAttachment[]): ImageAttachment[] =>
   images.map(image => (image.dataBase64 ? { ...image, dataBase64: '' } : image))
@@ -15,16 +15,19 @@ export function itemWithoutImageData(item: Item): Item {
   return item
 }
 
-/** 推给桌面窗口的事件：条目开始 / 完成、整份换掉时去掉图片数据，别的原样 */
+/** 发给窗口的一条：不在跑的长输出截成头尾（和快照一样，展开时经 engine:item 取），图片数据一律去掉 */
+const forWindow = (item: Item): Item => itemWithoutImageData(cutItem(item))
+
+/** 推给桌面窗口的事件：条目开始 / 完成、整份换掉时去掉图片数据、截长输出，别的原样 */
 export function eventForDesktop(event: HostEvent): HostEvent {
   if (event.kind !== 'session') return event
   const e = event.event
   if (e.type === 'item_started' || e.type === 'item_completed') {
-    const item = itemWithoutImageData(e.item)
+    const item = forWindow(e.item)
     return item === e.item ? event : { ...event, event: { ...e, item } }
   }
   if (e.type === 'items_reset') {
-    const items = e.items.map(itemWithoutImageData)
+    const items = e.items.map(forWindow)
     return items.every((item, i) => item === e.items[i]) ? event : { ...event, event: { ...e, items } }
   }
   return event

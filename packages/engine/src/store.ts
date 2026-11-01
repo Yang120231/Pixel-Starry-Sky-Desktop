@@ -8,7 +8,7 @@
 // <dataDir>/sessions/<id>/items.undo.jsonl  回退前的条目文件（硬链接），撤销回退时从它补回截掉的大字段
 //
 // 写入都是同步的小文件操作：保证顺序，量也很小（只在条目开始 / 完成时写，不写流式增量）。
-// 载入的条目截掉了图片数据（cutItem，docs/session-memory.md）；磁盘上永远是完整内容：写截过的条目前先按 id 读回补全。
+// 载入的条目截掉了图片数据、长输出只留头尾（cutItem，docs/session-memory.md）；磁盘上永远是完整内容：写截过的条目前先按 id 读回补全。
 import {
   closeSync,
   copyFileSync,
@@ -483,7 +483,7 @@ export class Store {
   /**
    * 截过的条目（cut）按 id 从磁盘读回完整内容：先找 items.jsonl 里这个 id 最后一行，再找回退前的 items.undo.jsonl。
    * 没截过的原样返回。没记位置、读出的 id 对不上、解析失败返回 null；位置失效时丢掉这个会话的索引（下次 loadItems 重建）。
-   * 只补图片字段，其它字段取 item（磁盘上那行可能还是 running）
+   * 只补截掉的字段（图片、长输出），其它字段取 item（磁盘上那行可能还是 running）
    */
   body(sessionId: string, item: Item): Item | null {
     if (!item.cut) return item
@@ -580,7 +580,7 @@ export class Store {
   }
 
   /**
-   * 读出全部条目；同一个 id 出现多次时保留第一次的位置、最后一次的内容。没等到完成的标成已中断，图片数据截掉（cut），
+   * 读出全部条目；同一个 id 出现多次时保留第一次的位置、最后一次的内容。没等到完成的标成已中断，图片数据、长输出截掉（cut），
    * 同时记下每个 id 最后一行的位置，之后这个会话的追加、重写都更新它（body() 用）。
    * 只在建运行时时调用：重新载入后内存里没有撤销状态了，顺便删掉回退前留下的文件
    */
@@ -602,7 +602,7 @@ export class Store {
       try {
         const item = JSON.parse(line) as Item
         if (!item || typeof item.id !== 'string') return
-        // 边读边截：不然整份图片要等读完才放掉，打开时的峰值还是整个文件
+        // 边读边截：不然整份图片、输出要等读完才放掉，打开时的峰值还是整个文件
         byId.set(item.id, cutItem(item))
         index.set(item.id, [offset, length])
       } catch {

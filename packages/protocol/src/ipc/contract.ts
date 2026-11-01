@@ -49,8 +49,9 @@ export interface IpcChannelSpec {
  * 7（2026-10-20）：按需取图片原图（engine:image）；桌面界面的快照和事件里不再带图片数据（docs/perf-audit-2026-10-18.md B1）。
  * 8（2026-10-20）：新增 files:stage，在 SSH / WSL 工作区暂存文件引用。
  * 9（2026-10-24）：开分支 / 合并回主会话（engine:branch*、engine:dropPendingMerge，docs/ui/branch-merge.md §6）。
+ * 10（2026-11-01）：按 id 取一条完整条目（engine:item）；快照里的条目截掉了图片数据、长输出只留头尾（docs/session-memory.md）。
  */
-export const REMOTE_PROTOCOL = 9
+export const REMOTE_PROTOCOL = 10
 
 export const IPC_CONTRACT = {
   // 定时任务「立即运行」（docs/ui/board-schedule.md）：调度只在本机跑，不经过远端
@@ -219,6 +220,8 @@ export const IPC_CONTRACT = {
   'engine:engines': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:engines', trust: 'sender' },
   'engine:event': { kind: 'push', route: 'push', trust: 'none' },
   'engine:image': { kind: 'invoke', route: 'resource', ids: [0, 1, 2], remote: 'engine:image', trust: 'sender' },
+  // 一条完整条目（快照里截过的长输出补回；图片数据仍去掉，走 engine:image）
+  'engine:item': { kind: 'invoke', route: 'resource', ids: [0, 1], remote: 'engine:item', trust: 'sender' },
   'engine:itemDetail': {
     kind: 'invoke',
     route: 'resource',
