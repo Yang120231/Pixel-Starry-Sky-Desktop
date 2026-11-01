@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline'
 import { setImmediate as yieldThread } from 'node:timers/promises'
 import { isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
 import {
+  cutItem,
   deliveryType,
   type ArtifactDelivery,
   type ArtifactFile,
@@ -74,7 +75,8 @@ async function historyItems(
       try {
         const item = JSON.parse(line) as Item
         if (item && typeof item.id === 'string' && typeof item.kind === 'string') {
-          if (!keep || keep.has(item.kind)) byId.set(item.id, item)
+          // 调用方（产物、对话历史工具）只看附件名：图片数据截掉，读大对话时不攒一整份图片
+          if (!keep || keep.has(item.kind)) byId.set(item.id, cutItem(item))
         } else partial = true
       } catch {
         partial = true

@@ -459,6 +459,11 @@ export class EngineHost {
     return this.m.sessions.open(id)
   }
 
+  /** 一条完整条目（快照里截掉的图片数据从磁盘补回）；没载入的会话不创建运行时。没有这一条为 null */
+  item(id: string, itemId: string): Item | null {
+    return this.m.sessions.item(id, itemId)
+  }
+
   /** 已载入的会话的快照；没载入为 null（不创建运行时） */
   loaded(id: string): SessionSnapshot | null {
     return this.runtimes.get(id)?.snapshot ?? null

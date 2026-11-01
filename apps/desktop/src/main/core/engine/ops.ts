@@ -227,12 +227,12 @@ export const ENGINE_OPS = {
   'engine:openSession': (c, id) => c.host.openSession(str(id, 'id')),
   // 手机端（docs/mobile-remote.md §5.2）：只取最后一段条目，点开某一条时再取完整内容
   'engine:openSessionTail': (c, id, opts) => sessionTail(c.host.openSession(str(id, 'id')), tailOptions(opts)),
-  'engine:itemDetail': (c, id, itemId) => itemDetail(c.host.open(str(id, 'id')), str(itemId, 'itemId')),
+  // 这两个按 id 取一条（图片数据从磁盘补回），没载入的会话不载入
+  'engine:itemDetail': (c, id, itemId) => itemDetail(c.host.item(str(id, 'id'), str(itemId, 'itemId'))),
   // 桌面界面按需取一张图的原图（快照里不带，desktop-images.ts）；手机传的是第几张
   'engine:image': (c, id, itemId, imageId) =>
     imageOf(
-      c.host.open(str(id, 'id')).items,
-      str(itemId, 'itemId'),
+      c.host.item(str(id, 'id'), str(itemId, 'itemId')),
       typeof imageId === 'number' ? imageId : str(imageId, 'imageId'),
     ),
   'engine:send': (c, id, input) => c.host.send(str(id, 'id'), input as Parameters<EngineHost['send']>[1]),

@@ -4,12 +4,14 @@ import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
   CHAT_PROJECT_ID,
+  cutItem,
   EFFORT_PANEL_KEYS,
   emptySnapshot,
   normalizeSessionTitle,
   PROVIDER_ID,
   sourceKey,
   type EngineId,
+  type Item,
   type OpenedSession,
   type SessionRecord,
   type SessionSettings,
@@ -113,11 +115,13 @@ export class HostSessions {
     if (!record) throw new Error('会话不存在')
     const snapshot = emptySnapshot(record, ctx.store.loadItems(id))
     const adapter = ctx.adapters[record.engine]
+    // 补出来的条目（Codex 旧版只存路径的看图条目）落盘完整的，内存里留截掉图片数据的
     if (adapter?.restoreItem)
       snapshot.items = snapshot.items.map(item => {
         const restored = adapter.restoreItem!(record, item)
-        if (restored !== item) ctx.store.appendItem(id, restored)
-        return restored
+        if (restored === item) return item
+        ctx.store.appendItem(id, restored)
+        return cutItem(restored)
       })
     if (record.platform)
       snapshot.items = snapshot.items.map(item =>
@@ -170,6 +174,21 @@ export class HostSessions {
 
   open(id: string): SessionSnapshot {
     return this.runtime(id).snapshot
+  }
+
+  /**
+   * 按 id 取一条完整条目（截掉的图片数据从磁盘补回）：已载入的从快照里找，补不回来给截过的那条；
+   * 没载入的从磁盘读，不建运行时。没有这一条为 null
+   */
+  item(id: string, itemId: string): Item | null {
+    const { ctx } = this
+    const items = ctx.runtimes.get(id)?.snapshot.items
+    if (!items) {
+      if (!ctx.records.has(id)) throw new Error('会话不存在')
+      return ctx.store.readItem(id, itemId)
+    }
+    const item = items.findLast(i => i.id === itemId)
+    return item ? (ctx.store.body(id, item) ?? item) : null
   }
 
   openSession(id: string): OpenedSession {

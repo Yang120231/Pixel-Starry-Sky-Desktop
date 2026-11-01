@@ -658,6 +658,90 @@ describe('开分支（docs/ui/branch-merge.md）', () => {
   })
 })
 
+describe('图片数据留在磁盘：回退、撤销、分叉（docs/session-memory.md 第 2 期）', () => {
+  const png = (name: string, fill: number) => ({
+    id: name.replace(/\W/g, '-'),
+    name,
+    mediaType: 'image/png' as const,
+    bytes: 16,
+    width: 1,
+    height: 1,
+    dataBase64: Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(8, fill)]).toString(
+      'base64',
+    ),
+  })
+  const itemsFile = (id: string, name = 'items.jsonl') => join(root, 'data', 'sessions', id, name)
+  /** 条目文件读出来的样子（同一 id 第一次的位置、最后一次的内容），不截 */
+  const onDisk = (id: string): Record<string, unknown>[] => {
+    const byId = new Map<string, Record<string, unknown>>()
+    for (const line of readFileSync(itemsFile(id), 'utf8').split('\n'))
+      if (line) {
+        const item = JSON.parse(line) as Record<string, unknown>
+        byId.set(item.id as string, item)
+      }
+    return [...byId.values()]
+  }
+  /** 三轮，每条用户消息带一张图 */
+  async function withImages(host: EngineHost) {
+    const project = host.addProject(mkdtempSync(join(root, 'proj-')))
+    const record = host.createSession({ projectId: project.id, permissionMode: 'ask', effort: 'high' })
+    for (const [i, text] of ['一', '二', '三'].entries()) {
+      await host.send(record.id, { text, clientMessageId: `m${i}`, attachments: [png(`${i}.png`, i + 1)] })
+      await waitFor(() => turnsDone(record.id) === i + 1)
+    }
+    return record
+  }
+
+  it('回退再撤销：条目文件和回退前一致、图片完整；回退放回输入框的图片带数据；撤销后回退前的文件删掉', async () => {
+    const host = makeHost()
+    const record = await withImages(host)
+    const before = onDisk(record.id)
+    expect(before.find(i => i.id === 'm1')).toMatchObject({ attachments: [png('1.png', 2)] })
+    expect(host.open(record.id).items.find(i => i.id === 'm1')).toMatchObject({ cut: true })
+    const result = await host.rewind(record.id, 'm1')
+    expect(result.attachments).toEqual([png('1.png', 2)])
+    expect(existsSync(itemsFile(record.id, 'items.undo.jsonl'))).toBe(true)
+    await host.undoRewind(record.id)
+    expect(onDisk(record.id)).toEqual(before)
+    expect(readFileSync(itemsFile(record.id), 'utf8')).not.toContain('"cut"')
+    expect(existsSync(itemsFile(record.id, 'items.undo.jsonl'))).toBe(false)
+    expect(host.item(record.id, 'm2')).toMatchObject({ attachments: [png('2.png', 3)] })
+  })
+
+  it('不能再撤销时删掉回退前的文件：新的一轮开始、重新载入；重新载入后图片照样按 id 补回', async () => {
+    const host = makeHost()
+    const record = await withImages(host)
+    const undo = itemsFile(record.id, 'items.undo.jsonl')
+    await host.rewind(record.id, 'm2')
+    expect(existsSync(undo)).toBe(true)
+    await host.send(record.id, { text: '改', clientMessageId: 'x' })
+    await waitFor(() => turnsDone(record.id) === 4)
+    expect(existsSync(undo)).toBe(false)
+    await host.rewind(record.id, 'x')
+    expect(existsSync(undo)).toBe(true)
+    await host.shutdown()
+    const again = makeHost()
+    expect(again.open(record.id).items.find(i => i.id === 'm1')).toMatchObject({ cut: true })
+    expect(existsSync(undo)).toBe(false)
+    expect(again.item(record.id, 'm1')).toMatchObject({ attachments: [png('1.png', 2)] })
+  })
+
+  it('从某条消息分叉：新会话的条目文件带完整图片，放回输入框的图片带数据', async () => {
+    const host = makeHost()
+    const record = await withImages(host)
+    const before = onDisk(record.id)
+    const forked = await host.forkSession(record.id, 'm2')
+    expect(forked.attachments).toEqual([png('2.png', 3)])
+    expect(onDisk(forked.record.id)).toEqual(
+      before.slice(
+        0,
+        before.findIndex(i => i.id === 'm2'),
+      ),
+    )
+    expect(host.item(forked.record.id, 'm1')).toMatchObject({ attachments: [png('1.png', 2)] })
+  })
+})
+
 describe('旁聊', () => {
   it('带着主对话的上下文，没有工具，不写记录、不进主对话', async () => {
     const host = makeHost()

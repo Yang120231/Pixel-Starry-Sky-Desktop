@@ -45,13 +45,17 @@ describe('Codex 看图附件', () => {
       status: 'completed',
     })
     host = new EngineHost({ dataDir, adapters: { codex: new CodexAdapter() }, emit: () => {} })
+    // 快照里截掉了图片数据，落盘的是补齐的完整条目
     const item = host.open(record.id).items[0]
-    expect(item?.kind === 'tool' && item.images?.[0].dataBase64).toBe(png.toString('base64'))
-    expect(store.loadItems(record.id)[0]).toEqual(item)
+    expect(item).toMatchObject({ cut: true, images: [{ dataBase64: '' }] })
+    const full = host.item(record.id, 'cx-old-image')
+    expect(full?.kind === 'tool' && full.images?.[0].dataBase64).toBe(png.toString('base64'))
+    expect(new Store(dataDir).readItem(record.id, 'cx-old-image')).toEqual(full)
     await host.shutdown()
     rmSync(path)
     host = new EngineHost({ dataDir, adapters: {}, emit: () => {} })
     expect(host.open(record.id).items[0]).toEqual(item)
+    expect(host.item(record.id, 'cx-old-image')).toEqual(full)
   })
 
   it('只在看图完成时保存数据，后续重复完成不会因临时文件被删而丢失附件', () => {
@@ -140,8 +144,11 @@ describe('Codex 看图附件', () => {
     const record = host.createSession({ projectId: host.addProject(cwd).id, engine: 'codex', model: 'fake-codex' })
     await host.send(record.id, '查看截图')
     await expect.poll(() => host!.open(record.id).state).toBe('idle')
+    // 快照里截掉了图片数据，按 id 从磁盘补回
     const viewed = host.open(record.id).items.find(i => i.kind === 'tool' && i.name === 'imageView')
-    expect(viewed?.kind === 'tool' && viewed.images?.[0]).toMatchObject({
+    expect(viewed).toMatchObject({ cut: true })
+    const full = host.item(record.id, viewed!.id)
+    expect(full?.kind === 'tool' && full.images?.[0]).toMatchObject({
       name: '截图 dark.png',
       dataBase64: png.toString('base64'),
     })
@@ -158,5 +165,6 @@ describe('Codex 看图附件', () => {
     rmSync(path)
     host = new EngineHost({ dataDir, adapters: {}, emit: () => {} })
     expect(host.open(record.id).items.find(i => i.id === viewed?.id)).toEqual(viewed)
+    expect(host.item(record.id, viewed!.id)).toEqual(full)
   })
 })

@@ -112,7 +112,15 @@ export interface NoticeBranchMerge {
   gitBranch: string | null
 }
 
-export type Item =
+export type Item = ItemVariant & {
+  /**
+   * 大字段（图片数据）在内存里截掉了，要完整内容时按 id 从磁盘读回（itemCut.ts、Store.body）。
+   * 永不写盘：写条目文件前 Store 先补全，补不全就不写
+   */
+  cut?: true
+}
+
+type ItemVariant =
   | {
       kind: 'user'
       id: string

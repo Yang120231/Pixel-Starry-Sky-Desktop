@@ -14,6 +14,7 @@ import type {
 import type { EngineAdapter, EngineSession, SessionContext } from '../src/adapter'
 import { EngineHost, type EngineHostOptions } from '../src/host'
 import { ENGINES } from '../src/registry'
+import { Store } from '../src/store'
 
 let root: string
 let hosts: EngineHost[]
@@ -115,9 +116,32 @@ describe('消息队列：调度与恢复', () => {
     const resumed = new EngineHost({ dataDir: join(root, 'data'), adapters: { claude: adapter }, emit() {} })
     hosts.push(resumed)
     expect(resumed.open(record.id).queue[0]).toMatchObject({ attachments: [image], status: 'failed' })
-    expect(resumed.open(record.id).items.find(i => i.kind === 'user')).toMatchObject({ attachments: [image] })
+    // 快照里的条目截掉了图片数据，按 id 从磁盘补回
+    expect(resumed.item(record.id, 'image-only')).toMatchObject({ attachments: [image] })
     expect(resumed.cancelQueued(record.id, 'image-only')).toBe('')
     expect(resumed.open(record.id).queue).toEqual([])
+  })
+  it('关掉发送失败的带图消息：对话里那条标「未送达」，磁盘上图片数据还在', async () => {
+    const { host, adapter, record } = setup()
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg=='
+    const image: ImageAttachment = {
+      id: 'image-1',
+      name: '测试.png',
+      mediaType: 'image/png',
+      bytes: Buffer.from(png, 'base64').length,
+      width: 1,
+      height: 1,
+      dataBase64: png,
+    }
+    await host.send(record.id, { text: '看图', clientMessageId: 'with-image', attachments: [image] })
+    await until(() => !!adapter.sessions[0]?.active)
+    adapter.sessions[0].finish('failed')
+    expect(host.open(record.id).items.find(i => i.id === 'with-image')).toMatchObject({ cut: true })
+    host.dismissQueued(record.id, 'with-image')
+    expect(new Store(join(root, 'data')).readItem(record.id, 'with-image')).toMatchObject({
+      dismissed: true,
+      attachments: [image],
+    })
   })
   it('文本文件：接在消息后面发给引擎，对话和队列里单独保留，重启恢复不丢', async () => {
     const { host, adapter, record } = setup()

@@ -1,8 +1,8 @@
-// 桌面界面不再常驻图片原图（docs/perf-audit-2026-10-18.md B1）：发给桌面窗口的「打开会话」结果和条目事件里，
+// 桌面界面不再常驻图片原图（docs/perf-audit-2026-10-18.md B1）：发给桌面窗口的条目事件里，
 // 用户发的图、工具结果里的图把 dataBase64 换成空串（名字、大小、宽高保留），界面显示、复制、重发时按需经 engine:image 取。
-// 实测界面快照里的图片有 174 MB，是界面内存里最大的一块。手机走自己的 slimForPhone；主进程、手机网关拿到的照旧是完整数据，
-// 这里只做浅拷贝，不改原对象
-import type { HostEvent, ImageAttachment, Item, OpenedSession } from '@pixelsky/protocol'
+// 实测界面快照里的图片有 174 MB，是界面内存里最大的一块。「打开会话」的快照在宿主里就截过了（cutItem，docs/session-memory.md）；
+// 事件里的条目是完整的，手机走自己的 slimForPhone。这里只做浅拷贝，不改原对象
+import type { HostEvent, ImageAttachment, Item } from '@pixelsky/protocol'
 
 const blank = (images: ImageAttachment[]): ImageAttachment[] =>
   images.map(image => (image.dataBase64 ? { ...image, dataBase64: '' } : image))
@@ -13,17 +13,6 @@ export function itemWithoutImageData(item: Item): Item {
     return { ...item, attachments: blank(item.attachments) }
   if (item.kind === 'tool' && item.images?.some(a => a.dataBase64)) return { ...item, images: blank(item.images) }
   return item
-}
-
-export function openedForDesktop(opened: OpenedSession): OpenedSession {
-  const items = opened.snapshot.items
-  let changed = false
-  const next = items.map(item => {
-    const out = itemWithoutImageData(item)
-    if (out !== item) changed = true
-    return out
-  })
-  return changed ? { ...opened, snapshot: { ...opened.snapshot, items: next } } : opened
 }
 
 /** 推给桌面窗口的事件：条目开始 / 完成、整份换掉时去掉图片数据，别的原样 */
@@ -41,9 +30,8 @@ export function eventForDesktop(event: HostEvent): HostEvent {
   return event
 }
 
-/** 一张图的原图：用户发的图、工具结果里的图，按图片 id 找（手机按第几张）；找不到为 null */
-export function imageOf(items: readonly Item[], itemId: string, imageId: string | number): ImageAttachment | null {
-  const item = items.find(i => i.id === itemId)
+/** 一张图的原图：用户发的图、工具结果里的图，按图片 id 找（手机按第几张）；找不到为 null。item 要是补过图片数据的（EngineHost.item） */
+export function imageOf(item: Item | null, imageId: string | number): ImageAttachment | null {
   const images = item?.kind === 'user' ? item.attachments : item?.kind === 'tool' ? item.images : undefined
   const image = typeof imageId === 'number' ? images?.[imageId] : images?.find(image => image.id === imageId)
   return image?.dataBase64 ? image : null

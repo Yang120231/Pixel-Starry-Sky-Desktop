@@ -1,6 +1,6 @@
 // 给手机的会话快照（docs/mobile-remote.md §5.2、§11.1）：只取最后一段条目，去掉图片、截断长文本。
 // 纯函数，本机和 SSH 辅助进程共用；手机点开某一条时再用 itemDetail 取完整内容。
-import type { OpenedSession, SessionSnapshot } from '@pixelsky/protocol'
+import type { Item, OpenedSession, SessionSnapshot } from '@pixelsky/protocol'
 import { int } from '../args'
 import type { ItemDetail, SessionTail } from '../../../shared/types/mobile'
 
@@ -91,9 +91,8 @@ export function sessionTail(opened: OpenedSession, options: TailOptions): Sessio
   }
 }
 
-/** 一条的完整内容：长文本放宽到 256 KB；图片放得下才带上（单帧 1 MB） */
-export function itemDetail(snapshot: SessionSnapshot, itemId: string): ItemDetail | null {
-  const item = snapshot.items.find(i => i.id === itemId)
+/** 一条的完整内容（EngineHost.item 补过图片数据的）：长文本放宽到 256 KB；图片放得下才带上（单帧 1 MB） */
+export function itemDetail(item: Item | null): ItemDetail | null {
   if (!item) return null
   const hit = { cut: false }
   const full = slim(item, DETAIL_CUT, hit, true)

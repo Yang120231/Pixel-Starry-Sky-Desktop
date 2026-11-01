@@ -84,6 +84,11 @@ export class HostBranch {
     return { index, target }
   }
 
+  /** 放回输入框的消息：快照里截掉了图片数据（cutItem），从磁盘补回；补不回来用截过的 */
+  private full(id: string, target: UserItem): UserItem {
+    return (this.ctx.store.body(id, target) as UserItem | null) ?? target
+  }
+
   private assertIdle(id: string): void {
     const { ctx } = this
     if (ctx.closing) throw new Error('应用正在退出')
@@ -227,9 +232,11 @@ export class HostBranch {
         files,
       })
       m.events.patchRecord(id, { updatedAt: Date.now() })
+      // 截断后它在回退前的条目文件里（keepOld），图片数据从那里补回
+      const images = options.conversation ? this.full(id, target).attachments : undefined
       return {
         text: options.conversation ? target.text : '',
-        ...(options.conversation && target.attachments?.length ? { attachments: target.attachments } : {}),
+        ...(images?.length ? { attachments: images } : {}),
         ...(options.conversation && target.files?.length ? { files: target.files } : {}),
         ...(files ? { filesRestored: files.length } : {}),
         ...(codeSkipped ? { codeSkipped } : {}),
@@ -302,7 +309,8 @@ export class HostBranch {
     const old = record.engineSessions
     const oldEntry = old?.[record.engine]
     const oldSeen = oldEntry ? oldEntry.seen : old ? null : lastItemId(rt.snapshot.items)
-    ctx.store.replaceItems(id, kept)
+    // 留着回退前的条目文件：撤销时放回的条目从它补回截掉的图片数据
+    ctx.store.replaceItems(id, kept, { keepOld: true })
     m.events.apply(id, { type: 'items_truncated', fromItemId: userItemId })
     m.cache.reset(id)
     // Missing native records must never silently preserve the discarded context.
@@ -381,12 +389,17 @@ export class HostBranch {
       JSON.stringify(snap.record.engineSessions ?? null) !== JSON.stringify(entry.after.engineSessions ?? null) ||
       (snap.record.nextEngine ?? null) !== entry.after.nextEngine
     ) {
-      this.undo.delete(id)
+      this.forget(id)
       throw new Error('回退之后有了新的对话，不能撤销了')
     }
     ctx.changingSessions.add(id)
     try {
       await this.closeProcess(id)
+      // 放回的条目要从回退前的条目文件补回图片数据：先核对每条都补得回来，免得中途失败只放回一部分
+      if (entry.removed.some(item => !ctx.store.body(id, item))) {
+        this.forget(id)
+        throw new Error('回退前的内容读不回来了，不能撤销')
+      }
       for (const file of entry.files ?? []) {
         if (file.data === null) rmSync(file.path, { force: true })
         else {
@@ -397,6 +410,7 @@ export class HostBranch {
       if (entry.removed.length > 0) {
         // 去掉回退时加的提示，再把移除的条目原样放回
         const extra = snap.items[entry.kept]
+        // 不带 keepOld：放回的条目要从回退前的条目文件补回图片数据，它得留到放完
         if (extra) {
           ctx.store.replaceItems(id, snap.items.slice(0, entry.kept))
           m.events.apply(id, { type: 'items_truncated', fromItemId: extra.id })
@@ -405,7 +419,7 @@ export class HostBranch {
         m.cache.reset(id)
         m.events.patchRecord(id, { ...entry.before, updatedAt: Date.now() })
       }
-      this.undo.delete(id)
+      this.forget(id)
     } finally {
       ctx.changingSessions.delete(id)
     }
@@ -513,13 +527,15 @@ export class HostBranch {
       rt.snapshot.items === all &&
       ctx.store.copyItems(id, record.id)
     if (copied) for (const item of notice) ctx.store.appendItem(record.id, item)
-    else ctx.store.replaceItems(record.id, [...items, ...notice])
+    // 截过的条目从来源会话的条目文件补全
+    else ctx.store.replaceItems(record.id, [...items, ...notice], { from: id })
     m.events.broadcastSessions()
     if (!target) return { record, text: '' }
+    const images = this.full(id, target).attachments
     return {
       record,
       text: target.text,
-      ...(target.attachments?.length ? { attachments: target.attachments } : {}),
+      ...(images?.length ? { attachments: images } : {}),
       ...(target.files?.length ? { files: target.files } : {}),
     }
   }
@@ -600,9 +616,10 @@ export class HostBranch {
     this.sideQuestions.delete(id)
   }
 
-  /** 会话删掉了：放掉它的撤销记录（可能有 20 MB 的文件内容） */
+  /** 撤销用完、不能再撤销（新的一轮开始、会话删掉）：放掉撤销记录（可能有 20 MB 的文件内容）和回退前的条目文件 */
   forget(id: string): void {
     this.undo.delete(id)
+    this.ctx.store.dropUndo(id)
   }
 }
 

@@ -139,7 +139,7 @@ function setup(extra: Partial<GatewayDeps> = {}) {
       calls.push([channel, args, owner])
       if (channel === 'engine:sessions') return [summary('old', 1), summary('archived', 9, 5), summary('new', 3)]
       if (channel === 'engine:openSessionTail') return { snapshot: { items: [] }, seq: 1 }
-      if (channel === 'engine:image') return imageOf(withImages, args[1] as string, args[2] as number)
+      if (channel === 'engine:image') return imageOf(withImages.find(i => i.id === args[1]) ?? null, args[2] as number)
       return { ok: channel }
     },
     send: (phone, frame) => phones.get(phone)?.deliver(frame),

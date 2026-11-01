@@ -73,14 +73,13 @@ describe('itemDetail', () => {
   it('returns the full item, with images only when they fit in one frame (a dropped image is not a cut)', () => {
     const user = { kind: 'user', id: 'u1', text: 'hi', attachments: [image(1000)] } as unknown as Item
     const big = { kind: 'user', id: 'u2', text: 'hi', attachments: [image(900_000)] } as unknown as Item
-    const snapshot = opened([user, big, assistant(1, 'w'.repeat(300_000))]).snapshot
-    expect(itemDetail(snapshot, 'u1')).toEqual({ item: user, truncated: false })
-    const second = itemDetail(snapshot, 'u2')!
+    expect(itemDetail(user)).toEqual({ item: user, truncated: false })
+    const second = itemDetail(big)!
     expect(JSON.stringify(second.item)).not.toContain('AAAA')
     expect(second.truncated).toBe(false)
-    const long = itemDetail(snapshot, 'a1')!
+    const long = itemDetail(assistant(1, 'w'.repeat(300_000)))!
     expect((long.item as { text: string }).text).toHaveLength(256 * 1024)
-    expect(itemDetail(snapshot, 'missing')).toBeNull()
+    expect(itemDetail(null)).toBeNull()
   })
 
   it('slims events the same way', () => {

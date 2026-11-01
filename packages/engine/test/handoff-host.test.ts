@@ -612,7 +612,7 @@ describe('跨引擎接力：图片', () => {
   it('不能注入聊天的引擎：更早消息的图片随这条消息发，排在消息自己的图片前面，文字里说明各是哪条消息的', async () => {
     const a = png('a.png'),
       b = png('b.png')
-    const { codex, say, snap } = await interruptedWithImages(false, [a])
+    const { host, record, codex, say, snap } = await interruptedWithImages(false, [a])
     await say('怎么样', 'm2', [b])
     const session = codex.sessions[0]
     expect(session.handoffImages[0]).toEqual([a])
@@ -621,9 +621,28 @@ describe('跨引擎接力：图片', () => {
     expect(session.inputs[0]).toContain('这条消息附带的图片里，前 1 张是之前消息里的图')
     expect(session.inputs[0]).toContain(`下面第 1 张图是之前「${ASKED}」那条消息附的 a.png`)
     expect(session.inputs[0].endsWith('\n\n怎么样')).toBe(true)
-    // 用户消息条目里只有用户自己发的图
-    expect(snap().items.findLast(i => i.kind === 'user')).toMatchObject({ attachments: [b] })
+    // 用户消息条目里只有用户自己发的图（快照里截掉了数据，按 id 补回）
+    expect(host.item(record.id, 'm2')).toMatchObject({ attachments: [b] })
     expect(notice(snap().items)).toMatchObject({ text: '已把之前的对话交接给 Codex（1 条，含 1 张图片）' })
+  })
+
+  it('重新载入的会话（快照里截掉了图片数据）换引擎：回放和退回文字交接带的图片从磁盘补回数据', async () => {
+    const a = png('a.png')
+    const t = await interruptedWithImages(true, [a])
+    await t.host.shutdown()
+    const claude = new FakeAdapter('claude', false, true),
+      codex = new FakeAdapter('codex', true, true)
+    const host = new EngineHost({ dataDir: join(root, 'data'), adapters: { claude, codex }, emit: () => {} })
+    hosts.push(host)
+    const user = host.open(t.record.id).items.find(i => i.kind === 'user')
+    expect(user).toMatchObject({ cut: true, attachments: [{ id: a.id, dataBase64: '' }] })
+    await host.send(t.record.id, { text: '怎么样', clientMessageId: 'm2' })
+    await until(() => codex.sessions[0]?.inputs.length === 1)
+    const seed = codex.sessions[0].seeds[0]!
+    expect(seed.turns[0].images).toEqual([a])
+    expect(seed.fallbackImages).toEqual([a])
+    // 快照里的还是截过的
+    expect(host.open(t.record.id).items.find(i => i.kind === 'user')).toBe(user)
   })
 
   it('当前消息自己的图片先占额度：只带得下的最近几张，没带上的说明', async () => {
