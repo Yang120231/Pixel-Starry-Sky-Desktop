@@ -80,7 +80,7 @@ const TOOLS = [
 const INSTRUCTIONS =
   '只读地查询当前像素星空对话的历史。这段对话可能先后由不同的 AI 引擎处理过；需要更早几轮的细节时先 outline，再 read 或 search，不要凭印象猜。'
 
-function run(name: string, args: Args, items: readonly Item[], body: (item: Item) => Item): string {
+async function run(name: string, args: Args, items: readonly Item[], body: (item: Item) => Item): Promise<string> {
   if (name === 'outline') return historyOutline(items, { page: integer(args, 'page') })
   if (name === 'read') {
     const turn = integer(args, 'turn')
@@ -109,7 +109,7 @@ function mcpServer(ctx: HistoryContext, sessionId: string): Server {
       const items = await engine.historyItems(sessionId)
       // 引擎在跑时才会调，会话已载入：按位置读一行
       const body = (item: Item) => engine.body(sessionId, item) ?? item
-      return text(run(request.params.name, (request.params.arguments ?? {}) as Args, items, body))
+      return text(await run(request.params.name, (request.params.arguments ?? {}) as Args, items, body))
     } catch (error) {
       return text(error instanceof Error ? error.message : String(error), true)
     }

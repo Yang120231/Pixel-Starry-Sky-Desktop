@@ -28,6 +28,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { setImmediate as nextTurn } from 'node:timers/promises'
 import type {
   EngineDefaults,
   EngineId,
@@ -574,9 +575,14 @@ export class Store {
     return [...byId.values()]
   }
 
+  /** items.jsonl 的字节数，没有这个文件为 0（不读条目） */
+  itemsSize(sessionId: string): number {
+    return statSync(join(this.sessionDir(sessionId), ITEMS), { throwIfNoEntry: false })?.size ?? 0
+  }
+
   /** items.jsonl 有内容（不读条目，只看大小） */
   hasItems(sessionId: string): boolean {
-    return (statSync(join(this.sessionDir(sessionId), 'items.jsonl'), { throwIfNoEntry: false })?.size ?? 0) > 0
+    return this.itemsSize(sessionId) > 0
   }
 
   /**
@@ -585,6 +591,45 @@ export class Store {
    * 只在建运行时时调用：重新载入后内存里没有撤销状态了，顺便删掉回退前留下的文件
    */
   loadItems(sessionId: string): Item[] {
+    const load = this.beginLoad(sessionId)
+    if (existsSync(load.file)) eachLine(load.file, load.line)
+    this.lines.set(sessionId, load.index)
+    return load.items()
+  }
+
+  /**
+   * 和 loadItems 一样的结果，但按块读、每块之后让出事件循环（打开大对话不卡主进程，docs/session-memory.md 第 4 期）。
+   * 读的间隙里没载入时的追加（appendItem 不记位置）读得到就读进来；bytes 是读到的字节数，调用方和读完时的文件大小比，不等就重读。
+   * 读完才登记位置，而且只在期间没有别人 loadItems 过时登记（不然会盖掉那份已经跟着追加、重写更新的）
+   */
+  async loadItemsAsync(sessionId: string, chunk = 1 << 20): Promise<{ items: Item[]; bytes: number }> {
+    const load = this.beginLoad(sessionId)
+    let bytes = 0
+    if (existsSync(load.file)) {
+      const buf = Buffer.alloc(chunk)
+      const split = lineSplitter(load.line)
+      for (;;) {
+        // 每块重新打开：间隙里不占着文件（Windows 上占着时回退的改名会失败）
+        const fd = openSync(load.file, 'r')
+        let n: number
+        try {
+          n = readSync(fd, buf, 0, chunk, bytes)
+        } finally {
+          closeSync(fd)
+        }
+        if (!n) break
+        split.feed(buf, n)
+        bytes += n
+        await nextTurn()
+      }
+      split.end()
+    }
+    if (!this.lines.has(sessionId)) this.lines.set(sessionId, load.index)
+    return { items: load.items(), bytes }
+  }
+
+  /** loadItems / loadItemsAsync 共用：删掉残留的撤销文件，给出逐行解析的回调（边读边截、记位置）和读完后的变换 */
+  private beginLoad(sessionId: string) {
     const file = join(this.sessionDir(sessionId), ITEMS)
     this.dropUndo(sessionId)
     // 回退到一半崩溃留下的（replaceItems keepOld 的临时名）；被占着删不掉不能因此打不开会话
@@ -594,28 +639,32 @@ export class Store {
       // 下次载入再删
     }
     const index = new Map<string, Line>()
-    this.lines.set(sessionId, index)
-    if (!existsSync(file)) return []
     const byId = new Map<string, Item>()
-    eachLine(file, (line, offset, length) => {
-      if (!line.trim()) return
-      try {
-        const item = JSON.parse(line) as Item
-        if (!item || typeof item.id !== 'string') return
-        // 边读边截：不然整份图片、输出要等读完才放掉，打开时的峰值还是整个文件
-        byId.set(item.id, cutItem(item))
-        index.set(item.id, [offset, length])
-      } catch {
-        // 跳过写坏的行（例如写到一半断电）
-      }
-    })
-    const items: Item[] = []
-    for (const item of byId.values()) {
-      const shown = loaded(item)
-      // running 的上面没截，标成已中断后再截
-      if (shown) items.push(cutItem(shown))
+    return {
+      file,
+      index,
+      line: (line: string, offset: number, length: number): void => {
+        if (!line.trim()) return
+        try {
+          const item = JSON.parse(line) as Item
+          if (!item || typeof item.id !== 'string') return
+          // 边读边截：不然整份图片、输出要等读完才放掉，打开时的峰值还是整个文件
+          byId.set(item.id, cutItem(item))
+          index.set(item.id, [offset, length])
+        } catch {
+          // 跳过写坏的行（例如写到一半断电）
+        }
+      },
+      items: (): Item[] => {
+        const items: Item[] = []
+        for (const item of byId.values()) {
+          const shown = loaded(item)
+          // running 的上面没截，标成已中断后再截
+          if (shown) items.push(cutItem(shown))
+        }
+        return items
+      },
     }
-    return items
   }
 
   deleteSession(id: string): void {
@@ -653,11 +702,23 @@ export function eachLine(
   const fd = openSync(file, 'r')
   try {
     const buf = Buffer.alloc(chunk)
-    let parts: Buffer[] = []
-    // base：这一块在文件里的起点；lineStart：当前行的起点
-    let base = 0,
-      lineStart = 0
-    for (let n: number; (n = readSync(fd, buf, 0, chunk, null)) > 0; base += n) {
+    const split = lineSplitter(fn)
+    for (let n: number; (n = readSync(fd, buf, 0, chunk, null)) > 0; ) split.feed(buf, n)
+    split.end()
+  } finally {
+    closeSync(fd)
+  }
+}
+
+/** 按块喂入、按换行切行（eachLine 和 loadItemsAsync 共用）；回调同 eachLine */
+function lineSplitter(fn: (line: string, offset: number, length: number) => void) {
+  let parts: Buffer[] = []
+  // base：下一块在文件里的起点；lineStart：当前行的起点
+  let base = 0,
+    lineStart = 0
+  return {
+    /** buf 的前 n 个字节；buf 之后会被复用 */
+    feed(buf: Buffer, n: number): void {
       let start = 0
       // 换行符 0x0A 不会出现在 UTF-8 多字节字符中间，按字节切安全
       for (let i = buf.indexOf(10); i !== -1 && i < n; i = buf.indexOf(10, start)) {
@@ -669,9 +730,10 @@ export function eachLine(
       }
       // 下一块会复用 buf：没切完的那段拷出来
       if (start < n) parts.push(Buffer.from(buf.subarray(start, n)))
-    }
-    if (parts.length) fn(Buffer.concat(parts).toString('utf8'), lineStart, base - lineStart)
-  } finally {
-    closeSync(fd)
+      base += n
+    },
+    end(): void {
+      if (parts.length) fn(Buffer.concat(parts).toString('utf8'), lineStart, base - lineStart)
+    },
   }
 }

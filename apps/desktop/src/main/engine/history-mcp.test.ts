@@ -167,7 +167,9 @@ describe('对话历史 MCP 服务', () => {
     const c = (await s.entry(record(ID_C)))!
     const client = await connect(c.url, c.token)
     expect(textOf(await client.callTool({ name: 'search', arguments: { query: '中间的报错' } }))).toContain('#1 [命令]')
-    expect(textOf(await client.callTool({ name: 'search', arguments: { query: '中间省略' } }))).toContain('没有找到')
+    expect(textOf(await client.callTool({ name: 'search', arguments: { query: 'chars omitted' } }))).toContain(
+      '没有找到',
+    )
   })
 
   it('参数不对时返回工具错误而不是抛出', async () => {

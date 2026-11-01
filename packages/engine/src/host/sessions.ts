@@ -26,6 +26,9 @@ import { NEW_TITLE } from './title'
 export class HostSessions {
   constructor(private readonly ctx: HostContext) {}
 
+  /** prepare 进行中的分块读 */
+  private readonly preparing = new Map<string, Promise<void>>()
+
   sessions(): SessionSummary[] {
     const { ctx } = this
     return [...ctx.records.values()]
@@ -109,11 +112,43 @@ export class HostSessions {
   /** 会话的运行时；第一次访问时从磁盘读条目和队列，并排期续跑未完成的结算 */
   runtime(id: string): Runtime {
     const { ctx } = this
-    let rt = ctx.runtimes.get(id)
+    const rt = ctx.runtimes.get(id)
     if (rt) return rt
     const record = ctx.records.get(id)
     if (!record) throw new Error('会话不存在')
-    const snapshot = emptySnapshot(record, ctx.store.loadItems(id))
+    return this.build(record, ctx.store.loadItems(id))
+  }
+
+  /**
+   * 打开前先分块读条目、不卡主进程（docs/session-memory.md 第 4 期），读完建运行时；已载入的直接返回，同一会话同时只读一次。
+   * 读的期间别的同步调用建了运行时就丢掉读到的；文件大小和读到的对不上（期间被追加、换掉）就同步重读
+   */
+  prepare(id: string): Promise<void> {
+    const { ctx } = this
+    if (ctx.runtimes.has(id)) return Promise.resolve()
+    if (!ctx.records.has(id)) return Promise.reject(new Error('会话不存在'))
+    let reading = this.preparing.get(id)
+    if (!reading) {
+      reading = ctx.store
+        .loadItemsAsync(id)
+        .then(({ items, bytes }) => {
+          // 期间删掉了：交给之后的 openSession 报「会话不存在」
+          const record = ctx.records.get(id)
+          if (ctx.runtimes.has(id) || !record) return
+          if (ctx.store.itemsSize(id) !== bytes) this.runtime(id)
+          else this.build(record, items)
+        })
+        .finally(() => this.preparing.delete(id))
+      this.preparing.set(id, reading)
+    }
+    return reading
+  }
+
+  /** 用读出的条目建运行时（runtime 同步读、prepare 分块读共用）：补出来的条目、平台计费、队列、追踪数据、续跑结算 */
+  private build(record: SessionRecord, items: Item[]): Runtime {
+    const { ctx } = this
+    const id = record.id
+    const snapshot = emptySnapshot(record, items)
     const adapter = ctx.adapters[record.engine]
     // 补出来的条目（Codex 旧版只存路径的看图条目）落盘完整的，内存里留截过的
     if (adapter?.restoreItem)
@@ -149,7 +184,7 @@ export class HostSessions {
     } catch {
       // 读不到以前的追踪数据不影响打开会话
     }
-    rt = {
+    const rt: Runtime = {
       snapshot,
       seq: 0,
       session: null,

@@ -100,7 +100,7 @@ describe('本机会话搜索', () => {
     const items = host.open(r.id).items
     expect(items[0]).toMatchObject({ cut: true })
     expect((await host.search(query('中间的关键字'))).results[0]).toMatchObject({ itemId: 'c1', field: '命令输出' })
-    expect((await host.search(query('中间省略'))).results).toEqual([])
+    expect((await host.search(query('chars omitted'))).results).toEqual([])
     host.open(r.id).items = [...items, command('c2', '流式中的输出', 'running')]
     expect((await host.search(query('流式中的输出'))).results[0]).toMatchObject({ itemId: 'c2' })
   })

@@ -140,3 +140,27 @@ describe('engine:image / engine:itemDetail', () => {
     ])
   })
 })
+
+describe('engine:openSession / engine:openSessionTail', () => {
+  // 先等 host.prepare 分块读完条目，再同步取快照（大对话第一次打开不卡主进程）
+  it('waits for host.prepare before taking the snapshot', async () => {
+    const calls: string[] = []
+    const done: (() => void)[] = []
+    const opened = { snapshot: { items: [] }, seq: 3 }
+    const c = {
+      host: {
+        prepare: (id: string) => (calls.push(`prepare ${id}`), new Promise<void>(r => done.push(r))),
+        openSession: (id: string) => (calls.push(`open ${id}`), opened),
+      },
+    } as unknown as EngineOpContext
+    const session = ENGINE_OPS['engine:openSession'](c, 's1')
+    const tail = ENGINE_OPS['engine:openSessionTail'](c, 's2', { limit: 5 })
+    await Promise.resolve()
+    expect(calls).toEqual(['prepare s1', 'prepare s2'])
+    done.forEach(r => r())
+    expect(await session).toBe(opened)
+    expect(await tail).toMatchObject({ seq: 3, total: 0 })
+    expect(calls).toEqual(['prepare s1', 'prepare s2', 'open s1', 'open s2'])
+    await expect(async () => ENGINE_OPS['engine:openSession'](c, 3)).rejects.toThrow()
+  })
+})

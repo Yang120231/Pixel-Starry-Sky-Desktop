@@ -19,7 +19,8 @@ const isLow = (code: number): boolean => code >= 0xdc00 && code <= 0xdfff
 function headTail(text: string): string {
   const head = isHigh(text.charCodeAt(CUT_EDGE - 1)) ? CUT_EDGE - 1 : CUT_EDGE
   const tail = isLow(text.charCodeAt(text.length - CUT_EDGE)) ? text.length - CUT_EDGE + 1 : text.length - CUT_EDGE
-  const out = `${text.slice(0, head)}\n…（中间省略 ${tail - head} 个字符）…\n${text.slice(tail)}`
+  // 标记只用 ASCII：串里有一个非拉丁字符，V8 就把整串按双字节存，英文输出截完多占一倍
+  const out = `${text.slice(0, head)}\n... [${tail - head} chars omitted] ...\n${text.slice(tail)}`
   // 拷成扁平的新串：V8 的切片、拼接串引用着整个原串，不拷整串还留在内存里
   return JSON.parse(JSON.stringify(out)) as string
 }

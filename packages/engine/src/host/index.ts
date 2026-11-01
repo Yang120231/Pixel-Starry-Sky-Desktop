@@ -484,6 +484,11 @@ export class EngineHost {
     return this.m.query.lastTodo(id)
   }
 
+  /** 打开前先分块读条目建运行时（不卡主进程），之后的 openSession 不再同步读；已载入的直接返回 */
+  prepare(id: string): Promise<void> {
+    return this.m.sessions.prepare(id)
+  }
+
   /** 打开会话（给界面用）：快照 + 序号，之后界面只应用序号更大的事件 */
   openSession(id: string): OpenedSession {
     return this.m.sessions.openSession(id)

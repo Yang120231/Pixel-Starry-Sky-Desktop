@@ -79,7 +79,7 @@ describe('cutItem', () => {
   it('超过 CUT_OVER 的输出只留头尾和一行省略说明，记下原长度；其它字段不变', () => {
     const text = long(CUT_OVER + 1)
     const omitted = text.length - 2 * CUT_EDGE
-    const marker = `\n…（中间省略 ${omitted} 个字符）…\n`
+    const marker = `\n... [${omitted} chars omitted] ...\n`
     const cut = cutItem(command(text))
     expect(cut).toEqual({
       ...command(text),
@@ -100,7 +100,7 @@ describe('cutItem', () => {
     const text = 'a'.repeat(CUT_EDGE - 1) + '😀' + 'b'.repeat(CUT_OVER) + '😀' + 'c'.repeat(CUT_EDGE - 1)
     const output = outputOf(cutItem(command(text)))
     const omitted = text.length - 2 * (CUT_EDGE - 1)
-    expect(output).toBe(`${'a'.repeat(CUT_EDGE - 1)}\n…（中间省略 ${omitted} 个字符）…\n${'c'.repeat(CUT_EDGE - 1)}`)
+    expect(output).toBe(`${'a'.repeat(CUT_EDGE - 1)}\n... [${omitted} chars omitted] ...\n${'c'.repeat(CUT_EDGE - 1)}`)
   })
 })
 

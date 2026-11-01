@@ -221,8 +221,8 @@ describe('historySearch', () => {
     assistant('日志里有连接被拒绝'),
   ]
 
-  it('不分大小写，按轮次给出类型和片段', () => {
-    const text = historySearch(items, { query: 'staging' })
+  it('不分大小写，按轮次给出类型和片段', async () => {
+    const text = await historySearch(items, { query: 'staging' })
     expect(text).toContain('找到 3 处')
     expect(text).toContain('#1 [用户] 部署到 Staging 环境')
     expect(text).toContain('#2 [工具] Read config/staging.yml')
@@ -230,35 +230,46 @@ describe('historySearch', () => {
     expect(text).not.toContain('内部推理')
   })
 
-  it('命令输出里的内容能搜到，片段两侧各留 80 字', () => {
+  it('截过的命令输出按 body 补全再搜，读很多条时中途让出主线程', async () => {
+    const cuts = Array.from({ length: 300 }, (_, i) => ({ ...command(`c${i}`, 'head tail'), cutChars: 9000 }) as Item)
+    let ticked = false
+    setImmediate(() => (ticked = true))
+    const text = await historySearch([user('x', 'claude'), ...cuts], {
+      query: 'middle',
+      body: item => ({ ...item, output: 'head middle tail' }) as Item,
+    })
+    expect(text).toContain('找到 300 处')
+    expect(ticked).toBe(true)
+  })
+  it('命令输出里的内容能搜到，片段两侧各留 80 字', async () => {
     const long = `${'前'.repeat(300)}NEEDLE${'后'.repeat(300)}`
-    const text = historySearch([user('x', 'claude'), command('run', long)], { query: 'needle' })
+    const text = await historySearch([user('x', 'claude'), command('run', long)], { query: 'needle' })
     expect(text).toContain(`#1 [命令] …${'前'.repeat(80)}NEEDLE${'后'.repeat(80)}…`)
   })
 
-  it('搜「用户」「助手」这类前缀词不会全中', () => {
-    expect(historySearch(items, { query: '助手' })).toContain('没有找到')
+  it('搜「用户」「助手」这类前缀词不会全中', async () => {
+    expect(await historySearch(items, { query: '助手' })).toContain('没有找到')
   })
 
-  it('没有命中、空关键词、特殊字符', () => {
-    expect(historySearch(items, { query: 'zzz' })).toBe('没有找到包含「zzz」的内容。')
-    expect(historySearch(items, { query: '  ' })).toContain('请给出')
-    expect(historySearch(items, { query: 'a'.repeat(300) })).toContain('太长')
-    expect(historySearch([user('价格 (a+b)* [x]', 'claude')], { query: '(a+b)* [x]' })).toContain('#1 [用户]')
+  it('没有命中、空关键词、特殊字符', async () => {
+    expect(await historySearch(items, { query: 'zzz' })).toBe('没有找到包含「zzz」的内容。')
+    expect(await historySearch(items, { query: '  ' })).toContain('请给出')
+    expect(await historySearch(items, { query: 'a'.repeat(300) })).toContain('太长')
+    expect(await historySearch([user('价格 (a+b)* [x]', 'claude')], { query: '(a+b)* [x]' })).toContain('#1 [用户]')
   })
 
-  it('limit 默认 20、最多 50，并说明总数', () => {
+  it('limit 默认 20、最多 50，并说明总数', async () => {
     const many = Array.from({ length: 60 }, (_, i) => turn(`关键词 ${i}`, '好')).flat()
-    const dflt = historySearch(many, { query: '关键词' })
+    const dflt = await historySearch(many, { query: '关键词' })
     expect(dflt).toContain('找到 60 处')
     expect(dflt).toContain('显示前 20 处')
     expect(dflt.match(/^#\d+ /gm)).toHaveLength(20)
-    expect(historySearch(many, { query: '关键词', limit: 500 }).match(/^#\d+ /gm)).toHaveLength(50)
-    expect(historySearch(many, { query: '关键词', limit: 2 }).match(/^#\d+ /gm)).toHaveLength(2)
+    expect((await historySearch(many, { query: '关键词', limit: 500 })).match(/^#\d+ /gm)).toHaveLength(50)
+    expect((await historySearch(many, { query: '关键词', limit: 2 })).match(/^#\d+ /gm)).toHaveLength(2)
   })
 
-  it('命中交接前后的内容都按原轮次编号', () => {
-    const text = historySearch(items, { query: '连接被拒绝' })
+  it('命中交接前后的内容都按原轮次编号', async () => {
+    const text = await historySearch(items, { query: '连接被拒绝' })
     expect(text).toContain('#2 [助手]')
   })
 })
@@ -267,7 +278,7 @@ describe('emoji 和落单的代理项', () => {
   const emoji = String.fromCharCode(0xd83d, 0xde00)
   const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
 
-  it('read 超长截断、search 片段：不劈开 emoji', () => {
+  it('read 超长截断、search 片段：不劈开 emoji', async () => {
     const items = [
       user(`问${emoji.repeat(15_000)}`, 'claude'),
       assistant(`答${emoji.repeat(15_000)}关键词${emoji.repeat(100)}`),
@@ -276,18 +287,18 @@ describe('emoji 和落单的代理项', () => {
     expect(read).toContain('已截断')
     expect(lone.test(read)).toBe(false)
     expect(read).not.toContain('�')
-    const found = historySearch(items, { query: '关键词' })
+    const found = await historySearch(items, { query: '关键词' })
     expect(lone.test(found)).toBe(false)
     expect(found).not.toContain('�')
   })
 
-  it('上游原文里本来就有的半个代理项：三个工具的输出都换成 U+FFFD', () => {
+  it('上游原文里本来就有的半个代理项：三个工具的输出都换成 U+FFFD', async () => {
     const half = String.fromCharCode(0xd83d)
     const items = [user(`坏${half}字 关键词`, 'claude'), assistant(`回复${half}`)]
     for (const out of [
       historyOutline(items),
       historyRead(items, { turn: 1 }),
-      historySearch(items, { query: '关键词' }),
+      await historySearch(items, { query: '关键词' }),
     ]) {
       expect(lone.test(out)).toBe(false)
       expect(out).toContain('�')
