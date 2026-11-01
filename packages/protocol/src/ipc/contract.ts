@@ -218,7 +218,7 @@ export const IPC_CONTRACT = {
   },
   'engine:engines': { kind: 'invoke', route: 'selected', ids: [0], remote: 'engine:engines', trust: 'sender' },
   'engine:event': { kind: 'push', route: 'push', trust: 'none' },
-  'engine:image': { kind: 'invoke', route: 'resource', ids: [0, 1], remote: 'engine:image', trust: 'sender' },
+  'engine:image': { kind: 'invoke', route: 'resource', ids: [0, 1, 2], remote: 'engine:image', trust: 'sender' },
   'engine:itemDetail': {
     kind: 'invoke',
     route: 'resource',

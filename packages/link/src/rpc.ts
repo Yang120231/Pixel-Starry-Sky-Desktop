@@ -8,6 +8,13 @@ export type RpcMessage =
   | { id: number; error: string }
   | { event: string; data: unknown }
 
+// globals.d.ts 不带 console 的类型；各平台都有，这里只用来记丢掉的事件
+declare const console: { error(...args: unknown[]): void }
+
+/** output 抛这个表示只是这一条太大（传输层的上限），连接本身还能用 */
+export const RPC_SIZE_LIMIT = 'RPC_SIZE_LIMIT'
+const tooBig = (e: unknown) => e instanceof Error && e.message === RPC_SIZE_LIMIT
+
 interface Pending {
   resolve(value: unknown): void
   reject(error: Error): void
@@ -28,7 +35,7 @@ export class RpcCore {
   onClose: (error: Error) => void = () => {}
 
   constructor(
-    /** 发出一条消息；抛错表示发不出去（太大、连接断了） */
+    /** 发出一条消息；抛错表示发不出去（抛 RPC_SIZE_LIMIT：这一条太大；别的：连接断了） */
     private readonly output: (message: RpcMessage) => void,
     private readonly handler: RpcHandler = () => {
       throw new Error('Unknown RPC method')
@@ -66,7 +73,20 @@ export class RpcCore {
     try {
       this.output({ event: channel, data })
     } catch (e) {
-      this.close(e as Error)
+      // 太大的事件丢掉、记一笔：关掉连接会让远端辅助进程退出，这台机器的会话全断
+      if (tooBig(e)) console.error('[rpc] event dropped: ' + RPC_SIZE_LIMIT, channel)
+      else this.close(e as Error)
+    }
+  }
+
+  /** 回复太大：改回一个错误，调用方看到 RPC_SIZE_LIMIT，连接照常；别的写错误往外抛（关闭连接） */
+  private reply(message: { id: number; result: unknown } | { id: number; error: string }): void {
+    if (this.closed) return
+    try {
+      this.output(message)
+    } catch (e) {
+      if (!tooBig(e)) throw e
+      this.output({ id: message.id, error: RPC_SIZE_LIMIT })
     }
   }
 
@@ -88,12 +108,8 @@ export class RpcCore {
         void Promise.resolve()
           .then(() => this.handler(method, args))
           .then(
-            result => {
-              if (!this.closed) this.output({ id, result })
-            },
-            error => {
-              if (!this.closed) this.output({ id, error: error instanceof Error ? error.message : 'RPC_FAILED' })
-            },
+            result => this.reply({ id, result }),
+            error => this.reply({ id, error: error instanceof Error ? error.message : 'RPC_FAILED' }),
           )
           .catch(error => this.close(error as Error))
         return

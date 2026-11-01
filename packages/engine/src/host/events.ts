@@ -101,16 +101,27 @@ export class HostEvents {
   }
 
   patchRecord(id: string, patch: Partial<SessionRecord>): SessionRecord {
-    const rt = this.ctx.m.sessions.runtime(id)
+    const { ctx } = this
+    const rt = ctx.runtimes.get(id)
     if (
       patch.model !== undefined ||
       patch.platform !== undefined ||
       patch.provider !== undefined ||
       patch.engine !== undefined
     ) {
-      this.ctx.m.cache.reset(id)
-      if (rt.snapshot.context)
+      ctx.m.cache.reset(id)
+      if (rt?.snapshot.context)
         this.apply(id, { type: 'context', context: { ...rt.snapshot.context, stale: true, diagnosticStale: true } })
+    }
+    if (!rt) {
+      // 没载入的会话只改记录：不为改一个字段把整份对话读进内存（docs/session-memory.md 第 1 期）；没人持有它的快照，不发会话事件
+      const base = ctx.records.get(id)
+      if (!base) throw new Error('会话不存在')
+      const record = { ...base, ...patch }
+      ctx.records.set(id, record)
+      ctx.store.saveRecord(record)
+      this.broadcastSessions()
+      return record
     }
     const record = { ...rt.snapshot.record, ...patch }
     this.apply(id, { type: 'record', record })
@@ -237,6 +248,8 @@ export class HostEvents {
         break
       case 'approval_resolved':
         if (rt.snapshot.turnId && rt.snapshot.pending.length === 0) this.apply(id, { type: 'status', state: 'running' })
+        // 状态没变时也要广播：会话列表里的 pending 是第一个待批准的，处理掉一个就换成下一个
+        else this.broadcastSessions()
         break
       case 'turn_completed': {
         if (event.usage || m.usage.hasPlatformRequests(id, event.turnId))

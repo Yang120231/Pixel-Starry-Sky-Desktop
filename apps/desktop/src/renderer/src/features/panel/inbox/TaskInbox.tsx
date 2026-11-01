@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, CircleAlert, CirclePause, ShieldAlert, type LucideIcon } from 'lucide-react'
 import { Button, cn, CountBadge } from '@/ui'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage, type TranslationKey } from '@/i18n/core'
-import { bridge, relativeTime, useEngineState } from '@/features/engine'
-import { openSession } from '@/features/engine/store'
+import { bridge, relativeTime } from '@/features/engine'
 import { OPEN_SESSION_EVENT } from '@/features/engine/openRequests'
 import { isDemo } from '@/data'
 import { CARD, ToolError, useOperation, useRemember } from '../ToolsUi'
@@ -16,8 +15,6 @@ const LANE: Record<InboxLane, { label: TranslationKey; icon: LucideIcon; tone: s
   failed: { label: 'projectTools.inbox.lane.failed', icon: CircleAlert, tone: 'text-danger' },
   paused: { label: 'projectTools.inbox.lane.paused', icon: CirclePause, tone: 'text-fg-muted' },
 }
-/** 后台读取快照的上限：只为显示审批内容，不必全部打开 */
-const MAX_PREFETCH = 20
 
 const open = (sessionId: string) => window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId } }))
 
@@ -36,32 +33,11 @@ export function TaskInbox() {
   const items = useInbox()
   const [collapsed, setCollapsed] = useRemember('pixelsky.inbox.collapsed', false)
   const { busy, error, run } = useOperation()
-  const snapshots = useEngineState(s => s.snapshots)
-  const fetched = useRef(new Set<string>())
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000)
     return () => window.clearInterval(timer)
   }, [])
-
-  // 等你处理但还没打开过的会话：后台读一次快照，好显示审批内容
-  useEffect(() => {
-    if (isDemo) return
-    // 不再等你处理的会话忘掉：快照可能已被释放，下次又等你处理时要再读一次
-    const waiting = new Set(items.filter(item => item.lane === 'waiting').map(item => item.sessionId))
-    for (const id of fetched.current) if (!waiting.has(id)) fetched.current.delete(id)
-    for (const item of items) {
-      if (
-        item.lane !== 'waiting' ||
-        snapshots[item.sessionId] ||
-        fetched.current.has(item.sessionId) ||
-        fetched.current.size >= MAX_PREFETCH
-      )
-        continue
-      fetched.current.add(item.sessionId)
-      void openSession(item.sessionId).catch(() => {})
-    }
-  }, [items, snapshots])
 
   const act = (item: InboxItem, fn: () => Promise<void>) =>
     run(async () => {

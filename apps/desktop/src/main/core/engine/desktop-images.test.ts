@@ -61,5 +61,10 @@ describe('去掉图片数据', () => {
     expect(imageOf(items, 't1', 'c')?.id).toBe('c')
     expect(imageOf(items, 'u1', 'zz')).toBeNull()
     expect(imageOf(items, 'nope', 'a')).toBeNull()
+    // 手机按第几张取
+    expect(imageOf(items, 'u1', 1)?.dataBase64).toBe('REVG')
+    expect(imageOf(items, 't1', 0)?.id).toBe('c')
+    expect(imageOf(items, 'u1', 2)).toBeNull()
+    expect(imageOf(items, 'u1', -1)).toBeNull()
   })
 })

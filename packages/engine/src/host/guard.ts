@@ -33,7 +33,9 @@ export class HostGuard {
       for (const record of ctx.records.values()) {
         // 会话可以开在副本的子文件夹里（导入的原生会话），在这个目录下面的也一起停
         if (!within(this.workspaceKey(record.cwd), key)) continue
-        const rt = ctx.m.sessions.runtime(record.id)
+        // 没载入的会话没有进程可停，也不整份读进来；锁期间发送和派发由 isLocked 挡住（queue.ts send、turn.ts pump）
+        const rt = ctx.runtimes.get(record.id)
+        if (!rt) continue
         await ctx.m.turn.interrupt(record.id)
         await rt.pumpFinished
         rt.generation++

@@ -32,11 +32,13 @@ export class HostSessions {
         const queue = ctx.m.queue.queueSummary(record.id)
         const snapshot = ctx.runtimes.get(record.id)?.snapshot
         const background = snapshot?.background ?? 0
+        const pending = snapshot?.pending[0]
         return {
           record,
           state: snapshot?.state ?? 'idle',
           ...(background ? { background } : {}),
           ...(queue ? { queue } : {}),
+          ...(pending ? { pending, pendingIds: snapshot.pending.map(p => p.requestId) } : {}),
         }
       })
   }
@@ -181,6 +183,13 @@ export class HostSessions {
     return { snapshot: this.runtime(id).snapshot, seq: this.runtime(id).seq }
   }
 
+  /** 会话记录（载入时和 snapshot.record 是同一份，apply 'record' 两边一起写）；不存在时报错，不创建运行时 */
+  stored(id: string): SessionRecord {
+    const record = this.ctx.records.get(id)
+    if (!record) throw new Error('会话不存在')
+    return record
+  }
+
   /** 正在执行的设置（含运行中改过的）；没有运行时用会话记录。不创建运行时 */
   record(id: string): SessionRecord | null {
     return this.ctx.runtimes.get(id)?.execution ?? this.ctx.records.get(id) ?? null
@@ -323,10 +332,10 @@ export class HostSessions {
 
   renameSession(id: string, title: unknown): SessionRecord {
     if (this.ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
-    const name = normalizeSessionTitle(title),
-      rt = this.runtime(id)
+    const name = normalizeSessionTitle(title)
     const record = this.ctx.m.events.patchRecord(id, { title: name, titleEdited: true })
-    if (rt.execution) rt.execution = { ...rt.execution, title: name, titleEdited: true }
+    const rt = this.ctx.runtimes.get(id)
+    if (rt?.execution) rt.execution = { ...rt.execution, title: name, titleEdited: true }
     return record
   }
 
@@ -335,15 +344,22 @@ export class HostSessions {
    * 还没有任何条目的会话不加：加了它就不再算「没开始过」，之后换引擎会走接力而不是直接改（update 里的判断）
    */
   addNotice(id: string, level: 'info' | 'warn' | 'error', text: string): void {
-    const rt = this.runtime(id)
-    if (rt.snapshot.items.length === 0) return
-    this.ctx.m.events.apply(id, { type: 'item_completed', item: { kind: 'notice', id: randomUUID(), level, text } })
+    const { ctx } = this
+    const item = { kind: 'notice', id: randomUUID(), level, text } as const
+    const rt = ctx.runtimes.get(id)
+    if (rt) {
+      if (rt.snapshot.items.length > 0) ctx.m.events.apply(id, { type: 'item_completed', item })
+      return
+    }
+    if (!ctx.records.has(id)) throw new Error('会话不存在')
+    // 没载入的会话：只追加到磁盘（没人在看它，打开时读到），不为一条提示整份载入
+    if (ctx.store.hasItems(id)) ctx.store.appendItem(id, item)
   }
 
   setSessionBottom(id: string, bottomed: boolean): SessionRecord {
     if (this.ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
-    const rt = this.runtime(id)
-    if (Boolean(rt.snapshot.record.bottomedAt) === bottomed) return rt.snapshot.record
+    const current = this.stored(id)
+    if (Boolean(current.bottomedAt) === bottomed) return current
     const stamp = bottomed
       ? [...this.ctx.records.values()].reduce(
           (latest, record) => Math.max(latest, (record.bottomedAt ?? 0) + 1),
@@ -353,14 +369,15 @@ export class HostSessions {
     // 置底和置顶互斥：置底时取消置顶
     const patch = { bottomedAt: stamp, ...(bottomed ? { pinnedAt: null } : {}) }
     const record = this.ctx.m.events.patchRecord(id, patch)
-    if (rt.execution) rt.execution = { ...rt.execution, ...patch }
+    const rt = this.ctx.runtimes.get(id)
+    if (rt?.execution) rt.execution = { ...rt.execution, ...patch }
     return record
   }
 
   setSessionPinned(id: string, pinned: boolean): SessionRecord {
     if (this.ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
-    const rt = this.runtime(id)
-    if (Boolean(rt.snapshot.record.pinnedAt) === pinned) return rt.snapshot.record
+    const current = this.stored(id)
+    if (Boolean(current.pinnedAt) === pinned) return current
     // 时间戳只增不减，同一毫秒里连着置顶几个也分得出先后
     const stamp = pinned
       ? [...this.ctx.records.values()].reduce(
@@ -370,7 +387,8 @@ export class HostSessions {
       : null
     const patch = { pinnedAt: stamp, ...(pinned ? { bottomedAt: null } : {}) }
     const record = this.ctx.m.events.patchRecord(id, patch)
-    if (rt.execution) rt.execution = { ...rt.execution, ...patch }
+    const rt = this.ctx.runtimes.get(id)
+    if (rt?.execution) rt.execution = { ...rt.execution, ...patch }
     return record
   }
 
@@ -378,8 +396,13 @@ export class HostSessions {
     const { ctx } = this
     const m = ctx.m
     if (ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
-    const rt = this.runtime(id)
-    if (Boolean(rt.snapshot.record.archivedAt) === archived) return
+    if (Boolean(this.stored(id).archivedAt) === archived) return
+    const rt = ctx.runtimes.get(id)
+    // 没载入的会话没有进程和任务可停：只改记录
+    if (!rt) {
+      m.events.patchRecord(id, { archivedAt: archived ? Date.now() : null })
+      return
+    }
     if (archived && (rt.snapshot.state !== 'idle' || rt.pumping || rt.stopping) && !stopRunning)
       throw new Error('SESSION_RUNNING')
     ctx.changingSessions.add(id)

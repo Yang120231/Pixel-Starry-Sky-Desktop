@@ -41,9 +41,10 @@ export function eventForDesktop(event: HostEvent): HostEvent {
   return event
 }
 
-/** 一张图的原图：用户发的图、工具结果里的图，按图片 id 找；找不到为 null */
-export function imageOf(items: readonly Item[], itemId: string, imageId: string): ImageAttachment | null {
+/** 一张图的原图：用户发的图、工具结果里的图，按图片 id 找（手机按第几张）；找不到为 null */
+export function imageOf(items: readonly Item[], itemId: string, imageId: string | number): ImageAttachment | null {
   const item = items.find(i => i.id === itemId)
   const images = item?.kind === 'user' ? item.attachments : item?.kind === 'tool' ? item.images : undefined
-  return images?.find(image => image.id === imageId && image.dataBase64) ?? null
+  const image = typeof imageId === 'number' ? images?.[imageId] : images?.find(image => image.id === imageId)
+  return image?.dataBase64 ? image : null
 }

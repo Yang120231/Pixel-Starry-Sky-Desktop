@@ -20,6 +20,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
@@ -387,6 +388,11 @@ export class Store {
       // 读到一半出错（文件被删）：用已经读到的
     }
     return [...byId.values()]
+  }
+
+  /** items.jsonl 有内容（不读条目，只看大小） */
+  hasItems(sessionId: string): boolean {
+    return (statSync(join(this.sessionDir(sessionId), 'items.jsonl'), { throwIfNoEntry: false })?.size ?? 0) > 0
   }
 
   /** 读出全部条目；同一个 id 出现多次时保留第一次的位置、最后一次的内容 */

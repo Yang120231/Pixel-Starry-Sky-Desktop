@@ -19,7 +19,7 @@ export interface SessionCard {
   /** 会话最近更新时间 */
   at: number
   lane: SessionLane
-  /** 等你批准 / 回答：第一个请求；还没读到快照时为 null */
+  /** 等你批准 / 回答：第一个请求（「待处理」给的）；读不到时为 null */
   request: ApprovalRequest | null
   /** 出错：错误摘要 */
   error: string | null

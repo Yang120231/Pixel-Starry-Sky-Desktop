@@ -110,6 +110,22 @@ describe('待处理分栏', () => {
       build([waiting], { snapshots: { w: snapshot([request({ requestId: 'r2' })]) }, dismissed: { w: 'w:r1' } }),
     ).toHaveLength(1)
   })
+  it('界面里没打开的会话用会话列表带的第一个请求，签名和打开后一样；打开着的按快照', () => {
+    const waiting = { ...summary('w', {}, 'waiting'), pending: request(), pendingIds: ['r1'] }
+    const [item] = build([waiting])
+    expect(item).toMatchObject({ signature: 'w:r1', request: { requestId: 'r1' } })
+    expect(build([waiting], { dismissed: { w: 'w:r1' } })).toEqual([])
+    // 又来第二个请求：已处理的重新出现，签名和打开后一样
+    const two = { ...waiting, pendingIds: ['r1', 'r2'] }
+    expect(build([two], { dismissed: { w: 'w:r1' } })[0]).toMatchObject({ signature: 'w:r1,r2' })
+    expect(build([two], { snapshots: { w: snapshot([request(), request({ requestId: 'r2' })]) } })[0].signature).toBe(
+      'w:r1,r2',
+    )
+    // 快照已经收到「已批准」，会话列表还没推新的：不显示已经批过的请求
+    expect(build([waiting], { snapshots: { w: snapshot([]) } })[0]).toMatchObject({ request: null, signature: 'w:10' })
+    // 会话列表没带（旧版远端辅助进程）：照旧按更新时间
+    expect(build([summary('w', {}, 'waiting')])[0]).toMatchObject({ request: null, signature: 'w:10' })
+  })
   it('命令类审批可以直接允许；提问、计划、表单、不允许批准的要去会话；有排队才能继续', () => {
     expect(canAnswerInline(request())).toBe(true)
     expect(canAnswerInline(request({ kind: 'file_change' }))).toBe(true)

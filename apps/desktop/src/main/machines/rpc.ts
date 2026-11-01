@@ -1,6 +1,6 @@
 import type { Readable, Writable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
-import { RpcCore } from '@pixelsky/link/rpc'
+import { RpcCore, RPC_SIZE_LIMIT } from '@pixelsky/link/rpc'
 
 export type { RpcHandler } from '@pixelsky/link/rpc'
 import type { RpcHandler } from '@pixelsky/link/rpc'
@@ -10,7 +10,9 @@ import type { RpcHandler } from '@pixelsky/link/rpc'
  * 调用 / 回复 / 事件的配对在 packages/link 的 RpcCore（手机连接也用它），这里只负责按行读写和大小限制。
  */
 export class RpcPeer {
-  private buffer = ''
+  /** 还没收到换行的那一行，按块存着、收齐再拼一次（以前每块都把整个缓冲重拼重扫，大消息是平方级的） */
+  private parts: string[] = []
+  private buffered = 0
   /** 收到过合法消息：之前的非 JSON 行是远端 shell 启动文件（.bashrc 等）打印的，跳过 */
   private started = false
   private readonly decoder = new StringDecoder('utf8')
@@ -41,9 +43,17 @@ export class RpcPeer {
   }
   private write(value: unknown): void {
     if (this.core.isClosed) throw new Error('SSH_CONNECTION_CLOSED')
-    const line = JSON.stringify(value)
-    if (Buffer.byteLength(line) > 48 * 1024 * 1024 || this.output.writableLength > 64 * 1024 * 1024)
-      throw new Error('RPC_SIZE_LIMIT')
+    let line: string
+    try {
+      line = JSON.stringify(value)
+    } catch (e) {
+      // 超过 V8 字符串上限（几百 MB 的会话）也是「这一条太大」
+      if (e instanceof RangeError) throw new Error(RPC_SIZE_LIMIT)
+      throw e
+    }
+    // 单条太大：RpcCore 只让这一次失败、连接照常；输出积压照旧断开（丢事件会让隧道数据错位、会话状态对不上）
+    if (Buffer.byteLength(line) > 48 * 1024 * 1024) throw new Error(RPC_SIZE_LIMIT)
+    if (this.output.writableLength > 64 * 1024 * 1024) throw new Error('RPC_BACKLOG_LIMIT')
     this.output.write(line + '\n')
   }
   call<T = unknown>(method: string, args: unknown[] = [], timeout = 120_000): Promise<T> {
@@ -60,21 +70,27 @@ export class RpcPeer {
   whenClosed(cb: () => void): void {
     this.closeListeners.push(cb)
   }
-  /** 待写出的字节数：隧道据此在输出积压时暂停读源 socket，免得撞上 RPC_SIZE_LIMIT 把整条连接关掉。 */
+  /** 待写出的字节数：隧道据此在输出积压时暂停读源 socket，免得撞上 RPC_BACKLOG_LIMIT 把整条连接关掉。 */
   get backlog(): number {
     return this.output.writableLength
   }
   private receive(chunk: string): void {
     if (this.core.isClosed) return
-    this.buffer += chunk
-    if (this.buffer.length > 64 * 1024 * 1024) {
-      this.close(new Error('RPC_SIZE_LIMIT'))
-      return
-    }
-    let newline: number
-    while ((newline = this.buffer.indexOf('\n')) >= 0) {
-      const line = this.buffer.slice(0, newline)
-      this.buffer = this.buffer.slice(newline + 1)
+    // 只在新到的这块里找换行
+    for (let start = 0; ; ) {
+      const newline = chunk.indexOf('\n', start)
+      const piece = newline < 0 ? chunk.slice(start) : chunk.slice(start, newline)
+      this.buffered += piece.length
+      if (this.buffered > 64 * 1024 * 1024) {
+        this.close(new Error(RPC_SIZE_LIMIT))
+        return
+      }
+      if (piece) this.parts.push(piece)
+      if (newline < 0) return
+      const line = this.parts.join('')
+      this.parts = []
+      this.buffered = 0
+      start = newline + 1
       if (!line.trim()) continue
       let message: unknown
       try {

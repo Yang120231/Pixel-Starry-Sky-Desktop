@@ -366,7 +366,7 @@ const decodeChannels: Record<string, string> = {
   'engine:dismissQueued': 'firstAndSecond',
   'engine:engines': 'first',
   'engine:interrupt': 'first',
-  'engine:image': 'firstAndSecond',
+  'engine:image': 'firstSecondThird',
   'engine:itemDetail': 'firstAndSecond',
   'engine:interruptTurn': 'firstAndSecond',
   'engine:moveQueued': 'firstAndSecond',

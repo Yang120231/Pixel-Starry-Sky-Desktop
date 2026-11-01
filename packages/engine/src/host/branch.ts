@@ -537,18 +537,25 @@ export class HostBranch {
    * 分支会话记下合并时间（和新的代码起点、副本是否删掉）
    */
   recordMerge(id: string, merge: NoticeBranchMerge, branchPatch: Partial<SessionBranch>): void {
-    const m = this.ctx.m
-    const record = m.sessions.runtime(id).snapshot.record
+    const { ctx } = this
+    const m = ctx.m
+    const record = m.sessions.stored(id)
     const parentId = record.forkedFrom?.sessionId
     if (!record.branch || !parentId) throw new Error('这个会话不是开分支开出来的')
-    const parent = m.sessions.runtime(parentId)
+    const parent = m.sessions.stored(parentId)
     const verb = merge.code === 'committed' || merge.code === 'applied' ? '代码和结论' : '结论'
-    m.events.apply(parentId, {
-      type: 'item_completed',
-      item: { kind: 'notice', id: randomUUID(), level: 'info', text: `合并了分支「${record.title}」的${verb}`, merge },
-    })
+    const item: Item = {
+      kind: 'notice',
+      id: randomUUID(),
+      level: 'info',
+      text: `合并了分支「${record.title}」的${verb}`,
+      merge,
+    }
+    // 上级没载入：卡片只写进磁盘（打开时读到），不为它整份载入上级
+    if (ctx.runtimes.has(parentId)) m.events.apply(parentId, { type: 'item_completed', item })
+    else ctx.store.appendItem(parentId, item)
     // 上一个合并回来的摘要还没带给 AI：两份接在一起，不覆盖
-    const before = parent.snapshot.record.pendingMerge ?? null
+    const before = parent.pendingMerge ?? null
     m.events.patchRecord(parentId, {
       pendingMerge: !merge.summary
         ? before
@@ -566,13 +573,13 @@ export class HostBranch {
   /** 这次不带合并摘要 */
   dropPendingMerge(id: string): void {
     const m = this.ctx.m
-    if (m.sessions.runtime(id).snapshot.record.pendingMerge) m.events.patchRecord(id, { pendingMerge: null })
+    if (m.sessions.stored(id).pendingMerge) m.events.patchRecord(id, { pendingMerge: null })
   }
 
   /** 旁聊：带着主对话的上下文单独问一次（主任务运行中也可以） */
   async sideQuestion(id: string, question: string, history: SideTurn[]): Promise<string> {
     const { ctx } = this
-    const record = ctx.m.sessions.runtime(id).snapshot.record
+    const record = ctx.m.sessions.stored(id)
     const adapter = ctx.adapters[record.engine]
     if (!ENGINES[record.engine].caps.sideChat || !adapter?.sideQuestion) throw new Error('当前引擎暂不支持旁聊')
     if (!record.engineSessionId) throw new Error('先在主对话里发一条消息')

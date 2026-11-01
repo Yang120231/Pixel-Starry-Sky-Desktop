@@ -52,7 +52,10 @@ export function remoteIds<T>(value: T, machine: string, encode: boolean, field =
     ) as T
   }
   if (Array.isArray(value))
-    return value.map(item => remoteIds(item, machine, encode, field === 'ids' ? 'id' : field)) as T
+    // truncated：手机会话尾部里内容截过的条目 id（「查看完整」按它取）
+    return value.map(item =>
+      remoteIds(item, machine, encode, field === 'ids' || field === 'truncated' ? 'id' : field),
+    ) as T
   if (value && typeof value === 'object')
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [key, remoteIds(item, machine, encode, key)]),

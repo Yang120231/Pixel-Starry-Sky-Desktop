@@ -107,6 +107,8 @@ it('worktree sessions keep their own cwd and directory maintenance blocks new wr
   const record = host.createSession({ projectId: project.id }, copy)
   expect(record.cwd).toBe(copy)
   expect(host.projects().find(p => p.id === project.id)?.path).toBe(root)
+  // 已载入的会话维护时停下、队列暂停；没载入的不载入（unloaded-session.test.ts）
+  host.open(record.id)
   await host.withWorkspaceStopped(copy, async () => {
     await expect(host.send(record.id, 'blocked')).rejects.toThrow('维护')
     expect(() => host.createSession({ projectId: project.id }, copy)).toThrow('维护')
@@ -126,6 +128,8 @@ it('directory maintenance also stops and blocks sessions in its subfolders, not 
   const inner = host.createSession({ projectId: project.id }, sub)
   const other = host.createSession({ projectId: project.id }, sibling)
   const lockPath = process.platform === 'win32' ? copy.toUpperCase() : copy
+  host.open(inner.id)
+  host.open(other.id)
   await host.withWorkspaceStopped(lockPath, async () => {
     await expect(host.send(inner.id, 'blocked')).rejects.toThrow('维护')
     expect(host.open(inner.id).queuePaused).toBe(true)

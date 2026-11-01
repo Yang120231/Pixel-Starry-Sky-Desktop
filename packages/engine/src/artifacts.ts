@@ -43,8 +43,20 @@ export function within(root: string, path: string): boolean {
 const localOf = (root: string, absolute: string): string | null =>
   within(root, absolute) ? relative(resolve(root), absolute).split(sep).join('/') : null
 
-async function historyItems(file: string, signal?: AbortSignal): Promise<{ items: Item[]; partial: boolean }> {
+/** 产物扫描只看这两种条目（sessionArtifacts） */
+const ARTIFACT_KINDS: ReadonlySet<Item['kind']> = new Set(['user', 'file_change'])
+
+/**
+ * 流式读 items.jsonl（同一 id 取第一次的位置、最后一次的内容）。给了 keep 就只解析这几种条目：
+ * 先按 `"kind":"…"` 字样筛行（JSON.stringify 不加空格，正文里的引号是转义的，不会漏），嵌套对象可能误中，解析后再核对 kind
+ */
+async function historyItems(
+  file: string,
+  signal?: AbortSignal,
+  keep?: ReadonlySet<Item['kind']>,
+): Promise<{ items: Item[]; partial: boolean }> {
   signal?.throwIfAborted()
+  const needles = keep && [...keep].map(kind => `"kind":"${kind}"`)
   const byId = new Map<string, Item>()
   const stream = createReadStream(file, { encoding: 'utf8', signal })
   const lines = createInterface({ input: stream, crlfDelay: Infinity })
@@ -58,11 +70,12 @@ async function historyItems(file: string, signal?: AbortSignal): Promise<{ items
   try {
     for await (const line of lines) {
       signal?.throwIfAborted()
-      if (!line.trim()) continue
+      if (!line.trim() || (needles && !needles.some(n => line.includes(n)))) continue
       try {
         const item = JSON.parse(line) as Item
-        if (item && typeof item.id === 'string' && typeof item.kind === 'string') byId.set(item.id, item)
-        else partial = true
+        if (item && typeof item.id === 'string' && typeof item.kind === 'string') {
+          if (!keep || keep.has(item.kind)) byId.set(item.id, item)
+        } else partial = true
       } catch {
         partial = true
       }
@@ -207,7 +220,11 @@ export async function collectArtifacts(
       const record = records[index++]
       let items = source.liveItems(record.id)
       if (items === undefined) {
-        const history = await historyItems(join(source.dataDir, 'sessions', record.id, 'items.jsonl'), signal)
+        const history = await historyItems(
+          join(source.dataDir, 'sessions', record.id, 'items.jsonl'),
+          signal,
+          ARTIFACT_KINDS,
+        )
         partial ||= history.partial
         items = source.liveItems(record.id) ?? history.items
       }

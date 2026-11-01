@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { deliveryType, type FileChange, type Item } from '@pixelsky/protocol'
+import { historyItems } from '../src/artifacts'
 import { EngineHost } from '../src/host'
 
 let root: string, workspace: string, outside: string
@@ -174,6 +175,32 @@ describe('产物：交付', () => {
     const controller = new AbortController()
     controller.abort()
     await expect(host.artifacts(query(), workspace, controller.signal)).rejects.toThrow()
+  })
+  it('磁盘上的条目只解析用户消息和改文件两种：正文里的 "kind":"user" 不算，同一条目第一次的位置、最后一版内容', async () => {
+    const file = join(root, 'items.jsonl')
+    const tool: Item = {
+      kind: 'tool',
+      id: 't',
+      name: 'x',
+      input: { kind: 'user' },
+      output: '',
+      status: 'completed',
+    } as unknown as Item
+    const items: Item[] = [
+      user('u1', '先说"kind":"file_change"'),
+      edit('e1', [change('a.ts')], 'failed'),
+      { kind: 'assistant', id: 'a', text: '{"kind":"user","id":"fake"}', status: 'completed' },
+      tool,
+      user('u2', '再来'),
+      edit('e1', [change('a.ts', 'update', 7)]),
+    ]
+    writeFileSync(file, items.map(i => JSON.stringify(i)).join('\n') + '\n')
+    const kept = await historyItems(file, undefined, new Set(['user', 'file_change']))
+    expect(kept.items.map(i => i.id)).toEqual(['u1', 'e1', 'u2'])
+    expect(kept.items[1]).toMatchObject({ status: 'completed', changes: [{ added: 7 }] })
+    expect(kept.partial).toBe(false)
+    // 不给 keep（对话历史工具）：全部条目
+    expect((await historyItems(file)).items.map(i => i.id)).toEqual(['u1', 'e1', 'a', 't', 'u2'])
   })
   it('交付类型按扩展名判断', () => {
     expect(

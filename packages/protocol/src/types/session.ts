@@ -1,3 +1,4 @@
+import type { ApprovalRequest } from './approval'
 import type { Effort, EngineId, PermissionMode } from './base'
 
 /** 项目的附加文件夹（docs/ui/multi-root-projects.md §3） */
@@ -478,6 +479,10 @@ export interface SessionSummary {
    * queued 只数还在等的：不含失败项，也不含正在执行、正在交付的那条。没打开过的会话按磁盘上的队列文件计数
    */
   queue?: QueueSummary
+  /** 已载入的会话第一个等你批准的请求：看板、收件箱不用为它整份打开会话；没有时省略 */
+  pending?: ApprovalRequest
+  /** 所有等你批准的请求 id（有 pending 时才有）：收件箱「已处理」按它认，又来一个请求时重新出现 */
+  pendingIds?: string[]
 }
 
 export interface QueueSummary {

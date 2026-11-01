@@ -97,6 +97,14 @@ describe('machine resource ownership', () => {
     expect(remoteIds({ ids: [machine + '~' + id] }, machine, false)).toEqual({ ids: [id] })
     expect(remoteIds(null, machine, true)).toBeNull()
   })
+  it('prefixes the phone tail truncated item ids, so 查看完整 finds the remote item', () => {
+    const tail = { snapshot: { items: [{ kind: 'tool', id }] }, truncated: [id, 'x'] }
+    const encoded = remoteIds(tail, machine, true)
+    expect(encoded.truncated).toEqual([machine + '~' + id, 'x'])
+    expect(encoded.truncated[0]).toBe(encoded.snapshot.items[0].id)
+    expect(remoteIds(encoded, machine, false)).toEqual(tail)
+    expect(remoteIds({ truncated: true }, machine, true)).toEqual({ truncated: true })
+  })
   it('prefixes the built-in chat project id (not a uuid) only in projectId fields', () => {
     const chat = machine + '~chat'
     expect(remoteIds({ record: { id, projectId: 'chat' }, id: 'chat' }, machine, true)).toEqual({
@@ -123,6 +131,9 @@ describe('machine resource ownership', () => {
     expect(remoteArguments('projectTools:searchTasks', [value, value], machine)).toEqual([value, id])
     expect(remoteArguments('engine:steerQueued', [value, value, value, value], machine)).toEqual([id, id, id, value])
     expect(remoteArguments('engine:cancelQueued', [value, value], machine)).toEqual([id, id])
+    // 远端用户图片的 id 是 uuid，也要去前缀；手机传的是第几张（数字原样）
+    expect(remoteArguments('engine:image', [value, value, value], machine)).toEqual([id, id, id])
+    expect(remoteArguments('engine:image', [value, value, 0], machine)).toEqual([id, id, 0])
     expect(remoteArguments('x', [{ projectId: value, input: { id: value } }], machine)).toEqual([
       { projectId: id, input: { id: value } },
     ])
