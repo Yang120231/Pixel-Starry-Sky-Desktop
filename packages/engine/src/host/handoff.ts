@@ -21,9 +21,56 @@ import {
   type ChatSeed,
 } from '../chat-log'
 import { NATIVE_TEXT } from '../native/text'
-import { buildHandoff, handoffEngines, hasHandoffContent, userImages } from '../handoff'
+import {
+  buildHandoff,
+  handoffEngines,
+  hasHandoffContent,
+  userImages,
+  type HandoffImage,
+  type UserItem,
+} from '../handoff'
 import { ENGINES } from '../registry'
+import type { Store } from '../store'
 import type { HostContext } from './context'
+
+type ImageLoader = (image: ImageAttachment) => ImageAttachment | null
+
+/**
+ * 交接带上的图片补上数据：快照里的用户条目截掉了图片数据（cutItem），挑图只看元数据（chat-log 按对象认带没带上），
+ * 挑完再按所属的用户条目从磁盘读回，每条只读一次；读不回的为 null，调用方丢掉
+ */
+function imageLoader(store: Store, id: string, items: readonly Item[]): ImageLoader {
+  const owners = new Map(userImages(items).map(({ image, item }) => [image, item]))
+  const bodies = new Map<UserItem, UserItem | null>()
+  return image => {
+    if (image.dataBase64) return image
+    const item = owners.get(image)
+    if (!item) return null
+    let full = bodies.get(item)
+    if (full === undefined) bodies.set(item, (full = store.body(id, item) as UserItem | null))
+    const data = full?.attachments?.[item.attachments!.indexOf(image)]
+    return data?.id === image.id && data.dataBase64 ? data : null
+  }
+}
+
+/** 挑好的图片补上数据，读不回的丢掉 */
+const loadCarry = (carry: HandoffImage[], load: ImageLoader): HandoffImage[] =>
+  carry.flatMap(c => {
+    const image = load(c.image)
+    return image ? [{ ...c, image }] : []
+  })
+
+/** 回放里各轮带的图片补上数据（fallbackImages 来自已经补过的 carry），读不回的丢掉 */
+function loadSeed(seed: ChatSeed | null, load: ImageLoader): ChatSeed | null {
+  if (!seed) return null
+  const turns = seed.turns.map(turn => {
+    if (!turn.images) return turn
+    const { images, ...rest } = turn
+    const loaded = images.flatMap(image => load(image) ?? [])
+    return loaded.length ? { ...rest, images: loaded } : rest
+  })
+  return { ...seed, turns }
+}
 
 /** 对话里最后一条条目的 id；没有为 null */
 export const lastItemId = (items: readonly Item[]): string | null => items.at(-1)?.id ?? null
@@ -204,10 +251,14 @@ export class HostHandoff {
     const sees = await this.modelSees(id, record)
     const all = userImages(delta)
     const room = handoffImageRoom()
+    const load = imageLoader(this.ctx.store, id, delta)
     const carry = sees
-      ? pickRecentImages(
-          all.filter(({ image }) => carriableImage(image)),
-          room,
+      ? loadCarry(
+          pickRecentImages(
+            all.filter(({ image }) => carriableImage(image)),
+            room,
+          ),
+          load,
         )
       : []
     const built = buildHandoff({
@@ -220,11 +271,14 @@ export class HostHandoff {
       omittedImages: all.length - carry.length,
     })
     if (!built) return null
-    const seed = buildChatSeed(delta, built.text, undefined, {
-      carryImages: sees,
-      room,
-      fallbackImages: carry.map(c => c.image),
-    })
+    const seed = loadSeed(
+      buildChatSeed(delta, built.text, undefined, {
+        carryImages: sees,
+        room,
+        fallbackImages: carry.map(c => c.image),
+      }),
+      load,
+    )
     return seed ? (recreate ? { ...seed, recreated: true } : seed) : null
   }
 
@@ -265,11 +319,15 @@ export class HostHandoff {
     const skipIds = new Set(attachments.map(a => a.id))
     const all = userImages(delta).filter(({ image }) => !skipIds.has(image.id))
     const room = handoffImageRoom(attachments)
+    const load = imageLoader(this.ctx.store, id, delta)
     // 单张超过 Claude 的大小 / 边长上限的不带（带了写进记录后每次 resume 都会被拒）
     const carry = sees
-      ? pickRecentImages(
-          all.filter(({ image }) => carriableImage(image)),
-          room,
+      ? loadCarry(
+          pickRecentImages(
+            all.filter(({ image }) => carriableImage(image)),
+            room,
+          ),
+          load,
         )
       : []
     const built = buildHandoff({
@@ -298,12 +356,15 @@ export class HostHandoff {
     // 会话接不上（lost，只有 recover 会传）时不能注入的引擎也要一份回放：适配器把 seed.fallback 加在消息前面发
     const seed =
       this.ctx.adapters[record.engine]?.seedsHistory || lost
-        ? buildChatSeed(delta, built.text, undefined, {
-            carryImages: sees,
-            room,
-            skipIds,
-            fallbackImages: carry.map(c => c.image),
-          })
+        ? loadSeed(
+            buildChatSeed(delta, built.text, undefined, {
+              carryImages: sees,
+              room,
+              skipIds,
+              fallbackImages: carry.map(c => c.image),
+            }),
+            load,
+          )
         : null
     if (seed) {
       const parts = imageParts(seedImageCount(seed), seed.omittedImages ?? 0)

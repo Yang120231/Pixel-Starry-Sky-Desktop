@@ -551,9 +551,15 @@ export class WorkspaceFiles {
       const code = e.code
       // 正在复制的这一项本身撞上了别处刚建的同名条目：那是别人的，不删。只认这一项自己的路径——
       // 文件夹里面撞名（大小写不同的两个文件复制进不分大小写的盘）是这次自己建的文件夹，照常回滚
+      // 别处建的是不同类型（文件夹撞文件、文件撞文件夹）时 cp 报的是 DIR_TO_NON_DIR / NON_DIR_TO_DIR，同样是别人的
       const hit = e.dest ?? e.path
       const taken =
-        (code === 'EEXIST' || code === 'ERR_FS_CP_EEXIST') && !!hit && resolve(hit) === resolve(created.at(-1) ?? '')
+        (code === 'EEXIST' ||
+          code === 'ERR_FS_CP_EEXIST' ||
+          code === 'ERR_FS_CP_DIR_TO_NON_DIR' ||
+          code === 'ERR_FS_CP_NON_DIR_TO_DIR') &&
+        !!hit &&
+        resolve(hit) === resolve(created.at(-1) ?? '')
       if (taken) created.pop()
       await Promise.all(created.map(p => rm(p, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})))
       if (taken) throw codedError('files.exists', { name: current })

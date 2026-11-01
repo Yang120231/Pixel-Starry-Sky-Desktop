@@ -1,11 +1,17 @@
 import { app, clipboard, dialog, safeStorage } from 'electron'
-import { join, isAbsolute, posix } from 'node:path'
+import { join, isAbsolute, posix, win32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { hostname, homedir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises'
 import type { EngineHost } from '@pixelsky/engine'
-import type { HostEvent, ProjectRecord, SessionRecord, SessionSummary } from '@pixelsky/protocol'
+import {
+  isChatProject,
+  type HostEvent,
+  type ProjectRecord,
+  type SessionRecord,
+  type SessionSummary,
+} from '@pixelsky/protocol'
 import type { CheckItem, MachineConnection, MachineInfo, MachineInput, MachineState } from '../../shared/types/machines'
 import type { WorkspaceRef, WorkspaceTarget } from '../../shared/types/workspace'
 import * as ipc from '../ipc/guard'
@@ -25,6 +31,7 @@ import type { RpcHandler } from './rpc'
 import { machineOf, remoteIds, remoteArguments, remoteMethod } from './identity'
 import { resolveRoute } from './routing'
 import { addProjectPath } from '../core/engine/ops'
+import { chatName } from '../workspace/resolve'
 
 interface StoredMachine extends Omit<MachineInput, 'password' | 'passphrase'> {
   id: string
@@ -243,7 +250,8 @@ export class Machines {
     const record = ref.sessionId ? this.record(ref.sessionId) : null
     const project = remote.projects.find(p => p.id === (ref.projectId ?? record?.projectId))
     if (!record && !project) throw new Error('项目已不存在')
-    return { ref, name: project?.name ?? record!.title, path: record?.cwd ?? project!.path }
+    const name = project?.name ?? (isChatProject(record?.projectId) ? chatName() : record!.title)
+    return { ref, name, path: record?.cwd ?? project!.path }
   }
   private write(file: string, data: string): Promise<void> {
     this.saving = this.saving
@@ -587,8 +595,11 @@ export class Machines {
       case 'local':
         return fallback()
       case 'copyPath': {
-        const target = this.target(args[0] as WorkspaceRef)!
-        clipboard.writeText(posix.join(target.path, String(args[1] ?? '')))
+        const ref = args[0] as WorkspaceRef
+        const target = this.target(ref)!
+        // 按远端系统拼路径：Windows 远端用反斜杠，不然会拼出 \ 和 / 混着的路径
+        const windows = this.states.get(machineOf(ref.projectId ?? ref.sessionId))?.info.platform === 'win32'
+        clipboard.writeText((windows ? win32 : posix).join(target.path, String(args[1] ?? '')))
         return
       }
       case 'target':

@@ -1,5 +1,6 @@
 // 对话历史查询（pixelsky_history 工具的纯逻辑）：目录、读几轮原文、关键词搜索。
 // 只读、确定性：同样的条目一定得到同样的文字；输出都是给引擎读的中文纯文本。
+import { setImmediate as yieldThread } from 'node:timers/promises'
 import { ENGINES, type EngineId, type Item } from '@pixelsky/protocol'
 import {
   HANDOFF_TAG,
@@ -158,10 +159,12 @@ export interface SearchOptions {
   query: string
   limit?: number
   fallbackEngine?: EngineId
+  /** 截过输出的命令（cutChars）按 id 补回完整的（EngineHost.item）；不给就搜截过的头尾 */
+  body?: (item: Item) => Item
 }
 
 /** 在用户、助手、命令、工具、文件改动里按关键词（不分大小写）找，每个条目最多给一处片段 */
-export function historySearch(items: readonly Item[], options: SearchOptions): string {
+export async function historySearch(items: readonly Item[], options: SearchOptions): Promise<string> {
   const query = options.query.trim()
   if (!query) return '请给出要搜索的关键词。'
   if (query.length > QUERY_MAX) return `关键词太长（最多 ${QUERY_MAX} 字）。`
@@ -169,11 +172,16 @@ export function historySearch(items: readonly Item[], options: SearchOptions): s
   const limit = Math.min(Math.max(Number.isInteger(asked) ? asked : SEARCH_DEFAULT_LIMIT, 1), SEARCH_MAX_LIMIT)
   const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
   const hits: string[] = []
-  let total = 0
+  let total = 0,
+    read = 0
   for (const turn of historyTurns(items, options.fallbackEngine))
     for (const item of turn.items) {
       if (!(item.kind in SEARCH_KIND)) continue
-      const text = searchText(item)
+      // 截过的命令输出中间也要搜到（按位置同步读盘）；工具只搜名字和摘要，用不着补
+      const full = item.kind === 'command' && item.cutChars !== undefined && options.body
+      const text = searchText(full ? options.body!(item) : item)
+      // 大对话截过的输出上万条：隔一段让出主线程，别让一次搜索卡住所有会话
+      if (full && ++read % 128 === 0) await yieldThread()
       const at = text.search(pattern)
       if (at < 0) continue
       total++

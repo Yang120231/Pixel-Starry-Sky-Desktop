@@ -7,11 +7,11 @@
 // 同时按原顺序带起依赖引擎的模块：平台额度、SSH 机器、扩展、终端、产物面板的本机操作。
 import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
-import { app, BrowserWindow, dialog, net, powerMonitor, session, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, net, powerMonitor, session, shell, type IpcMainInvokeEvent } from 'electron'
 import * as ipc from '../ipc/guard'
 import { nativeText, windowLocale } from '../app/ui-language'
 import { EngineHost } from '@pixelsky/engine'
-import type { HostEvent, OpenedSession, SessionRecord } from '@pixelsky/protocol'
+import { isChatProject, type HostEvent, type SessionRecord } from '@pixelsky/protocol'
 import type { AppContext } from '../app/context'
 import { platformCalls, platformCharges, accountCalls, accountSummary } from '../platform/billing'
 import { onAccountChange, signedInEmail } from '../account/account'
@@ -42,9 +42,8 @@ import { initTerminalIpc, localTerminals } from '../terminal/ipc'
 import { initMachines } from '../machines/service'
 import { machineOf } from '../machines/identity'
 import { initArtifacts } from '../artifacts/ipc'
-import { resolveTerminalTarget, workspaceToolsHost } from '../workspace/resolve'
+import { chatName, resolveTerminalTarget, workspaceToolsHost } from '../workspace/resolve'
 import { ENGINE_OPS, addProjectPaths, type EngineOpContext } from '../core/engine/ops'
-import { openedForDesktop } from '../core/engine/desktop-images'
 import { listImportCandidates } from '../core/importProjects'
 import { opEntries, type InvokeName, type OpTable } from '../core/ops'
 import { SearchRegistry } from '../core/search-registry'
@@ -115,6 +114,8 @@ export async function initEngine(ctx: AppContext): Promise<void> {
       fetch: (url, init) => net.fetch(url, init),
     }),
     dataDir: join(app.getPath('userData'), 'engine'),
+    // 删对话时它的文件夹里有文件：移到系统回收站
+    trash: path => shell.trashItem(path),
     checkpoints: true,
     pixelCli: bundledPixelCli(),
     // 有 SSH 机器时由它合并本机与远端的项目 / 会话再广播
@@ -157,16 +158,11 @@ export async function initEngine(ctx: AppContext): Promise<void> {
   const shutdownTerminals = await initTerminalIpc(machines, ref => resolveTerminalTarget(ctx, ref))
 
   const handle = (channel: ipc.InvokeChannel, fn: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
-    ipc.handle(channel, (event, ...args) => {
-      const result =
-        channel.startsWith('engine:') && ctx.machines
-          ? ctx.machines.invoke(channel, args, () => fn(event, ...args))
-          : fn(event, ...args)
-      // 桌面界面打开会话：快照里不带图片原图（远端机器的也一样；手机经 engineCall 拿完整的，docs/perf-audit-2026-10-18.md B1）
-      if (channel === 'engine:openSession')
-        return Promise.resolve(result).then(opened => openedForDesktop(opened as OpenedSession))
-      return result
-    })
+    ipc.handle(channel, (event, ...args) =>
+      channel.startsWith('engine:') && ctx.machines
+        ? ctx.machines.invoke(channel, args, () => fn(event, ...args))
+        : fn(event, ...args),
+    )
   }
 
   handle('account:calls', (_e, query) => accountCalls(query))
@@ -233,7 +229,7 @@ export async function initEngine(ctx: AppContext): Promise<void> {
       label: 'Claude Code',
       sessionId,
       projectId: record.projectId,
-      projectName: project?.name ?? record.projectId,
+      projectName: project?.name ?? (isChatProject(record.projectId) ? chatName() : record.projectId),
     })
     h.setTuiTerminal(sessionId, term.id)
     return { terminalId: term.id, engineSessionId: launch.engineSessionId }

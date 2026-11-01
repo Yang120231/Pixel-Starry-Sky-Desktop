@@ -4,6 +4,16 @@ export const projectToolsMessages = {
     zh: '选择项目后，这里会显示对应的工作区信息。',
     en: 'Workspace information appears after you select a project.',
   },
+  'projectTools.chatUnsupported': { zh: '对话里没有这个功能', en: 'Not available in chats' },
+  'projectTools.chatUnsupportedHint': {
+    zh: '这里的内容按项目保存，对话不属于任何项目。',
+    en: 'This is saved per project, and chats don’t belong to a project.',
+  },
+  'projectTools.chatNoFolder': { zh: '这个对话还没有文件夹', en: 'This chat has no folder yet' },
+  'projectTools.chatNoFolderHint': {
+    zh: '发第一条消息后，会给它建一个自己的文件夹。',
+    en: 'It gets a folder of its own when you send the first message.',
+  },
   'projectTools.refresh': { zh: '重新检测', en: 'Refresh' },
   'projectTools.loading': { zh: '正在读取…', en: 'Loading…' },
   'projectTools.failed': { zh: '读取失败：{p0}', en: 'Could not load: {p0}' },

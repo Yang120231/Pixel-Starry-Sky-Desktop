@@ -9,6 +9,24 @@ export const portPreviewMessages = {
   'portTip.copy': { zh: '复制地址', en: 'Copy address' },
   'portTip.ignore': { zh: '忽略', en: 'Dismiss' },
   'portTip.ignoreAll': { zh: '全部忽略', en: 'Dismiss all' },
+  // 提示条的「⋯」和总开关（docs/ui/port-preview.md §7）
+  'portTip.more': { zh: '更多', en: 'More' },
+  'portTip.ignoreThis': { zh: '忽略这个端口', en: 'Dismiss this port' },
+  'portTip.turnOff': { zh: '不再提示发现的本机页面', en: 'Stop showing local page tips' },
+  'portTip.turnedOff': {
+    zh: '已关闭「发现本机页面」提示，可在 设置 › 外观 › 对话 里重新打开',
+    en: 'Local page tips are off. Turn them back on in Settings › Appearance › Conversation',
+  },
+  'portTip.undo': { zh: '撤销', en: 'Undo' },
+  'portTip.setting.title': { zh: '命令输出里发现本机页面时提示', en: 'Show a tip when commands print a local page' },
+  'portTip.setting.desc': {
+    zh: 'AI 运行的命令输出了 localhost 地址时，在对话末尾提示「在内置浏览器打开」；关掉后右侧面板的「端口」页照常显示',
+    en: 'When a command prints a localhost address, offer to open it in the built-in browser at the end of the conversation. The Ports tab in the side panel still lists them when off',
+  },
+  'portTip.setting.keywords': {
+    zh: '本机页面 端口 localhost 内置浏览器 预览 提示 不再提示 port preview browser tip',
+    en: 'local page port localhost built-in browser preview tip',
+  },
   'portTip.expand': { zh: '展开', en: 'Expand' },
   'portTip.collapse': { zh: '收起', en: 'Collapse' },
   'portTip.manualHint': {

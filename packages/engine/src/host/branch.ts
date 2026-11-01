@@ -84,6 +84,11 @@ export class HostBranch {
     return { index, target }
   }
 
+  /** 放回输入框的消息：快照里截掉了图片数据（cutItem），从磁盘补回；补不回来用截过的 */
+  private full(id: string, target: UserItem): UserItem {
+    return (this.ctx.store.body(id, target) as UserItem | null) ?? target
+  }
+
   private assertIdle(id: string): void {
     const { ctx } = this
     if (ctx.closing) throw new Error('应用正在退出')
@@ -227,9 +232,11 @@ export class HostBranch {
         files,
       })
       m.events.patchRecord(id, { updatedAt: Date.now() })
+      // 截断后它在回退前的条目文件里（keepOld），图片数据从那里补回
+      const images = options.conversation ? this.full(id, target).attachments : undefined
       return {
         text: options.conversation ? target.text : '',
-        ...(options.conversation && target.attachments?.length ? { attachments: target.attachments } : {}),
+        ...(images?.length ? { attachments: images } : {}),
         ...(options.conversation && target.files?.length ? { files: target.files } : {}),
         ...(files ? { filesRestored: files.length } : {}),
         ...(codeSkipped ? { codeSkipped } : {}),
@@ -302,7 +309,8 @@ export class HostBranch {
     const old = record.engineSessions
     const oldEntry = old?.[record.engine]
     const oldSeen = oldEntry ? oldEntry.seen : old ? null : lastItemId(rt.snapshot.items)
-    ctx.store.replaceItems(id, kept)
+    // 留着回退前的条目文件：撤销时放回的条目从它补回截掉的大字段
+    ctx.store.replaceItems(id, kept, { keepOld: true })
     m.events.apply(id, { type: 'items_truncated', fromItemId: userItemId })
     m.cache.reset(id)
     // Missing native records must never silently preserve the discarded context.
@@ -381,12 +389,17 @@ export class HostBranch {
       JSON.stringify(snap.record.engineSessions ?? null) !== JSON.stringify(entry.after.engineSessions ?? null) ||
       (snap.record.nextEngine ?? null) !== entry.after.nextEngine
     ) {
-      this.undo.delete(id)
+      this.forget(id)
       throw new Error('回退之后有了新的对话，不能撤销了')
     }
     ctx.changingSessions.add(id)
     try {
       await this.closeProcess(id)
+      // 放回的条目要从回退前的条目文件补回图片数据：先核对每条都补得回来，免得中途失败只放回一部分
+      if (entry.removed.some(item => !ctx.store.body(id, item))) {
+        this.forget(id)
+        throw new Error('回退前的内容读不回来了，不能撤销')
+      }
       for (const file of entry.files ?? []) {
         if (file.data === null) rmSync(file.path, { force: true })
         else {
@@ -397,6 +410,7 @@ export class HostBranch {
       if (entry.removed.length > 0) {
         // 去掉回退时加的提示，再把移除的条目原样放回
         const extra = snap.items[entry.kept]
+        // 不带 keepOld：放回的条目要从回退前的条目文件补回图片数据，它得留到放完
         if (extra) {
           ctx.store.replaceItems(id, snap.items.slice(0, entry.kept))
           m.events.apply(id, { type: 'items_truncated', fromItemId: extra.id })
@@ -405,7 +419,7 @@ export class HostBranch {
         m.cache.reset(id)
         m.events.patchRecord(id, { ...entry.before, updatedAt: Date.now() })
       }
-      this.undo.delete(id)
+      this.forget(id)
     } finally {
       ctx.changingSessions.delete(id)
     }
@@ -426,8 +440,9 @@ export class HostBranch {
     if (userItemId === null) this.assertIdle(id)
     const { index, target } =
       userItemId === null ? { index: rt.snapshot.items.length, target: null } : this.userItem(id, userItemId)
-    const items = rt.snapshot.items.slice(0, index)
-    const later = rt.snapshot.items.slice(index).flatMap(item => (item.kind === 'user' ? [item.id] : []))
+    const all = rt.snapshot.items
+    const items = all.slice(0, index)
+    const later = all.slice(index).flatMap(item => (item.kind === 'user' ? [item.id] : []))
     const adapter = ctx.adapters[source.engine]
     // 来源是还没启动的分叉会话（Codex）时，从它要 fork 的原线程里算截断点
     const thread = source.engineSessionId ?? source.pendingFork?.from ?? null
@@ -504,13 +519,23 @@ export class HostBranch {
         : []
     ctx.records.set(record.id, record)
     ctx.store.saveRecord(record)
-    ctx.store.replaceItems(record.id, [...items, ...notice])
+    // 带上整个会话、上面等的期间来源的条目没变（还是同一份）：空闲时磁盘上的文件就是这些条目，直接复制，
+    // 几百 MB 的对话不用重新序列化；变了（又发了消息）就按取条目时的那份写
+    const copied =
+      userItemId === null &&
+      ctx.runtimes.get(id) === rt &&
+      rt.snapshot.items === all &&
+      ctx.store.copyItems(id, record.id)
+    if (copied) for (const item of notice) ctx.store.appendItem(record.id, item)
+    // 截过的条目从来源会话的条目文件补全
+    else ctx.store.replaceItems(record.id, [...items, ...notice], { from: id })
     m.events.broadcastSessions()
     if (!target) return { record, text: '' }
+    const images = this.full(id, target).attachments
     return {
       record,
       text: target.text,
-      ...(target.attachments?.length ? { attachments: target.attachments } : {}),
+      ...(images?.length ? { attachments: images } : {}),
       ...(target.files?.length ? { files: target.files } : {}),
     }
   }
@@ -528,18 +553,25 @@ export class HostBranch {
    * 分支会话记下合并时间（和新的代码起点、副本是否删掉）
    */
   recordMerge(id: string, merge: NoticeBranchMerge, branchPatch: Partial<SessionBranch>): void {
-    const m = this.ctx.m
-    const record = m.sessions.runtime(id).snapshot.record
+    const { ctx } = this
+    const m = ctx.m
+    const record = m.sessions.stored(id)
     const parentId = record.forkedFrom?.sessionId
     if (!record.branch || !parentId) throw new Error('这个会话不是开分支开出来的')
-    const parent = m.sessions.runtime(parentId)
+    const parent = m.sessions.stored(parentId)
     const verb = merge.code === 'committed' || merge.code === 'applied' ? '代码和结论' : '结论'
-    m.events.apply(parentId, {
-      type: 'item_completed',
-      item: { kind: 'notice', id: randomUUID(), level: 'info', text: `合并了分支「${record.title}」的${verb}`, merge },
-    })
+    const item: Item = {
+      kind: 'notice',
+      id: randomUUID(),
+      level: 'info',
+      text: `合并了分支「${record.title}」的${verb}`,
+      merge,
+    }
+    // 上级没载入：卡片只写进磁盘（打开时读到），不为它整份载入上级
+    if (ctx.runtimes.has(parentId)) m.events.apply(parentId, { type: 'item_completed', item })
+    else ctx.store.appendItem(parentId, item)
     // 上一个合并回来的摘要还没带给 AI：两份接在一起，不覆盖
-    const before = parent.snapshot.record.pendingMerge ?? null
+    const before = parent.pendingMerge ?? null
     m.events.patchRecord(parentId, {
       pendingMerge: !merge.summary
         ? before
@@ -557,13 +589,13 @@ export class HostBranch {
   /** 这次不带合并摘要 */
   dropPendingMerge(id: string): void {
     const m = this.ctx.m
-    if (m.sessions.runtime(id).snapshot.record.pendingMerge) m.events.patchRecord(id, { pendingMerge: null })
+    if (m.sessions.stored(id).pendingMerge) m.events.patchRecord(id, { pendingMerge: null })
   }
 
   /** 旁聊：带着主对话的上下文单独问一次（主任务运行中也可以） */
   async sideQuestion(id: string, question: string, history: SideTurn[]): Promise<string> {
     const { ctx } = this
-    const record = ctx.m.sessions.runtime(id).snapshot.record
+    const record = ctx.m.sessions.stored(id)
     const adapter = ctx.adapters[record.engine]
     if (!ENGINES[record.engine].caps.sideChat || !adapter?.sideQuestion) throw new Error('当前引擎暂不支持旁聊')
     if (!record.engineSessionId) throw new Error('先在主对话里发一条消息')
@@ -584,9 +616,10 @@ export class HostBranch {
     this.sideQuestions.delete(id)
   }
 
-  /** 会话删掉了：放掉它的撤销记录（可能有 20 MB 的文件内容） */
+  /** 撤销用完、不能再撤销（新的一轮开始、会话删掉）：放掉撤销记录（可能有 20 MB 的文件内容）和回退前的条目文件 */
   forget(id: string): void {
     this.undo.delete(id)
+    this.ctx.store.dropUndo(id)
   }
 }
 

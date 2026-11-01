@@ -1,5 +1,6 @@
 import { machineOf, openMachineManager, openWorkspacePicker } from '@/features/machines/store'
 import { openResumePicker } from '@/features/resume/store'
+import { isChatProject } from '@pixelsky/protocol'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import {
@@ -167,8 +168,10 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       !!findLeaf(getPaneState().layout.root, pane) &&
       getPaneState().layout.focused === pane &&
       focusedTab(getPaneState().layout) === tab
+    // 「对话」不在项目列表里，但有自己的文件夹：终端、文件这些照样能用
     const hasProject = () =>
-      !!ref && (isDemo || (!!projectId && getEngineState().projects.some(p => p.id === projectId)))
+      !!ref &&
+      (isDemo || (!!projectId && (isChatProject(projectId) || getEngineState().projects.some(p => p.id === projectId))))
     const hasFile = () => !!file && getFiles().tabs.some(f => f.id === file.id)
     const hasSession = () => !!target && !!sessionTarget(target.id)
     const items: CommandItem[] = []
@@ -207,6 +210,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       samePane,
     )
     // 接着终端里的 Claude Code / Codex 会话（docs/ui/claude-resume.md、codex-resume.md §2.1），各一条入口：按当前项目打开选择框；远程机器上暂不支持
+    // 对话不能接：它的文件夹在 chats/ 下，按它找旧会话会扫到所有对话
     const remoteWorkspace = machineOf(ref?.sessionId ?? ref?.projectId) !== 'local'
     add(
       'resume.open.claude',
@@ -217,7 +221,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
         openResumePicker({ engine: 'claude', projectId: projectId ?? (isDemo ? 'demo' : null) })
       },
       undefined,
-      () => hasProject() && !remoteWorkspace,
+      () => hasProject() && !isChatProject(projectId) && !remoteWorkspace,
       remoteWorkspace ? t('resume.remote') : undefined,
     )
     // Codex 没装好（不是已就绪、也不是只差登录）时灰掉；演示模式没有引擎信息，照常可用
@@ -232,7 +236,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
         openResumePicker({ engine: 'codex', projectId: projectId ?? (isDemo ? 'demo' : null) })
       },
       undefined,
-      () => hasProject() && !remoteWorkspace && !codexMissing,
+      () => hasProject() && !isChatProject(projectId) && !remoteWorkspace && !codexMissing,
       remoteWorkspace ? t('resume.remote') : codexMissing ? t('resume.open.codexMissing') : undefined,
     )
     add('nav.workbench', 'nav.workbench', 'terminal.categoryWorkbench', LayoutDashboard, showWorkbench)

@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'n
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Item, SearchQuery } from '@pixelsky/protocol'
+import { CHAT_PROJECT_ID, type Item, type SearchQuery } from '@pixelsky/protocol'
 import { EngineHost } from '../src/host'
 import { searchQuery, searchSessions } from '../src/search'
 
@@ -83,6 +83,26 @@ describe('本机会话搜索', () => {
       },
     ]
     expect((await host.search(query('还未发送'))).results).toEqual([])
+  })
+
+  it('打开的会话：截过的长输出中间的词从磁盘搜到，省略说明不算；还在跑的条目搜内存里流式的文字', async () => {
+    const command = (id: string, output: string, status: 'completed' | 'running' = 'completed'): Item => ({
+      kind: 'command',
+      id,
+      command: 'build',
+      description: null,
+      output,
+      exitCode: null,
+      status,
+    })
+    const r = record('长输出', [command('c1', `${'x'.repeat(6000)}中间的关键字${'y'.repeat(6000)}`)])
+    await reopen()
+    const items = host.open(r.id).items
+    expect(items[0]).toMatchObject({ cut: true })
+    expect((await host.search(query('中间的关键字'))).results[0]).toMatchObject({ itemId: 'c1', field: '命令输出' })
+    expect((await host.search(query('chars omitted'))).results).toEqual([])
+    host.open(r.id).items = [...items, command('c2', '流式中的输出', 'running')]
+    expect((await host.search(query('流式中的输出'))).results[0]).toMatchObject({ itemId: 'c2' })
   })
 
   it('范围和项目筛选正确，标题完全匹配优先于更新的正文', async () => {
@@ -194,11 +214,27 @@ describe('本机会话搜索', () => {
     await reopen()
     const controller = new AbortController()
     const results = await searchSessions(
-      { dataDir: root, records: [r], projects: host.projects(), liveItems: () => undefined, exists: () => false },
+      {
+        dataDir: root,
+        records: [r],
+        projects: host.projects(),
+        liveItems: () => undefined,
+        body: (_, item) => item,
+        exists: () => false,
+      },
       query('目标'),
       controller.signal,
     )
     expect(results.results).toEqual([])
+  })
+
+  it('不用项目的对话写「对话」，项目移除了才写「已移除的项目」', async () => {
+    const chat = host.createSession({ projectId: CHAT_PROJECT_ID })
+    const gone = record('旧项目的会话')
+    host.removeProject(gone.projectId)
+    const names = new Map((await host.search(query(''))).results.map(r => [r.sessionId, r.projectName]))
+    expect(names.get(chat.id)).toBe('对话')
+    expect(names.get(gone.id)).toBe('已移除的项目')
   })
 
   it('无数据目录保持空结果；输入不接受越界路径或任意正则范围', async () => {

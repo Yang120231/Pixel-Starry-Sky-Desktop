@@ -11,6 +11,7 @@ import { codingLayout } from '../layoutStore'
 import { PROBLEMS_READY, useProblems } from '../problems'
 import type { BottomTab } from '../types'
 import { useCodingSessionId, useCodingWorkspace } from '../workspace'
+import { ImageSessionContext } from '@/features/session/attachments/imageSource'
 import { useAiCommands } from './aiCommands'
 import { AiCommandsTab } from './AiCommandsTab'
 import { OutputTab } from './OutputTab'
@@ -130,8 +131,11 @@ export function BottomPanel({
       </div>
       <div className="relative flex min-h-0 flex-1">
         <TerminalTab visible={visible && inTerminal} commands={commands} autoCollapsed={listCollapsed} />
-        {tab === 'aiCommands' && <AiCommandsTab sessionId={sessionId} commands={commands} />}
-        {tab === 'output' && <OutputTab workspace={workspace} commands={commands} sessionId={sessionId} />}
+        {/* 截过的 AI 命令输出按会话 id 取完整的（session/live/itemBody.ts） */}
+        <ImageSessionContext.Provider value={sessionId}>
+          {tab === 'aiCommands' && <AiCommandsTab sessionId={sessionId} commands={commands} />}
+          {tab === 'output' && <OutputTab workspace={workspace} commands={commands} sessionId={sessionId} />}
+        </ImageSessionContext.Provider>
         {tab === 'problems' && <ProblemsTab />}
         {tab === 'ports' && <PortsTab workspace={workspace} ports={ports} />}
       </div>

@@ -84,6 +84,8 @@ export const machineMessages = {
     en: 'No projects on this machine. Add a directory to begin.',
   },
   'machines.noMatches': { zh: '没有匹配的工作区', en: 'No matching workspaces' },
+  // 工作区列表最上面：开一个不用项目的新对话
+  'machines.chat': { zh: '对话（不用项目）', en: 'Chat (no project)' },
   'machines.mainTree': { zh: '项目主目录', en: 'Project root' },
   'machines.copy': { zh: 'Git 副本', en: 'Git worktree' },
   'machines.manageCopies': { zh: '管理 Git 副本', en: 'Manage Git worktrees' },

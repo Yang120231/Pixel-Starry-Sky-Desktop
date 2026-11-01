@@ -28,22 +28,28 @@ export interface ProgressAgent {
   steps: AgentStep[]
 }
 
-const isTurnStart = (item: Item): boolean => item.kind === 'user' && item.mode !== 'guidance'
+/** 新的一轮：用户自己发、送到了的消息。引导、断线重连 / 额度恢复后自动发的「继续」（都带 reconnect）、没送达的都不算 */
+const isTurnStart = (item: Item): boolean =>
+  item.kind === 'user' && item.mode !== 'guidance' && item.reconnect === undefined && !item.dismissed
 
-/** 最近一轮的 key：最后一条非引导用户消息的 id（还没有时为空字符串） */
+/** 最近一轮的 key：最后一条开始新一轮的用户消息的 id（还没有时为空字符串） */
 export function turnKey(items: Item[]): string {
   for (let i = items.length - 1; i >= 0; i--) if (isTurnStart(items[i])) return items[i].id
   return ''
 }
 
-/** 要显示的计划：最新一条待办，属于最近一轮，或会话还在运行且没全部完成；否则 null */
+/**
+ * 要显示的计划：最新一条待办，属于最近一轮；或者是上一轮没做完的、会话正在运行（你说「继续」时还看得到）。
+ * 再往前的不显示：额度用完、中断后没勾完的旧计划，不能在之后每次回复时都冒出来
+ */
 export function currentPlan(items: Item[], running: boolean): Plan | null {
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i]
     if (item.kind !== 'todo' || item.steps.length === 0) continue
     const done = item.steps.filter(s => s.status === 'completed').length
-    const inLatestTurn = !items.slice(i + 1).some(isTurnStart)
-    if (inLatestTurn || (running && done < item.steps.length)) return { id: item.id, steps: item.steps, done }
+    const later = items.slice(i + 1).filter(isTurnStart).length
+    if (later === 0 || (running && later === 1 && done < item.steps.length))
+      return { id: item.id, steps: item.steps, done }
     return null
   }
   return null

@@ -4,11 +4,13 @@ import { Button, cn } from '@/ui'
 import { stripAnsi } from '@/ui/code/ansi'
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '@/i18n/core'
+import { useSession } from '@/features/engine'
 import { useTerminalUi } from '@/features/terminal/TerminalProvider'
 import { terminalRunWhenReady, terminalState } from '@/features/terminal/store'
 import { codingLayout } from '../layoutStore'
 import { selectAiCommand, setOutputSource, useBottomState } from './aiCommands'
-import { commandTone, type AiCommandEntry } from './aiCommandsModel'
+import { useItemBody } from '@/features/session/live/itemBody'
+import { commandTone, entryOutput, type AiCommandEntry } from './aiCommandsModel'
 
 const TONE_COLOR = { running: 'bg-warn', failed: 'bg-danger', done: 'bg-success' } as const
 
@@ -31,11 +33,15 @@ export function AiCommandsTab({
   useI18n()
   const ui = useTerminalUi()
   const { selected } = useBottomState()
+  // 只有 Claude Code 跑完命令才把输出交回来；像素星空、Codex 边跑边推，运行中没输出就是还没打印
+  const claude = useSession(sessionId)?.record.engine === 'claude'
   const current =
     selected && selected.sessionId === sessionId ? commands.find(c => c.id === selected.itemId) : undefined
   // 没选过时默认看最后一条
   const entry = current ?? commands[commands.length - 1]
-  const text = useMemo(() => (entry ? stripAnsi(entry.output) : ''), [entry])
+  // 快照里截过的输出（cutChars）取完整的再留最后一段
+  const full = useItemBody(entry?.item, true)
+  const text = useMemo(() => (entry ? stripAnsi(entryOutput(entry, full)) : ''), [entry, full])
 
   const rerun = async (command: string): Promise<void> => {
     const before = new Set(terminalState().terminals.map(t => t.id))
@@ -116,7 +122,9 @@ export function AiCommandsTab({
               </Button>
             </div>
             {entry.status === 'running' && !text && (
-              <div className="px-4 pb-1 text-meta text-fg-muted">{tr('coding.bottom.ai.runningNote')}</div>
+              <div className="px-4 pb-1 text-meta text-fg-muted">
+                {tr(claude ? 'coding.bottom.ai.runningNote' : 'coding.bottom.ai.waitingOutput')}
+              </div>
             )}
             {text ? (
               <pre className="min-h-0 flex-1 overflow-auto px-4 pb-3 font-mono text-meta leading-5 whitespace-pre-wrap text-fg-body select-text">

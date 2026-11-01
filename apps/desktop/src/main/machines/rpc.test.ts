@@ -1,5 +1,5 @@
 import { PassThrough } from 'node:stream'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcPeer } from './rpc'
 const peers: RpcPeer[] = []
 afterEach(() => {
@@ -76,6 +76,51 @@ describe('SSH JSONL RPC', () => {
     expect(handled).toEqual([1])
     expect(fallback).toEqual(['engine:event'])
   })
+  it('回复太大：调用方收到 RPC_SIZE_LIMIT，连接照常；太大的事件丢掉', async () => {
+    const big = 'x'.repeat(49 * 1024 * 1024)
+    const forward = new PassThrough(),
+      backward = new PassThrough()
+    const a = new RpcPeer(backward, forward)
+    // 序列化本身失败（RangeError，几百 MB 的会话超过 V8 字符串上限时也是）同样只算这一条太大
+    let deep: unknown = []
+    for (let i = 0; i < 1_000_000; i++) deep = [deep]
+    const b = new RpcPeer(forward, backward, async (method, args) =>
+      method === 'big' ? big : method === 'deep' ? deep : args,
+    )
+    peers.push(a, b)
+    const events: string[] = []
+    a.onEvent = name => events.push(name)
+    await expect(a.call('big')).rejects.toThrow('RPC_SIZE_LIMIT')
+    await expect(a.call('deep')).rejects.toThrow('RPC_SIZE_LIMIT')
+    expect(await a.call('echo', [1])).toEqual([1])
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    b.event('big', big)
+    b.event('small', 1)
+    await new Promise(r => setImmediate(r))
+    error.mockRestore()
+    expect(events).toEqual(['small'])
+    expect(await a.call('echo', [2])).toEqual([2])
+  })
+  it('很长的一行分成很多块到达：只拼一次（线性），超过上限照旧断开', async () => {
+    const input = new PassThrough(),
+      values: unknown[] = []
+    const peer = new RpcPeer(input, new PassThrough())
+    peers.push(peer)
+    let reason = ''
+    peer.onClose = e => (reason = e.message)
+    peer.onEvent = (_name, value) => values.push((value as string).length)
+    const line = JSON.stringify({ event: 'big', data: 'a'.repeat(60 * 1024 * 1024) }) + '\n'
+    const started = Date.now()
+    for (let i = 0; i < line.length; i += 64 * 1024) input.write(line.slice(i, i + 64 * 1024))
+    await new Promise(r => setImmediate(r))
+    // 以前每块都重拼整个缓冲：60 MB 要好几秒
+    expect(Date.now() - started).toBeLessThan(1500)
+    expect(values).toEqual([60 * 1024 * 1024])
+    const chunk = 'b'.repeat(1024 * 1024)
+    for (let i = 0; i <= 64 && !reason; i++) input.write(chunk)
+    await new Promise(r => setImmediate(r))
+    expect(reason).toBe('RPC_SIZE_LIMIT')
+  }, 30_000)
   it('whenClosed 在连接关闭时通知', () => {
     const peer = new RpcPeer(new PassThrough(), new PassThrough())
     let closed = 0

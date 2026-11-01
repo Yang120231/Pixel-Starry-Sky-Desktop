@@ -31,7 +31,8 @@ import { createPortal } from 'react-dom'
 import { ActionMenu } from '@/ui/ActionMenu'
 import { workspaceTerminals } from './workspace'
 import { demo } from '@/data/demo'
-import { scriptCommand } from '@pixelsky/protocol'
+import { isChatProject, scriptCommand } from '@pixelsky/protocol'
+import { useFolderlessChat } from '@/features/editor/target'
 
 export function TerminalPanel({
   embedded = false,
@@ -48,6 +49,8 @@ export function TerminalPanel({
     state = useTerminalStore(),
     settings = useSettings()
   const realProjects = useEngineState(s => s.projects)
+  // 欢迎页选了「对话」：还没有文件夹，不提示添加项目
+  const chat = useFolderlessChat() && !ui.projectId
   const extraFolders = isDemo ? undefined : realProjects.find(p => p.id === ui.projectId)?.folders
   const machines = useMachines()
   const projects = isDemo ? demoProjects : realProjects.filter(p => machineOf(p.id) === machines.currentId)
@@ -109,7 +112,11 @@ export function TerminalPanel({
     ...projects.map(p => ({ value: p.id, label: p.name })),
     ...state.terminals
       .filter(r => !projects.some(p => p.id === r.projectId))
-      .map(r => ({ value: r.projectId, label: r.projectName })),
+      // 记录里存的是建终端时的语言，对话按当前语言显示
+      .map(r => ({
+        value: r.projectId,
+        label: isChatProject(r.projectId) ? t('sidebar.Sidebar.chat') : r.projectName,
+      })),
   ].filter((p, i, list) => list.findIndex(other => other.value === p.value) === i)
   const menuClose = (): void => {
     setMenu(null)
@@ -427,24 +434,30 @@ export function TerminalPanel({
         {!active && (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center text-fg">
             <TerminalSquare size={25} className="text-fg-faint" />
-            <p className="text-ui">{t(ui.projectId ? 'terminal.noTerminals' : 'terminal.chooseProject')}</p>
-            <button
-              onClick={() => {
-                if (ui.projectId) void ui.create()
-                else if (!isDemo)
-                  void addProject()
-                    .then(id => {
-                      if (id) {
-                        ui.selectProject(id)
-                        return ui.create({ projectId: id })
-                      }
-                    })
-                    .catch(terminalError)
-              }}
-              className="rounded-md bg-primary px-3 py-1.5 text-ui text-primary-fg"
-            >
-              {t(ui.projectId ? 'terminal.new' : 'terminal.addProject')}
-            </button>
+            <p className="text-ui">
+              {t(ui.projectId ? 'terminal.noTerminals' : chat ? 'projectTools.chatNoFolder' : 'terminal.chooseProject')}
+            </p>
+            {chat ? (
+              <p className="text-meta text-fg-muted">{t('projectTools.chatNoFolderHint')}</p>
+            ) : (
+              <button
+                onClick={() => {
+                  if (ui.projectId) void ui.create()
+                  else if (!isDemo)
+                    void addProject()
+                      .then(id => {
+                        if (id) {
+                          ui.selectProject(id)
+                          return ui.create({ projectId: id })
+                        }
+                      })
+                      .catch(terminalError)
+                }}
+                className="rounded-md bg-primary px-3 py-1.5 text-ui text-primary-fg"
+              >
+                {t(ui.projectId ? 'terminal.new' : 'terminal.addProject')}
+              </button>
+            )}
           </div>
         )}
         {state.terminals.map(record => {

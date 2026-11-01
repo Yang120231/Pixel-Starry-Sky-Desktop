@@ -1,6 +1,6 @@
 // 事件：apply 是唯一写快照的入口（先落盘再广播，seq 递增）；适配器发来的事件在这里推导运行状态
 import { randomUUID } from 'node:crypto'
-import { reduce, replyPreview, type EngineEvent, type Item, type SessionRecord } from '@pixelsky/protocol'
+import { cutItem, reduce, replyPreview, type EngineEvent, type Item, type SessionRecord } from '@pixelsky/protocol'
 import type { HostContext, Runtime } from './context'
 import { reconnectedCount } from './queue'
 import { providerOfEngine } from './quota'
@@ -82,15 +82,30 @@ export class HostEvents {
     const rt = ctx.runtimes.get(id)
     if (!rt) return
     const before = rt.snapshot.items
-    rt.snapshot = reduce(rt.snapshot, event)
-    rt.seq++
     // 开始时也写一次：重开会话时条目按开始的先后排（和实时一致），没等到完成的也不会丢（读出时标成已中断）
     if (event.type === 'item_completed' || event.type === 'item_started') ctx.store.appendItem(id, event.item)
-    // 一轮结束时收尾的条目（还在跑的标成完成 / 中断 / 失败）也要落盘，不然重开后状态不一致
+    // 磁盘上写完整的，快照里留截过的（图片数据、长输出）（docs/session-memory.md）；还在跑的不截。广播的仍是完整事件
+    rt.snapshot = reduce(
+      rt.snapshot,
+      event.type === 'item_completed' || event.type === 'item_started'
+        ? { ...event, item: cutItem(event.item) }
+        : event.type === 'items_reset'
+          ? { ...event, items: event.items.map(cutItem) }
+          : event,
+    )
+    rt.seq++
+    // 一轮结束时收尾的条目（还在跑的标成完成 / 中断 / 失败）也要落盘，不然重开后状态不一致；落盘后再截
     if (event.type === 'turn_completed' && rt.snapshot.items !== before) {
       const old = new Map(before.map(item => [item.id, item]))
-      for (const item of rt.snapshot.items) if (old.get(item.id) !== item) ctx.store.appendItem(id, item)
+      const items = rt.snapshot.items.map(item => {
+        if (old.get(item.id) === item) return item
+        ctx.store.appendItem(id, item)
+        return cutItem(item)
+      })
+      rt.snapshot = { ...rt.snapshot, items }
     }
+    // 新的一轮开始：回退不能再撤销了，放掉撤销记录和回退前的条目文件
+    if (event.type === 'turn_started') ctx.m.branch.forget(id)
     if (event.type === 'record') {
       ctx.records.set(id, event.record)
       ctx.store.saveRecord(event.record)
@@ -101,16 +116,27 @@ export class HostEvents {
   }
 
   patchRecord(id: string, patch: Partial<SessionRecord>): SessionRecord {
-    const rt = this.ctx.m.sessions.runtime(id)
+    const { ctx } = this
+    const rt = ctx.runtimes.get(id)
     if (
       patch.model !== undefined ||
       patch.platform !== undefined ||
       patch.provider !== undefined ||
       patch.engine !== undefined
     ) {
-      this.ctx.m.cache.reset(id)
-      if (rt.snapshot.context)
+      ctx.m.cache.reset(id)
+      if (rt?.snapshot.context)
         this.apply(id, { type: 'context', context: { ...rt.snapshot.context, stale: true, diagnosticStale: true } })
+    }
+    if (!rt) {
+      // 没载入的会话只改记录：不为改一个字段把整份对话读进内存（docs/session-memory.md 第 1 期）；没人持有它的快照，不发会话事件
+      const base = ctx.records.get(id)
+      if (!base) throw new Error('会话不存在')
+      const record = { ...base, ...patch }
+      ctx.records.set(id, record)
+      ctx.store.saveRecord(record)
+      this.broadcastSessions()
+      return record
     }
     const record = { ...rt.snapshot.record, ...patch }
     this.apply(id, { type: 'record', record })
@@ -237,6 +263,8 @@ export class HostEvents {
         break
       case 'approval_resolved':
         if (rt.snapshot.turnId && rt.snapshot.pending.length === 0) this.apply(id, { type: 'status', state: 'running' })
+        // 状态没变时也要广播：会话列表里的 pending 是第一个待批准的，处理掉一个就换成下一个
+        else this.broadcastSessions()
         break
       case 'turn_completed': {
         if (event.usage || m.usage.hasPlatformRequests(id, event.turnId))

@@ -1740,6 +1740,10 @@ export const catalog = {
     zh: '从这里开始',
     en: 'Starting points',
   },
+  'session.WelcomeView.chatNotSandbox': {
+    zh: '对话不是沙盒：AI 仍能读写这台电脑上别的文件，权限按当前模式。',
+    en: 'A chat is not a sandbox: the AI can still read and write other files on this computer, as the current mode allows.',
+  },
   'session.WelcomeView.reviewChanges': {
     zh: '看看未提交的改动（{n} 个文件）',
     en: 'Review uncommitted changes ({n} files)',
@@ -1791,6 +1795,10 @@ export const catalog = {
   'sidebar.Sidebar.newChat': {
     zh: '新对话（不用项目）',
     en: 'New chat (no project)',
+  },
+  'sidebar.Sidebar.chat': {
+    zh: '对话',
+    en: 'Chat',
   },
   'sidebar.Sidebar.chatLabel': {
     zh: '对话 · 不用项目',

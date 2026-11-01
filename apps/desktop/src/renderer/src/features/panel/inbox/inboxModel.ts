@@ -1,5 +1,6 @@
 // 任务 › 待处理 的分栏规则（docs/ui/tasks-inbox.md §3）。纯函数，不依赖 window。
 import type { ApprovalRequest, ProjectRecord, QueueSummary, SessionSnapshot, SessionSummary } from '@pixelsky/protocol'
+import { orChat } from '@/features/engine/sidebarData'
 
 export type InboxLane = 'waiting' | 'failed' | 'paused'
 export const LANES: InboxLane[] = ['waiting', 'failed', 'paused']
@@ -11,7 +12,7 @@ export interface InboxItem {
   lane: InboxLane
   /** 会话最近更新时间 */
   at: number
-  /** 等你处理：第一个待批准的请求；还没读到会话快照时为 null */
+  /** 等你处理：第一个待批准的请求；会话快照和会话列表里都没有时（旧版远端辅助进程）为 null */
   request: ApprovalRequest | null
   /** 出错：最近一轮的错误摘要 */
   error: string | null
@@ -48,8 +49,11 @@ type PendingOf = Pick<SessionSnapshot, 'pending'>
 
 export function signatureOf(lane: InboxLane, summary: SessionSummary, snapshot: PendingOf | undefined): string {
   const at = summary.record.updatedAt
-  if (lane === 'waiting')
-    return 'w:' + (snapshot?.pending.length ? snapshot.pending.map(p => p.requestId).join(',') : at)
+  if (lane === 'waiting') {
+    // 没打开的会话用会话列表里的请求 id：和打开后的签名一样，又来一个请求时变
+    const ids = (snapshot ? snapshot.pending.map(p => p.requestId) : (summary.pendingIds ?? [])).join(',')
+    return 'w:' + (ids || at)
+  }
   if (lane === 'failed') return 'f:' + at
   return `p:${at}:${(summary.queue?.queued ?? 0) + (summary.queue?.failed ?? 0)}`
 }
@@ -76,10 +80,11 @@ export function buildInbox(input: {
     items.push({
       sessionId: summary.record.id,
       title: summary.record.title,
-      project: names.get(summary.record.projectId) ?? '',
+      project: orChat(names.get(summary.record.projectId), summary.record.projectId) ?? '',
       lane,
       at: summary.record.updatedAt,
-      request: snapshot?.pending[0] ?? null,
+      // 界面里打开着的会话按快照（实时）；没打开的读会话列表带的第一个请求，不为它读整个对话
+      request: snapshot ? (snapshot.pending[0] ?? null) : (summary.pending ?? null),
       error: summary.record.lastError ?? null,
       queue: summary.queue ?? null,
       signature,

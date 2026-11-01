@@ -312,11 +312,9 @@ export async function refreshDefaults(): Promise<void> {
 export function setCurrentProject(id: string): void {
   set({ currentProjectId: id })
 }
-/** 新对话不用项目：当前机器上的「对话」内置项目（远端机器带机器前缀） */
-export function chooseChat(): void {
-  const machine = getMachines().currentId
-  set({ currentProjectId: machine === 'local' ? CHAT_PROJECT_ID : `${machine}~${CHAT_PROJECT_ID}` })
-}
+/** 某台机器上「对话」这个内置项目的 ID（远端机器带机器前缀） */
+export const chatProjectId = (machine = getMachines().currentId): string =>
+  machine === 'local' ? CHAT_PROJECT_ID : `${machine}~${CHAT_PROJECT_ID}`
 export async function refreshMachineEngine(machine: string): Promise<void> {
   if (!bridge) return
   const pushes = listPushes

@@ -388,6 +388,15 @@ export const SETTINGS_INDEX: SearchEntry[] = [
     },
   },
   { section: 'appearance', title: '缓存未命中提醒', keywords: '缓存 命中率 提醒 停止' },
+  {
+    section: 'appearance',
+    get title() {
+      return tr('portTip.setting.title')
+    },
+    get keywords() {
+      return tr('portTip.setting.keywords')
+    },
+  },
   { section: 'appearance', title: '界面字体', keywords: '字体 font' },
   { section: 'appearance', title: '代码字体', keywords: '等宽 字体 mono' },
   { section: 'appearance', title: '字号', keywords: '文字大小 放大 缩小 字体大小' },
@@ -397,6 +406,15 @@ export const SETTINGS_INDEX: SearchEntry[] = [
   { section: 'appearance', title: '模糊', keywords: '壁纸 虚化 blur' },
 
   { section: 'shortcuts', title: '快捷键', keywords: '键盘 ctrl 分屏 侧边栏 面板 搜索' },
+  {
+    section: 'storage',
+    get title() {
+      return tr('storage.title')
+    },
+    get keywords() {
+      return tr('storage.keywords')
+    },
+  },
   { section: 'logs', title: '日志', keywords: '日志 诊断 排查 报错 错误 导出 log logs diagnostics debug' },
   { section: 'logs', title: '详细日志', keywords: '日志 调试 详细 verbose debug stderr' },
   {

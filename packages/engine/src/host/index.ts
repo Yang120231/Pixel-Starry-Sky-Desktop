@@ -459,6 +459,21 @@ export class EngineHost {
     return this.m.sessions.open(id)
   }
 
+  /** 一条完整条目（快照里截掉的图片数据、长输出从磁盘补回）；没载入的会话不创建运行时。没有这一条为 null */
+  item(id: string, itemId: string): Item | null {
+    return this.m.sessions.item(id, itemId)
+  }
+
+  /** 手上已经有这一条（快照里的）：直接从磁盘补回截掉的部分，不按 id 在整个快照里找；补不回来为 null */
+  body(id: string, item: Item): Item | null {
+    return this.ctx.store.body(id, item)
+  }
+
+  /** 已载入的会话的快照；没载入为 null（不创建运行时） */
+  loaded(id: string): SessionSnapshot | null {
+    return this.runtimes.get(id)?.snapshot ?? null
+  }
+
   /** 会话的全部条目（只读，不复制；已有运行时用内存里的，否则异步流式读存储，都不创建运行时）；给对话历史工具用 */
   historyItems(id: string): Promise<readonly Item[]> {
     return this.m.query.historyItems(id)
@@ -467,6 +482,11 @@ export class EngineHost {
   /** 会话里最后一个 todo（没有时 null）；不创建运行时，给任务面板用 */
   lastTodo(id: string): Promise<Extract<Item, { kind: 'todo' }> | null> {
     return this.m.query.lastTodo(id)
+  }
+
+  /** 打开前先分块读条目建运行时（不卡主进程），之后的 openSession 不再同步读；已载入的直接返回 */
+  prepare(id: string): Promise<void> {
+    return this.m.sessions.prepare(id)
   }
 
   /** 打开会话（给界面用）：快照 + 序号，之后界面只应用序号更大的事件 */

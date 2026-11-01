@@ -18,7 +18,8 @@ import {
   type Codec,
   type Keypair,
 } from '@pixelsky/link'
-import { ENGINES, type ImageAttachment, type SearchResult, type SessionSummary } from '@pixelsky/protocol'
+import { ENGINES, type ImageAttachment, type Item, type SearchResult, type SessionSummary } from '@pixelsky/protocol'
+import { imageOf } from '../core/engine/desktop-images'
 import {
   DELTA_BATCH,
   checkSettings,
@@ -107,15 +108,10 @@ const picture = (dataBase64: string): ImageAttachment => ({
   dataBase64,
 })
 /** 会话里一条带两张图的用户消息（一小一大）和一条带图的工具结果 */
-const withImages = {
-  snapshot: {
-    items: [
-      { kind: 'user', id: 'u1', text: '', attachments: [picture('QUJD'), picture('A'.repeat(IMAGE_INLINE + 4))] },
-      { kind: 'tool', id: 't1', images: [picture('REVG')] },
-    ],
-  },
-  seq: 3,
-}
+const withImages = [
+  { kind: 'user', id: 'u1', text: '', attachments: [picture('QUJD'), picture('A'.repeat(IMAGE_INLINE + 4))] },
+  { kind: 'tool', id: 't1', images: [picture('REVG')] },
+] as Item[]
 
 function setup(extra: Partial<GatewayDeps> = {}) {
   const desktop = generateKeypair()
@@ -143,7 +139,7 @@ function setup(extra: Partial<GatewayDeps> = {}) {
       calls.push([channel, args, owner])
       if (channel === 'engine:sessions') return [summary('old', 1), summary('archived', 9, 5), summary('new', 3)]
       if (channel === 'engine:openSessionTail') return { snapshot: { items: [] }, seq: 1 }
-      if (channel === 'engine:openSession') return withImages
+      if (channel === 'engine:image') return imageOf(withImages.find(i => i.id === args[1]) ?? null, args[2] as number)
       return { ok: channel }
     },
     send: (phone, frame) => phones.get(phone)?.deliver(frame),
@@ -423,7 +419,9 @@ describe('MobileGateway calls', () => {
     expect(await p.call('image', 's1', 'u1', 0)).toMatchObject({ mediaType: 'image/png', dataBase64: 'QUJD' })
     expect(await p.call('image', 's1', 'u1', 1)).toMatchObject({ mediaType: 'image/jpeg', dataBase64: 'R0hJ' })
     expect(await p.call('image', 's1', 't1', 0)).toMatchObject({ dataBase64: 'REVG' })
-    expect(t.calls.at(-1)).toEqual(['engine:openSession', ['s1'], 'mobile:p1'])
+    // 只取那一张，不再整份 openSession
+    expect(t.calls.at(-1)).toEqual(['engine:image', ['s1', 't1', 0], 'mobile:p1'])
+    expect(t.calls.some(([channel]) => channel === 'engine:openSession')).toBe(false)
     await expect(p.call('image', 's1', 'u1', 2)).rejects.toThrow('MOBILE_NOT_FOUND')
     await expect(p.call('image', 's1', 'u1', -1)).rejects.toThrow('MOBILE_BAD_ARGUMENT')
   })
@@ -880,9 +878,12 @@ describe('MobileGateway session settings', () => {
 describe('helpers', () => {
   it('keeps only recent, unarchived sessions for the phone', () => {
     const list = Array.from({ length: 250 }, (_, i) => summary(String(i), i, i % 2 ? 1 : null))
+    list[248] = { ...list[248], pending: { requestId: 'r1' } as never, pendingIds: ['r1'] }
     const out = phoneSessions(list)
     expect(out).toHaveLength(125)
     expect(out[0].record.id).toBe('248')
+    expect(out[0]).not.toHaveProperty('pending')
+    expect(out[0].pendingIds).toEqual(['r1'])
   })
   it('rejects bad arguments before they reach the engine', () => {
     expect(() => sanitize('engine:createSession', [{}])).toThrow('MOBILE_BAD_ARGUMENT')

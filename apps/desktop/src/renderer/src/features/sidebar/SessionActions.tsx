@@ -10,8 +10,11 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { translateMessage } from '@/i18n/core'
 import { retainSessionFiles } from '@/features/files/store'
 import { RenameSessionDialog } from './RenameSessionDialog'
-import { normalizeSessionTitle } from '@pixelsky/protocol'
+import { isChatProject, normalizeSessionTitle } from '@pixelsky/protocol'
 import { demo, demoSessionChanges } from '@/data/demo'
+import { machineOf } from '@/features/machines/store'
+import { sessionRecord } from '@/features/session/branch/store'
+import { chatDeleteNote, type ChatDeleteNote } from './chatDeleteNote'
 export interface SessionTarget {
   id: string
   title: string
@@ -75,6 +78,8 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
     [toast, setToast] = useState<Toast | null>(null),
     working = useRef(false)
   const [rename, setRename] = useState<SessionTarget | null>(null)
+  // 删「对话」的确认框：note 没有＝还在数文件夹（或数不出来），只显示不带文件那行的说明
+  const [chat, setChat] = useState<{ id: string; note?: ChatDeleteNote } | null>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
   const pendingResult = useRef<((ok: boolean) => void) | null>(null)
   const resolveResult = (ok: boolean): void => {
@@ -84,6 +89,7 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
   const cancelConfirm = (): void => {
     resolveResult(false)
     setConfirm(null)
+    setChat(null)
     setRename(null)
     setError(null)
     requestAnimationFrame(() => {
@@ -173,6 +179,7 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
         )
       if (action === 'archive' || action === 'delete') paneActions.closeSessions(new Set([current.id]))
       setConfirm(null)
+      setChat(null)
       setToast({
         kind:
           action === 'bottom' && current.bottomed ? 'unbottom' : action === 'pin' && current.pinned ? 'unpin' : action,
@@ -232,7 +239,21 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
       document.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(current.id)}"][aria-selected="true"]`) ??
       document.querySelector<HTMLElement>(`[data-session-row="${CSS.escape(current.id)}"] > button`)
     if (action === 'rename') setRename(current)
-    else if (action === 'delete' || (action === 'archive' && current.running)) setConfirm({ action, target: current })
+    else if (action === 'delete') {
+      setConfirm({ action, target: current })
+      const record = isLive ? sessionRecord(current.id) : null
+      if (!record || !isChatProject(record.projectId)) return
+      setChat({ id: record.id })
+      void window.pixelsky!.files.listExisting({ sessionId: record.id }, '').then(
+        listing => {
+          const records = getEngineState().sessions.map(s => s.record),
+            note = chatDeleteNote(record, records, listing, t('composer.file.listSep'))
+          // 期间取消或换了别的会话：不写回
+          setChat(c => (c?.id === record.id ? { id: record.id, note } : c))
+        },
+        () => {},
+      )
+    } else if (action === 'archive' && current.running) setConfirm({ action, target: current })
     else void apply(action, current, false)
   }
   const copyId = (target: SessionTarget): void => {
@@ -251,6 +272,7 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
     )
   }
   const selected = confirm ? fresh(confirm.target) : null
+  const chatNote = confirm?.action === 'delete' && chat?.id === confirm.target.id ? chat : null
   const requestResult = (action: Action, target: SessionTarget): Promise<boolean> => {
     if (working.current || confirm || rename || pendingResult.current) return Promise.resolve(false)
     return new Promise(resolve => {
@@ -278,7 +300,29 @@ export function SessionActionsProvider({ children }: { children: ReactNode }) {
           })}
           description={
             <>
-              <p>{t(confirm.action === 'delete' ? 'session.deleteDescription' : 'session.archiveDescription')}</p>
+              <p>
+                {t(
+                  confirm.action !== 'delete'
+                    ? 'session.archiveDescription'
+                    : chatNote
+                      ? 'session.deleteChatDescription'
+                      : 'session.deleteDescription',
+                )}
+              </p>
+              {chatNote?.note && (
+                <p className="mt-2">
+                  {chatNote.note === 'shared'
+                    ? t('session.deleteChatShared')
+                    : chatNote.note === 'empty'
+                      ? t('session.deleteChatEmpty')
+                      : t(
+                          machineOf(chatNote.id) === 'local'
+                            ? 'session.deleteChatFiles'
+                            : 'session.deleteChatFilesRemote',
+                          chatNote.note,
+                        )}
+                </p>
+              )}
               {(selected.running || confirm.target.running) && (
                 <p className="mt-2 text-warn">{t('session.stopDescription')}</p>
               )}

@@ -65,6 +65,7 @@ import {
   fallbackNoticeText,
 } from '@/features/model-channels/PlatformFallbackNoticeActions'
 import { clipOutput, OUTPUT_ALL_MAX } from './outputClip'
+import { useItemBody } from './itemBody'
 
 type ItemOf<K extends Item['kind']> = Extract<Item, { kind: K }>
 
@@ -654,10 +655,15 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
   const images = item.kind === 'tool' ? (item.images ?? []) : []
   const viewedImage = item.kind === 'tool' && item.name === 'imageView' && !images.length ? item.title : null
   // 已经显示成图片的，不再在文字框里重复一行「[图片]」；只剩占位时文字框整个不显示
-  const output = item.kind === 'file_change' ? '' : withoutShownImagePlaceholders(item.output, images.length)
+  const textOf = (it: typeof item): string =>
+    it.kind === 'file_change' ? '' : withoutShownImagePlaceholders(it.output, images.length)
+  const output = textOf(item)
   const foldable =
     item.kind === 'file_change' ? item.changes.some(c => c.diff) : !!output || images.length > 0 || !!viewedImage
   const { open, toggle, fold } = useFold(item.id, foldable)
+  // 快照里截过的长输出（cutChars）展开时取完整的；能不能展开仍按截过的判断
+  const body = useItemBody(item, open)
+  const shown = body === item ? output : textOf(body)
   const row = useRef<HTMLDivElement>(null)
   const [fileError, setFileError] = useState('')
   const waiting = !!useApprovalWait(item.id)
@@ -761,7 +767,7 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
                 <span className="font-sans text-fg-muted">{tr('approvals.fullCommand')}</span> {item.wrapper.line}
               </span>
             )}
-            {item.output && <LongOutput text={item.output} />}
+            {shown && <LongOutput text={shown} />}
           </pre>
         )}
       </div>
@@ -843,16 +849,16 @@ export const ToolItemRow = memo(function ToolItemRow({ item }: { item: ItemOf<'c
         </span>
       </Row>
       {open &&
-        output &&
+        shown &&
         (plan ? (
           <div className={cn(OUTPUT_BOX, 'max-h-[28rem] bg-surface px-4 py-3')}>
-            <Markdown text={output} />
+            <Markdown text={shown} />
           </div>
         ) : (
           <pre
             className={cn(OUTPUT_BOX, 'p-3 font-mono text-meta leading-[1.6] whitespace-pre-wrap text-fg-secondary')}
           >
-            <LongOutput text={output} />
+            <LongOutput text={shown} />
           </pre>
         ))}
       {open && images.length > 0 && (

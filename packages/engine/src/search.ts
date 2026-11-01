@@ -3,6 +3,7 @@ import { createInterface } from 'node:readline'
 import { setImmediate as yieldThread } from 'node:timers/promises'
 import { join } from 'node:path'
 import {
+  CHAT_PROJECT_ID,
   SEARCH_SCOPES,
   compareSearchResults,
   containsTerms,
@@ -91,6 +92,8 @@ export interface SearchSource {
   projects: ProjectRecord[]
   /** 不创建运行时，仅返回已存在快照中的条目；空数组也代表有效的实时快照。 */
   liveItems(id: string): readonly Item[] | undefined
+  /** 快照里截过输出的条目（cutChars）从磁盘补回完整的（Store.body）；补不回来为 null，用截过的 */
+  body(id: string, item: Item): Item | null
   exists(id: string): boolean
 }
 
@@ -115,7 +118,8 @@ export async function searchSessions(
     itemId,
     title: record.title,
     projectId: record.projectId,
-    projectName: projects.get(record.projectId)?.name ?? '已移除的项目',
+    projectName:
+      projects.get(record.projectId)?.name ?? (record.projectId === CHAT_PROJECT_ID ? '对话' : '已移除的项目'),
     engine: record.engine,
     updatedAt: record.updatedAt,
     ...match,
@@ -165,7 +169,10 @@ export async function searchSessions(
           let liveCount = 0
           for (const item of live) {
             signal?.throwIfAborted()
-            const match = itemSearchMatch(item, terms, query.scope)
+            // 截过的输出中间也要搜到（省略说明本身不算）：按 id 从磁盘读完整的那一行
+            const full =
+              item.cutChars !== undefined && query.scope !== 'messages' ? (source.body(record.id, item) ?? item) : item
+            const match = itemSearchMatch(full, terms, query.scope)
             if (match) matches.set(item.id, match)
             if (++liveCount % 128 === 0) await yieldThread()
           }

@@ -106,6 +106,30 @@ describe('WorkspaceFiles.importPaths', () => {
     expect(await readFile(join(root, 'src', 'two.txt'), 'utf8')).toBe('theirs')
   })
 
+  it('回归：检查完到复制前别处建了同名但类型不同的条目：报重名，别人的文件 / 文件夹（连同里面的文件）都不删', async () => {
+    await mkdir(join(outside, 'pkg'))
+    await writeFile(join(outside, 'pkg', 'a.txt'), 'a')
+    await writeFile(join(outside, 'note.txt'), 'n')
+    const real = vi.mocked(fsp.cp).getMockImplementation()!
+    // 文件夹导入时别处建了同名文件
+    vi.mocked(fsp.cp).mockImplementationOnce(async (...args) => {
+      await writeFile(join(root, 'src', 'pkg'), 'theirs')
+      return real(...args)
+    })
+    await expect(service.importPaths(ref, 'src', [join(outside, 'pkg')])).rejects.toThrow(/files\.exists.*pkg/)
+    expect(await readFile(join(root, 'src', 'pkg'), 'utf8')).toBe('theirs')
+    // 文件导入时别处建了同名文件夹（里面还有别的文件）
+    vi.mocked(fsp.cp).mockImplementationOnce(async (...args) => {
+      await mkdir(join(root, 'src', 'note.txt'))
+      await writeFile(join(root, 'src', 'note.txt', 'keep.md'), 'k')
+      return real(...args)
+    })
+    await expect(service.importPaths(ref, 'src', [join(outside, 'note.txt')])).rejects.toThrow(
+      /files\.exists.*note\.txt/,
+    )
+    expect(await readFile(join(root, 'src', 'note.txt', 'keep.md'), 'utf8')).toBe('k')
+  })
+
   it('回归：撞名发生在自己新建的文件夹里面（大小写不同的两个文件进不分大小写的盘）：文件夹照常回滚，不当成别人的', async () => {
     await mkdir(join(outside, 'pkg'))
     await writeFile(join(outside, 'pkg', 'README.md'), 'x')

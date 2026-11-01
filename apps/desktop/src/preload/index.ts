@@ -140,6 +140,7 @@ const engine: EngineBridge = {
   createSession: opts => call('engine:createSession', opts),
   openSession: id => call('engine:openSession', id),
   image: (id, itemId, imageId) => call('engine:image', id, itemId, imageId),
+  item: (id, itemId) => call('engine:item', id, itemId),
   send: (id, text) => call('engine:send', id, text),
   context: (id, detail) => call('engine:context', id, detail),
   compact: id => call('engine:compact', id),
@@ -691,6 +692,13 @@ contextBridge.exposeInMainWorld('pixelsky', {
       return () => ipcRenderer.removeListener('sessionStatus:changed', listener)
     },
   } satisfies import('../shared/types/session-status').SessionStatusBridge,
+  storage: {
+    usage: force => call('storage:usage', force === true),
+    open: () => call('storage:open'),
+    clearCache: () => call('storage:clearCache'),
+    deleteSessions: ids => call('storage:deleteSessions', ids),
+    restoreSession: id => call('storage:restoreSession', id),
+  } satisfies import('../shared/types/storage').StorageBridge,
   quota: {
     get: provider => call('quota:get', provider),
     refresh: (provider, opts) => call('quota:refresh', provider, opts),

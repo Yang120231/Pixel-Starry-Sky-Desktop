@@ -29,6 +29,7 @@
 //   FAKE_CLAUDE_RATE_EVENT  每轮成功结束前输出一条 rate_limit_event：1 用 fixtures/claude-rate-limit-event.json，否则当 rate_limit_info 的 JSON
 //   FAKE_CLAUDE_REWIND    rewind_files 的模拟：JSON { file, content }，预览时报这个文件，还原时写入 content；
 //                         user_message_id 以 nocp 开头时报没有检查点
+//   FAKE_CLAUDE_THINKING_FAIL_FILE  这个文件存在时 set_max_thinking_tokens 回错误
 // -p --output-format json（旁聊）：从 stdin 读问题，回一个 result（含问题、--tools、能看到的用户消息）
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -841,6 +842,10 @@ function handle(msg) {
         else respond(msg.request_id, initialized)
         return
       case 'set_max_thinking_tokens':
+        if (process.env.FAKE_CLAUDE_THINKING_FAIL_FILE && existsSync(process.env.FAKE_CLAUDE_THINKING_FAIL_FILE)) {
+          out({ type: 'control_response', response: { subtype: 'error', request_id: msg.request_id, error: 'busy' } })
+          return
+        }
         thinkingDisplay = r.thinking_display
         if (process.env.FAKE_CLAUDE_LOG)
           appendFileSync(process.env.FAKE_CLAUDE_LOG.replace(/\.log$/, '.thinking.log'), String(thinkingDisplay) + '\n')

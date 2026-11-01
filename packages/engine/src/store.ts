@@ -5,24 +5,30 @@
 // <dataDir>/sessions/<id>/record.json  会话记录
 // <dataDir>/sessions/<id>/items.jsonl  对话条目，每行一个，只追加：开始时写一次，完成（或一轮结束收尾）时再写一次，
 //                                      读出时同一 id 取第一次的位置、最后一次的内容
+// <dataDir>/sessions/<id>/items.undo.jsonl  回退前的条目文件（硬链接），撤销回退时从它补回截掉的大字段
 //
 // 写入都是同步的小文件操作：保证顺序，量也很小（只在条目开始 / 完成时写，不写流式增量）。
+// 载入的条目截掉了图片数据、长输出只留头尾（cutItem，docs/session-memory.md）；磁盘上永远是完整内容：写截过的条目前先按 id 读回补全。
 import {
-  appendFileSync,
   closeSync,
+  copyFileSync,
   createReadStream,
   existsSync,
   fstatSync,
+  linkSync,
   mkdirSync,
   openSync,
   readSync,
   readFileSync,
   readdirSync,
   renameSync,
+  rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { setImmediate as nextTurn } from 'node:timers/promises'
 import type {
   EngineDefaults,
   EngineId,
@@ -32,7 +38,7 @@ import type {
   SessionDefaults,
   SessionRecord,
 } from '@pixelsky/protocol'
-import { isQuietWarning } from '@pixelsky/protocol'
+import { cutItem, isQuietWarning, withBodies } from '@pixelsky/protocol'
 import { messageInput, type QueueFile } from './queue'
 import { retryLimit } from './retry'
 import { removeTree } from './exec'
@@ -144,9 +150,50 @@ function endsMidLine(file: string): boolean {
   }
 }
 
+const ITEMS = 'items.jsonl'
+const UNDO = 'items.undo.jsonl'
+const LOST = '条目内容读不回来，没有写入'
+
+/** 一行在条目文件里的字节起点和长度（不含换行） */
+type Line = [offset: number, length: number]
+
+/** 读出时的单条变换：没等到完成的标成已中断；以前存下的配置类警告返回 null（不进对话） */
+function loaded(item: Item): Item | null {
+  // docs/ui/ai-commit-codex-warnings-history.md §3
+  if (item.kind === 'notice' && item.level !== 'error' && isQuietWarning(item.text)) return null
+  // 进程退出、应用关闭时没等到完成的（包括后台子智能体的）
+  if (item.kind !== 'user' && item.kind !== 'notice' && item.kind !== 'turn_stats' && item.status === 'running')
+    return { ...item, status: 'interrupted' }
+  return item
+}
+
+/** 按位置读一行并解析；文件打不开、读不全、解析失败返回 null。fds 按路径复用读句柄，调用方负责关 */
+function readLine(file: string, [offset, length]: Line, fds: Map<string, number>): Item | null {
+  try {
+    let fd = fds.get(file)
+    if (fd === undefined) fds.set(file, (fd = openSync(file, 'r')))
+    const buf = Buffer.alloc(length)
+    if (readSync(fd, buf, 0, length, offset) !== length) return null
+    return JSON.parse(buf.toString('utf8')) as Item
+  } catch {
+    return null
+  }
+}
+
+function closeAll(fds: Map<string, number>): void {
+  for (const fd of fds.values()) closeSync(fd)
+}
+
 export class Store {
   /** 本进程里已经核对过 items.jsonl 结尾的会话 */
   private readonly appendChecked = new Set<string>()
+  /**
+   * 已载入（loadItems 过）的会话：每个条目 id 最后一行在 items.jsonl 里的位置，body() 按它读回截掉的大字段。
+   * 没有这一项的会话不记位置（追加时不建）
+   */
+  private readonly lines = new Map<string, Map<string, Line>>()
+  /** 回退时留下的 items.undo.jsonl 里的位置（replaceItems keepOld），撤销回退时补全用 */
+  private readonly undoLines = new Map<string, Map<string, Line>>()
 
   constructor(readonly dir: string) {
     mkdirSync(join(dir, 'sessions'), { recursive: true })
@@ -236,10 +283,13 @@ export class Store {
     writeJson(join(dir, 'record.json'), record)
   }
 
+  /** 追加一行；截过的条目先从磁盘补全，补不全抛错、不写。已载入的会话记下新行的位置 */
   appendItem(sessionId: string, item: Item): void {
+    const full = this.body(sessionId, item)
+    if (!full) throw new Error(LOST)
     const dir = this.sessionDir(sessionId)
     mkdirSync(dir, { recursive: true })
-    const file = join(dir, 'items.jsonl')
+    const file = join(dir, ITEMS)
     // 每个会话本进程第一次追加前看一眼结尾：上次写坏的最后一行没有换行，先补一个，免得新的一条接在后面一起读不出来
     let lead = ''
     if (!this.appendChecked.has(sessionId)) {
@@ -247,7 +297,15 @@ export class Store {
       if (endsMidLine(file)) lead = '\n'
     }
     try {
-      appendFileSync(file, lead + JSON.stringify(item) + '\n', 'utf8')
+      const line = JSON.stringify(full)
+      const fd = openSync(file, 'a')
+      try {
+        const offset = fstatSync(fd).size + lead.length
+        writeFileSync(fd, lead + line + '\n', 'utf8')
+        this.lines.get(sessionId)?.set(full.id, [offset, Buffer.byteLength(line)])
+      } finally {
+        closeSync(fd)
+      }
     } catch (err) {
       // 写了一半就失败（磁盘满）：下次追加再看一眼结尾
       this.appendChecked.delete(sessionId)
@@ -326,14 +384,170 @@ export class Store {
     writeJson(join(dir, 'queue.json'), { version: 1, ...queue })
   }
 
-  /** 回退：用保留的条目原子重写对话记录（先写临时文件再改名） */
-  replaceItems(sessionId: string, items: Item[]): void {
+  /**
+   * 用这些条目原子重写对话记录（回退、分叉、导入；先写临时文件再改名）。
+   * 截过的条目从 opts.from（默认就是这个会话）的条目文件补全，必要时找它回退前的文件；补不全就在改名前抛错，原文件不动。
+   * keepOld：改名前把现在的 items.jsonl 硬链接成 items.undo.jsonl（回退的撤销从它补全，用完 dropUndo）
+   */
+  replaceItems(sessionId: string, items: Item[], opts: { from?: string; keepOld?: boolean } = {}): void {
     const dir = this.sessionDir(sessionId)
     mkdirSync(dir, { recursive: true })
-    const file = join(dir, 'items.jsonl'),
+    const file = join(dir, ITEMS),
       tmp = `${file}.tmp`
-    writeFileSync(tmp, items.map(item => JSON.stringify(item) + '\n').join(''), 'utf8')
+    const from = opts.from ?? sessionId
+    const next = new Map<string, Line>()
+    const fds = new Map<string, number>()
+    let done = false
+    // 一条一条写、攒到约 1 MB 写一次：整个对话拼成一个字符串时几百 MB 的对话内存翻几倍，超过约 512 MB 直接报错
+    const fd = openSync(tmp, 'w')
+    try {
+      let chunk = '',
+        offset = 0
+      for (const item of items) {
+        const full = item.cut ? this.indexedBody(from, item, fds) : item
+        if (!full) throw new Error(LOST)
+        const line = JSON.stringify(full)
+        const length = Buffer.byteLength(line)
+        next.set(full.id, [offset, length])
+        offset += length + 1
+        chunk += line + '\n'
+        if (chunk.length >= 1 << 20) {
+          writeFileSync(fd, chunk, 'utf8')
+          chunk = ''
+        }
+      }
+      if (chunk) writeFileSync(fd, chunk, 'utf8')
+      done = true
+    } finally {
+      closeSync(fd)
+      closeAll(fds)
+      if (!done) rmSync(tmp, { force: true })
+    }
+    const old = this.lines.get(sessionId)
+    // keepOld：硬链接而不是改名，任何一步崩溃 items.jsonl 都在；先链到临时名，改名成功后才换掉旧的 undo
+    // （改名失败时上一次回退的撤销还要用旧的）
+    const undo = join(dir, UNDO),
+      held = `${undo}.next`
+    const keep = !!opts.keepOld && existsSync(file)
+    if (keep) {
+      rmSync(held, { force: true })
+      try {
+        linkSync(file, held)
+      } catch {
+        copyFileSync(file, held)
+      }
+    }
+    try {
+      replaceFile(tmp, file)
+    } catch (err) {
+      if (keep) rmSync(held, { force: true })
+      throw err
+    }
+    if (old) this.lines.set(sessionId, next)
+    if (!opts.keepOld) return
+    this.dropUndo(sessionId)
+    if (!keep) return
+    try {
+      replaceFile(held, undo)
+      if (old) this.undoLines.set(sessionId, old)
+    } catch {
+      // 换不上（旧的 undo 被占着）：这次回退撤销不了（undoRewind 先核对补得回来），只多占点磁盘
+      rmSync(held, { force: true })
+    }
+  }
+
+  /** 分叉带上整个会话：直接复制来源的条目文件（先复制到临时文件再改名），不用把几百 MB 的对话重新序列化。来源没有条目文件时返回 false */
+  copyItems(fromId: string, toId: string): boolean {
+    const from = join(this.sessionDir(fromId), ITEMS)
+    if (!existsSync(from)) return false
+    const dir = this.sessionDir(toId)
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, ITEMS),
+      tmp = `${file}.tmp`
+    copyFileSync(from, tmp)
     replaceFile(tmp, file)
+    this.lines.delete(toId)
+    this.undoLines.delete(toId)
+    return true
+  }
+
+  /** 删掉回退前留下的 items.undo.jsonl（撤销回退用完、或不再能撤销时） */
+  dropUndo(sessionId: string): void {
+    this.undoLines.delete(sessionId)
+    try {
+      rmSync(join(this.sessionDir(sessionId), UNDO), { force: true })
+    } catch {
+      // 被占着删不掉（Windows）：只是多占点磁盘，不能因此打不开会话、开不了新的一轮；下次载入或回退时再删
+    }
+  }
+
+  /**
+   * 截过的条目（cut）按 id 从磁盘读回完整内容：先找 items.jsonl 里这个 id 最后一行，再找回退前的 items.undo.jsonl。
+   * 没截过的原样返回。没记位置、读出的 id 对不上、解析失败返回 null；位置失效时丢掉这个会话的索引（下次 loadItems 重建）。
+   * 只补截掉的字段（图片、长输出），其它字段取 item（磁盘上那行可能还是 running）
+   */
+  body(sessionId: string, item: Item): Item | null {
+    if (!item.cut) return item
+    const fds = new Map<string, number>()
+    try {
+      return this.indexedBody(sessionId, item, fds)
+    } finally {
+      closeAll(fds)
+    }
+  }
+
+  /**
+   * 按 id 取单条完整条目，给没载入的会话用（engine:image 之类）：已载入的按位置读；没载入的流式扫一遍文件，不建整份数组。
+   * 同一 id 取最后一行，套和 loadItems 一样的变换（running → interrupted），不截。没有这一条、或是被去掉的配置类警告返回 null
+   */
+  readItem(sessionId: string, itemId: string): Item | null {
+    const fds = new Map<string, number>()
+    let indexed: Item | null | undefined
+    try {
+      indexed = this.indexedLine(sessionId, itemId, fds)
+    } finally {
+      closeAll(fds)
+    }
+    if (indexed) return loaded(indexed)
+    // 已载入的会话索引是全的：索引里没有就是没有
+    if (this.lines.has(sessionId)) return null
+    const file = join(this.sessionDir(sessionId), ITEMS)
+    if (!existsSync(file)) return null
+    let last = null as Item | null
+    const needle = JSON.stringify(itemId)
+    eachLine(file, line => {
+      if (!line.includes(needle)) return
+      try {
+        const item = JSON.parse(line) as Item
+        if (item?.id === itemId) last = item
+      } catch {
+        // 跳过写坏的行
+      }
+    })
+    return last ? loaded(last) : null
+  }
+
+  private indexedBody(sessionId: string, item: Item, fds: Map<string, number>): Item | null {
+    const full = this.indexedLine(sessionId, item.id, fds)
+    return full ? withBodies(item, full) : null
+  }
+
+  /** 按索引读这个 id 最后一行（先 items.jsonl 再 items.undo.jsonl）；没记位置返回 undefined，位置失效返回 null 并丢掉这个会话的索引 */
+  private indexedLine(sessionId: string, itemId: string, fds: Map<string, number>): Item | null | undefined {
+    for (const [index, name] of [
+      [this.lines, ITEMS],
+      [this.undoLines, UNDO],
+    ] as const) {
+      const at = index.get(sessionId)?.get(itemId)
+      if (!at) continue
+      const full = readLine(join(this.sessionDir(sessionId), name), at, fds)
+      if (full?.id === itemId) return full
+      // 文件被外面改了（或写坏了一半）：位置都不可信了
+      this.lines.delete(sessionId)
+      this.undoLines.delete(sessionId)
+      return null
+    }
+    return undefined
   }
 
   /**
@@ -361,34 +575,102 @@ export class Store {
     return [...byId.values()]
   }
 
-  /** 读出全部条目；同一个 id 出现多次时保留第一次的位置、最后一次的内容 */
+  /** items.jsonl 的字节数，没有这个文件为 0（不读条目） */
+  itemsSize(sessionId: string): number {
+    return statSync(join(this.sessionDir(sessionId), ITEMS), { throwIfNoEntry: false })?.size ?? 0
+  }
+
+  /** items.jsonl 有内容（不读条目，只看大小） */
+  hasItems(sessionId: string): boolean {
+    return this.itemsSize(sessionId) > 0
+  }
+
+  /**
+   * 读出全部条目；同一个 id 出现多次时保留第一次的位置、最后一次的内容。没等到完成的标成已中断，图片数据、长输出截掉（cut），
+   * 同时记下每个 id 最后一行的位置，之后这个会话的追加、重写都更新它（body() 用）。
+   * 只在建运行时时调用：重新载入后内存里没有撤销状态了，顺便删掉回退前留下的文件
+   */
   loadItems(sessionId: string): Item[] {
-    const file = join(this.sessionDir(sessionId), 'items.jsonl')
-    if (!existsSync(file)) return []
-    const byId = new Map<string, Item>()
-    for (const line of readFileSync(file, 'utf8').split('\n')) {
-      if (!line.trim()) continue
-      try {
-        const item = JSON.parse(line) as Item
-        if (item && typeof item.id === 'string') byId.set(item.id, item)
-      } catch {
-        // 跳过写坏的行（例如写到一半断电）
+    const load = this.beginLoad(sessionId)
+    if (existsSync(load.file)) eachLine(load.file, load.line)
+    this.lines.set(sessionId, load.index)
+    return load.items()
+  }
+
+  /**
+   * 和 loadItems 一样的结果，但按块读、每块之后让出事件循环（打开大对话不卡主进程，docs/session-memory.md 第 4 期）。
+   * 读的间隙里没载入时的追加（appendItem 不记位置）读得到就读进来；bytes 是读到的字节数，调用方和读完时的文件大小比，不等就重读。
+   * 读完才登记位置，而且只在期间没有别人 loadItems 过时登记（不然会盖掉那份已经跟着追加、重写更新的）
+   */
+  async loadItemsAsync(sessionId: string, chunk = 1 << 20): Promise<{ items: Item[]; bytes: number }> {
+    const load = this.beginLoad(sessionId)
+    let bytes = 0
+    if (existsSync(load.file)) {
+      const buf = Buffer.alloc(chunk)
+      const split = lineSplitter(load.line)
+      for (;;) {
+        // 每块重新打开：间隙里不占着文件（Windows 上占着时回退的改名会失败）
+        const fd = openSync(load.file, 'r')
+        let n: number
+        try {
+          n = readSync(fd, buf, 0, chunk, bytes)
+        } finally {
+          closeSync(fd)
+        }
+        if (!n) break
+        split.feed(buf, n)
+        bytes += n
+        await nextTurn()
       }
+      split.end()
     }
-    // 没等到完成的条目（进程退出、应用关闭，包括后台子智能体的）：标成已中断。
-    // 以前存下的配置类警告（docs/ui/ai-commit-codex-warnings-history.md §3）现在不进对话：去掉
-    const items: Item[] = []
-    for (const item of byId.values()) {
-      if (item.kind === 'notice' && item.level !== 'error' && isQuietWarning(item.text)) continue
-      if (item.kind !== 'user' && item.kind !== 'notice' && item.kind !== 'turn_stats' && item.status === 'running')
-        items.push({ ...item, status: 'interrupted' })
-      else items.push(item)
+    if (!this.lines.has(sessionId)) this.lines.set(sessionId, load.index)
+    return { items: load.items(), bytes }
+  }
+
+  /** loadItems / loadItemsAsync 共用：删掉残留的撤销文件，给出逐行解析的回调（边读边截、记位置）和读完后的变换 */
+  private beginLoad(sessionId: string) {
+    const file = join(this.sessionDir(sessionId), ITEMS)
+    this.dropUndo(sessionId)
+    // 回退到一半崩溃留下的（replaceItems keepOld 的临时名）；被占着删不掉不能因此打不开会话
+    try {
+      rmSync(`${join(this.sessionDir(sessionId), UNDO)}.next`, { force: true })
+    } catch {
+      // 下次载入再删
     }
-    return items
+    const index = new Map<string, Line>()
+    const byId = new Map<string, Item>()
+    return {
+      file,
+      index,
+      line: (line: string, offset: number, length: number): void => {
+        if (!line.trim()) return
+        try {
+          const item = JSON.parse(line) as Item
+          if (!item || typeof item.id !== 'string') return
+          // 边读边截：不然整份图片、输出要等读完才放掉，打开时的峰值还是整个文件
+          byId.set(item.id, cutItem(item))
+          index.set(item.id, [offset, length])
+        } catch {
+          // 跳过写坏的行（例如写到一半断电）
+        }
+      },
+      items: (): Item[] => {
+        const items: Item[] = []
+        for (const item of byId.values()) {
+          const shown = loaded(item)
+          // running 的上面没截，标成已中断后再截
+          if (shown) items.push(cutItem(shown))
+        }
+        return items
+      },
+    }
   }
 
   deleteSession(id: string): void {
     removeTree(this.sessionDir(id))
+    this.lines.delete(id)
+    this.undoLines.delete(id)
   }
 
   /** 对话检查点的影子 Git 仓库（docs/ui/undo-changes.md §2），删会话时一起删 */
@@ -404,5 +686,54 @@ export class Store {
     const dir = this.sessionDir(id)
     mkdirSync(dir, { recursive: true })
     writeJson(join(dir, 'checkpoints.json'), data)
+  }
+}
+
+/**
+ * 按行读文件：一块一块读、按换行切，不把整个文件读成一个字符串
+ * （V8 单个字符串上限约 512 MB，跑了很久的对话 items.jsonl 会超过，整份读会报 ERR_STRING_TOO_LONG 打不开）。
+ * 回调另给这一行在文件里的字节起点和字节长度（不含换行）
+ */
+export function eachLine(
+  file: string,
+  fn: (line: string, offset: number, length: number) => void,
+  chunk = 16 << 20,
+): void {
+  const fd = openSync(file, 'r')
+  try {
+    const buf = Buffer.alloc(chunk)
+    const split = lineSplitter(fn)
+    for (let n: number; (n = readSync(fd, buf, 0, chunk, null)) > 0; ) split.feed(buf, n)
+    split.end()
+  } finally {
+    closeSync(fd)
+  }
+}
+
+/** 按块喂入、按换行切行（eachLine 和 loadItemsAsync 共用）；回调同 eachLine */
+function lineSplitter(fn: (line: string, offset: number, length: number) => void) {
+  let parts: Buffer[] = []
+  // base：下一块在文件里的起点；lineStart：当前行的起点
+  let base = 0,
+    lineStart = 0
+  return {
+    /** buf 的前 n 个字节；buf 之后会被复用 */
+    feed(buf: Buffer, n: number): void {
+      let start = 0
+      // 换行符 0x0A 不会出现在 UTF-8 多字节字符中间，按字节切安全
+      for (let i = buf.indexOf(10); i !== -1 && i < n; i = buf.indexOf(10, start)) {
+        parts.push(buf.subarray(start, i))
+        fn(Buffer.concat(parts).toString('utf8'), lineStart, base + i - lineStart)
+        parts = []
+        start = i + 1
+        lineStart = base + start
+      }
+      // 下一块会复用 buf：没切完的那段拷出来
+      if (start < n) parts.push(Buffer.from(buf.subarray(start, n)))
+      base += n
+    },
+    end(): void {
+      if (parts.length) fn(Buffer.concat(parts).toString('utf8'), lineStart, base - lineStart)
+    },
   }
 }

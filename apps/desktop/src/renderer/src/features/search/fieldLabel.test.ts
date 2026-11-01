@@ -25,4 +25,11 @@ describe('搜索字段名', () => {
     expect(projectLabel('已移除的项目')).toBe('Removed project')
     expect(projectLabel('项目')).toBe('项目')
   })
+
+  it('「对话」写对话，不写已移除的项目（本机和远端）', () => {
+    expect(projectLabel('已移除的项目', 'chat')).toBe('对话')
+    setCurrentLocale('en-US')
+    expect(projectLabel('已移除的项目', 'ssh-1~chat')).toBe('Chat')
+    expect(projectLabel('已移除的项目', 'gone')).toBe('Removed project')
+  })
 })

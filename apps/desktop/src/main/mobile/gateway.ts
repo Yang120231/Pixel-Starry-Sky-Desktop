@@ -19,7 +19,6 @@ import {
   type ArtifactResponse,
   type IpcChannelSpec,
   type Item,
-  type OpenedSession,
   type ProjectRecord,
   type SearchResponse,
   type SearchResult,
@@ -191,12 +190,13 @@ interface Pairing {
   request: { phone: string; publicKey: Uint8Array; name: string } | null
 }
 
-/** 手机看到的会话列表：不含归档，最近更新的在前，最多 200 条 */
+/** 手机看到的会话列表：不含归档，最近更新的在前，最多 200 条；去掉审批内容（手机不读，大了会超过单帧上限） */
 export function phoneSessions(list: readonly SessionSummary[]): SessionSummary[] {
   return list
     .filter(s => !s.record.archivedAt)
     .sort((a, b) => b.record.updatedAt - a.record.updatedAt)
     .slice(0, MAX_SESSIONS)
+    .map(({ pending: _pending, ...s }) => s)
 }
 
 const asString = (v: unknown, max = 200): string => {
@@ -836,10 +836,12 @@ export class MobileGateway {
       index = args[2]
     if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index > 100)
       throw new Error('MOBILE_BAD_ARGUMENT')
-    const opened = (await this.d.call('engine:openSession', [sessionId], 'mobile:' + peer.phone)) as OpenedSession
-    const item = opened.snapshot.items.find(i => i.id === itemId)
-    const images = item?.kind === 'user' ? item.attachments : item?.kind === 'tool' ? item.images : undefined
-    const image = images?.[index]
+    // 只取这一张（远端会话不用把整份快照经 SSH 传过来）
+    const image = (await this.d.call(
+      'engine:image',
+      [sessionId, itemId, index],
+      'mobile:' + peer.phone,
+    )) as ImageAttachment | null
     if (!image?.dataBase64) throw new Error('MOBILE_NOT_FOUND')
     if (image.dataBase64.length <= IMAGE_INLINE) return image
     for (const edge of SHRINK_EDGES) {

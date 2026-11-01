@@ -1,6 +1,6 @@
 import { useI18n } from '@/i18n/I18nProvider'
 import { tr } from '../i18n/core'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Sidebar } from '../features/sidebar/Sidebar'
 import { SidebarFollow } from './SidebarFollow'
 import { ToolbarContext } from '../features/layout/ToolbarContext'
@@ -26,6 +26,7 @@ import { FileConfirm } from '../features/files/FileConfirm'
 import { WindowControls } from '../features/layout/WindowControls'
 import { FirstLaunch } from '../features/onboarding/FirstLaunch'
 import { OPEN_RIGHT_WORKSPACE } from '../features/panel/workspaceStore'
+import { LAST_OPEN_KEY, readOpenMap, saveOpenMap, withOpen } from '../features/panel/panelOpen'
 import { CodingLayout } from '../features/coding/CodingLayout'
 import { codingLayout } from '../features/coding/layoutStore'
 import { getAppMode, useAppMode } from '../features/coding/mode'
@@ -79,11 +80,27 @@ export function App() {
   const preferredPanelWidth = savedPanelWidth ?? autoPanelWidth(windowWidth, preferredSidebarWidth)
   const panelMax = Math.max(360, windowWidth - (sidebarOpen ? preferredSidebarWidth : 0) - SESSION_MIN_WIDTH)
   const panelWidth = Math.min(preferredPanelWidth, panelMax)
-  const [panelOpen, setPanelOpen] = useState(
+  // 多对话窗格：第一次渲染前读出保存的布局（没有记录时打开默认会话），docs/ui/multi-pane.md
+  useState(() => startPanes(defaultSessionId))
+  // 侧栏高亮当前窗格正在显示的会话；新会话（欢迎页）时为 null
+  const current = usePaneState(s => focusedTab(s.layout))
+  const sessionId = current && !isNewTab(current) && !isFileTab(current) ? current : null
+  // 右侧面板按对话各自开合；没开合过的对话沿用最近一次
+  const [openMap, setOpenMap] = useState(readOpenMap)
+  const [lastOpen, setLastOpen] = useState(
     () =>
-      (localStorage.getItem('pixelsky.right-workspace.open') === 'true' || defaultPanelOpen) &&
+      (localStorage.getItem(LAST_OPEN_KEY) === 'true' || defaultPanelOpen) &&
       fits(true, true, preferredSidebarWidth, 360),
   )
+  const panelKey = useRef('')
+  panelKey.current = current ?? ''
+  const panelOpen = openMap[panelKey.current] ?? lastOpen
+  // 事件回调里可能是旧闭包：对话从 ref 读，记到当时正在看的那个
+  const setPanelOpen = (open: boolean) => {
+    const key = panelKey.current
+    setOpenMap(map => withOpen(map, key, open))
+    setLastOpen(open)
+  }
   // 频道页的最窄情况是 220px 紧凑列表 + 360px 时间线
   const sidebarMax = Math.max(
     240,
@@ -111,11 +128,6 @@ export function App() {
       localStorage.setItem(MEMBERS_KEY, String(membersOpen))
     } catch {}
   }, [membersOpen])
-  // 多对话窗格：第一次渲染前读出保存的布局（没有记录时打开默认会话），docs/ui/multi-pane.md
-  useState(() => startPanes(defaultSessionId))
-  // 侧栏高亮当前窗格正在显示的会话；新会话（欢迎页）时为 null
-  const current = usePaneState(s => focusedTab(s.layout))
-  const sessionId = current && !isNewTab(current) && !isFileTab(current) ? current : null
   // 引擎系统：连接主进程（演示模式下什么都不做）；正在看的会话由 Workspace 统一标记
   useEngineBoot()
   // 设置 › 用量 里点「打开这个会话」：和在侧栏点一样，打开到当前窗格；
@@ -126,11 +138,12 @@ export function App() {
   })
   // 「正在看」标记和失效会话标签清理（两种模式都要跑）
   usePaneHousekeeping()
+  useEffect(() => saveOpenMap(openMap), [openMap])
   useEffect(() => {
     try {
-      localStorage.setItem('pixelsky.right-workspace.open', String(panelOpen))
+      localStorage.setItem(LAST_OPEN_KEY, String(lastOpen))
     } catch {}
-  }, [panelOpen])
+  }, [lastOpen])
   useEffect(() => {
     const reveal = () => {
       // 代码模式下这些事件由 coding/routing.ts 接

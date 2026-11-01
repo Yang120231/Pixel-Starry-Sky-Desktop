@@ -16,7 +16,7 @@ import {
   Folder,
   type LucideIcon,
 } from 'lucide-react'
-import type { SessionRecord } from '@pixelsky/protocol'
+import { CHAT_PROJECT_ID, type SessionRecord } from '@pixelsky/protocol'
 import type { DesktopLink } from '@/connection'
 import { TOOL_NAMES, type ToolId } from '@/data/tools'
 import { L } from '@/i18n'
@@ -65,6 +65,8 @@ export function SessionMenu({
   const [menu, setMenu] = useState(false)
   const [renaming, setRenaming] = useState(false)
   if (!record) return <span className="w-12 shrink-0" />
+  // 不用项目的对话：没有「这个项目」，也没有按项目的工具（手机只连本机，ID 不带机器前缀）
+  const chat = record.projectId === CHAT_PROJECT_ID
 
   // 成功返回 null，失败返回错误码（调用方决定显示在哪）
   const send = async (method: string, ...args: unknown[]): Promise<string | null> => {
@@ -121,7 +123,7 @@ export function SessionMenu({
       disabled: !canAct,
       onSelect: () => void call('engine:setSessionPinned', !record.pinnedAt),
     },
-    ...(onNew
+    ...(onNew && !chat
       ? [
           {
             icon: Plus,
@@ -152,7 +154,7 @@ export function SessionMenu({
       </button>
       {menu && (
         <Sheet title={record.title || L('会话', 'Conversation')} onClose={() => setMenu(false)}>
-          {onTool && (
+          {onTool && !chat && (
             <div className="grid grid-cols-4 gap-2 px-4 pt-3 pb-2">
               {tools.map(([id, Icon]) => (
                 <button

@@ -1,5 +1,5 @@
 import { homedir, hostname, platform, arch } from 'node:os'
-import { join, dirname } from 'node:path'
+import { basename, join, dirname } from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
 import {
   REMOTE_PROTOCOL,
@@ -90,6 +90,10 @@ export async function createRemoteRuntime(
   const host = new EngineHost({
     ...extra,
     dataDir: join(dataDir, 'engine'),
+    // 删对话时它的文件夹里有文件：远端没有回收站，和文件树一样移到数据目录的 trash/
+    trash: async path => {
+      await moveToTrash(join(dataDir, 'trash'), [{ absolute: path, relative: basename(path) }])
+    },
     checkpoints: true,
     emit: (event: HostEvent) =>
       peer.event(

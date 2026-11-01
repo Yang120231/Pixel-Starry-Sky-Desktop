@@ -35,7 +35,7 @@ import type { SearchRegistry } from '../search-registry'
 import { workspaceRef } from '../workspace-files'
 import { readArtifact } from '../artifact-files'
 import { itemDetail, sessionTail, tailOptions } from './tail'
-import { imageOf } from './desktop-images'
+import { imageOf, itemWithoutImageData } from './desktop-images'
 
 export interface EngineOpContext {
   host: EngineHost
@@ -224,13 +224,32 @@ export const ENGINE_OPS = {
     if (o.copyId && !cwd) throw new Error('副本不存在')
     return c.host.createSession({ ...o, projectId: str(o.projectId, 'projectId') }, cwd)
   },
-  'engine:openSession': (c, id) => c.host.openSession(str(id, 'id')),
+  // 先分块读条目（大对话第一次打开不卡主进程），再同步取快照
+  'engine:openSession': async (c, id) => {
+    const sid = str(id, 'id')
+    await c.host.prepare(sid)
+    return c.host.openSession(sid)
+  },
   // 手机端（docs/mobile-remote.md §5.2）：只取最后一段条目，点开某一条时再取完整内容
-  'engine:openSessionTail': (c, id, opts) => sessionTail(c.host.openSession(str(id, 'id')), tailOptions(opts)),
-  'engine:itemDetail': (c, id, itemId) => itemDetail(c.host.open(str(id, 'id')), str(itemId, 'itemId')),
-  // 桌面界面按需取一张图的原图（快照里不带，desktop-images.ts）
+  'engine:openSessionTail': async (c, id, opts) => {
+    const sid = str(id, 'id')
+    const options = tailOptions(opts)
+    await c.host.prepare(sid)
+    return sessionTail(c.host.openSession(sid), options)
+  },
+  // 这几个按 id 取一条（截掉的图片数据、长输出从磁盘补回），没载入的会话不载入
+  'engine:itemDetail': (c, id, itemId) => itemDetail(c.host.item(str(id, 'id'), str(itemId, 'itemId'))),
+  // 桌面界面展开、复制截过的长输出时取完整的一条；图片数据仍不带（按 engine:image 取）
+  'engine:item': (c, id, itemId) => {
+    const item = c.host.item(str(id, 'id'), str(itemId, 'itemId'))
+    return item && itemWithoutImageData(item)
+  },
+  // 桌面界面按需取一张图的原图（快照里不带，desktop-images.ts）；手机传的是第几张
   'engine:image': (c, id, itemId, imageId) =>
-    imageOf(c.host.open(str(id, 'id')).items, str(itemId, 'itemId'), str(imageId, 'imageId')),
+    imageOf(
+      c.host.item(str(id, 'id'), str(itemId, 'itemId')),
+      typeof imageId === 'number' ? imageId : str(imageId, 'imageId'),
+    ),
   'engine:send': (c, id, input) => c.host.send(str(id, 'id'), input as Parameters<EngineHost['send']>[1]),
   'engine:context': (c, id, detail) => c.host.inspectContext(str(id, 'id'), detail === 'summary' ? 'summary' : 'full'),
   'engine:compact': (c, id) => c.host.compactContext(str(id, 'id')),

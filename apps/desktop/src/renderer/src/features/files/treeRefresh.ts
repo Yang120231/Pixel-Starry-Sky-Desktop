@@ -1,6 +1,6 @@
 // 文件树自动刷新（docs/ui/file-tree-auto-refresh.md）：三棵树共用的刷新时机（§2 A），本机目录监听推来的变化怎么用（§2 B）
 import { useEffect, useRef, useState } from 'react'
-import { bridge, useSession } from '@/features/engine'
+import { bridge, useEngineState } from '@/features/engine'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { planTreeChange } from './treeChange'
 
@@ -16,7 +16,8 @@ const STATUS_THROTTLE_MS = 2000
 export function useTreeRefresh(sessionId: string | null | undefined, visible: boolean): number {
   const [key, setKey] = useState(0)
   const bump = (): void => setKey(k => k + 1)
-  const state = useSession(sessionId ?? null)?.state
+  // 读会话列表里的状态：useSession 会为一个字段把整个对话读进界面并一直留着
+  const state = useEngineState(s => (sessionId ? s.sessions.find(x => x.record.id === sessionId)?.state : undefined))
   const previous = useRef(state)
   useEffect(() => {
     if (previous.current === 'running' && state !== 'running' && visible) bump()

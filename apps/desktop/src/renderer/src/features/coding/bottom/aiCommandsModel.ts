@@ -14,12 +14,18 @@ export interface AiCommandEntry {
   output: string
   exitCode: number | null
   subagent?: string
+  /** 原条目（快照里的那个对象）：选中时按它取完整输出（useItemBody；跑着时记下完整版，跑完截成头尾不闪） */
+  item: Item
 }
 
 /** 输出太长时留最后的部分（最新的内容更有用） */
 export function clipOutput(output: string, limit = MAX_OUTPUT_CHARS): string {
   return output.length > limit ? output.slice(output.length - limit) : output
 }
+
+/** 选中那条显示的输出：截过的取到完整的一条（useItemBody(entry.item)）后同样只留最后一段 */
+export const entryOutput = (entry: AiCommandEntry, full: Item | undefined): string =>
+  full?.kind === 'command' && full.cutChars === undefined ? clipOutput(full.output) : entry.output
 
 /** 取出所有命令条目，最多保留最近 200 条，每条输出最多 40 000 字 */
 export function aiCommandEntries(items: readonly Item[]): AiCommandEntry[] {
@@ -34,6 +40,7 @@ export function aiCommandEntries(items: readonly Item[]): AiCommandEntry[] {
       output: clipOutput(item.output),
       exitCode: item.exitCode,
       ...(item.subagent ? { subagent: item.subagent } : {}),
+      item,
     })
   }
   return entries.length > MAX_COMMANDS ? entries.slice(entries.length - MAX_COMMANDS) : entries

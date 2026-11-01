@@ -1,3 +1,4 @@
+import { isChatProject } from '@pixelsky/protocol'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '@/i18n/I18nProvider'
 import { useActiveWorkspace } from '@/features/editor/target'
@@ -187,13 +188,13 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const defaultRef = (): WorkspaceRef | null =>
     workspace.ref && projectOf(workspace.ref) === ui.projectId
       ? workspace.ref
-      : ui.projectId
+      : ui.projectId && !isChatProject(ui.projectId)
         ? { projectId: ui.projectId }
         : workspace.ref
   const create = async (ref: WorkspaceRef | null = defaultRef(), profileId?: string): Promise<boolean> => {
     if (creating.current) return false
     if (!ref) {
-      terminalError(new Error(t('terminal.chooseProject')))
+      terminalError(new Error(t(workspace.chat ? 'projectTools.chatNoFolder' : 'terminal.chooseProject')))
       setUi(v => ({ ...v, open: true }))
       return false
     }
@@ -248,7 +249,12 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       )[0]
     if (existing) select(existing.id)
     else if (projectId && state.ready)
-      void create(workspace.ref && projectOf(workspace.ref) === projectId ? workspace.ref : { projectId })
+      // 对话的终端组不能按项目 ID 开（主进程解析不了）：退回当前工作区
+      void create(
+        workspace.ref && (projectOf(workspace.ref) === projectId || isChatProject(projectId))
+          ? workspace.ref
+          : { projectId },
+      )
   }
   const focus = (): void => {
     if (!ui.open) toggle()
@@ -348,9 +354,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       event.stopPropagation()
       if (isNew)
         void create(
-          document.activeElement?.closest('[data-terminal-input]') && ui.projectId
-            ? { projectId: ui.projectId }
-            : workspace.ref,
+          document.activeElement?.closest('[data-terminal-input]') && ui.projectId ? defaultRef() : workspace.ref,
         )
       // 协作频道页时终端不可见：切回工作台显示它，而不是悄悄收起
       else if (ui.open && getPage() !== 'workbench') {

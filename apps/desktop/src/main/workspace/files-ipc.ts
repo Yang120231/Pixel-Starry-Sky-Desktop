@@ -108,7 +108,8 @@ export async function initWorkspace(ctx: AppContext): Promise<void> {
   })
   handle('editor:openMemory', async (_e, sessionId: unknown, path: unknown, action: unknown) => {
     if (typeof sessionId !== 'string' || machineOf(sessionId) !== 'local') throw new Error('只能打开本机上的记忆文件')
-    const listed = ctx.engine?.open(sessionId).context?.diagnostic?.memory ?? []
+    // 诊断只在载入的会话内存里：没载入就没有列出的文件，不为它整份载入
+    const listed = ctx.engine?.loaded(sessionId)?.context?.diagnostic?.memory ?? []
     const file = await memoryFile(listed, path)
     if (action === 'reveal') return void shell.showItemInFolder(file)
     if (await editors.openFile(file)) return

@@ -393,6 +393,8 @@ export interface ChannelFlow {
     mention?: boolean
     /** 拟计划这一轮用的模型、推理强度（在流程卡上换的）；不写跟随成员 */
     settings?: FlowStepSettings | null
+    /** 拟计划期间你接着补充的原话（换人拟计划时交给新成员） */
+    notes?: { from: string; text: string }[]
   } | null
   /** 拟计划的成员开工前一次问完的问题；answer 是你的回答（都答了才接着出计划） */
   questions?: { q: string; options: string[]; answer?: string }[] | null

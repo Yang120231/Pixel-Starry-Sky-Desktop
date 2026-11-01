@@ -107,6 +107,8 @@ it('worktree sessions keep their own cwd and directory maintenance blocks new wr
   const record = host.createSession({ projectId: project.id }, copy)
   expect(record.cwd).toBe(copy)
   expect(host.projects().find(p => p.id === project.id)?.path).toBe(root)
+  // 已载入的会话维护时停下、队列暂停；没载入的不载入（unloaded-session.test.ts）
+  host.open(record.id)
   await host.withWorkspaceStopped(copy, async () => {
     await expect(host.send(record.id, 'blocked')).rejects.toThrow('维护')
     expect(() => host.createSession({ projectId: project.id }, copy)).toThrow('维护')
@@ -126,6 +128,8 @@ it('directory maintenance also stops and blocks sessions in its subfolders, not 
   const inner = host.createSession({ projectId: project.id }, sub)
   const other = host.createSession({ projectId: project.id }, sibling)
   const lockPath = process.platform === 'win32' ? copy.toUpperCase() : copy
+  host.open(inner.id)
+  host.open(other.id)
   await host.withWorkspaceStopped(lockPath, async () => {
     await expect(host.send(inner.id, 'blocked')).rejects.toThrow('维护')
     expect(host.open(inner.id).queuePaused).toBe(true)
@@ -1038,6 +1042,20 @@ describe('EngineHost + Claude（假引擎）', () => {
     await host.update(record.id, { thinkingSummaries: false })
     expect(thinkingLog()).toEqual(['summarized', 'omitted'])
     expect(host.open(record.id).record.thinkingSummaries).toBe(false)
+  })
+
+  it('回归：显示思考摘要没发成功：不当成已生效，下次再改照样发', async () => {
+    const fail = join(root, 'thinking.fail')
+    const host = makeHost(60_000, { FAKE_CLAUDE_THINKING_FAIL_FILE: fail })
+    const { record } = setup(host)
+    await host.send(record.id, '你好')
+    await waitFor(() => turnsDone(record.id) === 1)
+    writeFileSync(fail, '')
+    await host.update(record.id, { thinkingSummaries: false })
+    rmSync(fail)
+    expect(thinkingLog()).toEqual(['summarized'])
+    await host.update(record.id, { thinkingSummaries: false })
+    expect(thinkingLog()).toEqual(['summarized', 'omitted'])
   })
 
   it('子智能体：子智能体条、工具行标出子智能体、智能体追踪的总数', async () => {

@@ -60,6 +60,22 @@ describe('sessionTail', () => {
     expect(JSON.stringify(tail.snapshot.queue)).not.toContain('AAAA')
   })
 
+  it('lists items whose output the host cut to head and tail (cutChars), not image-only cuts', () => {
+    const command = (id: string, extra: Partial<Item>): Item =>
+      ({
+        kind: 'command',
+        id,
+        command: 'ls',
+        description: null,
+        output: 'head…tail',
+        exitCode: 0,
+        status: 'completed',
+        ...extra,
+      }) as Item
+    const items = [command('c1', { cut: true, cutChars: 50_000 }), command('c2', { cut: true }), command('c3', {})]
+    expect(sessionTail(opened(items), tailOptions({})).truncated).toEqual(['c1'])
+  })
+
   it('always returns at least one item and clamps the limit', () => {
     const huge = sessionTail(opened([assistant(1, 'z'.repeat(400_000))]), { limit: 60, before: null, maxBytes: 10 })
     expect(huge.snapshot.items).toHaveLength(1)
@@ -73,14 +89,13 @@ describe('itemDetail', () => {
   it('returns the full item, with images only when they fit in one frame (a dropped image is not a cut)', () => {
     const user = { kind: 'user', id: 'u1', text: 'hi', attachments: [image(1000)] } as unknown as Item
     const big = { kind: 'user', id: 'u2', text: 'hi', attachments: [image(900_000)] } as unknown as Item
-    const snapshot = opened([user, big, assistant(1, 'w'.repeat(300_000))]).snapshot
-    expect(itemDetail(snapshot, 'u1')).toEqual({ item: user, truncated: false })
-    const second = itemDetail(snapshot, 'u2')!
+    expect(itemDetail(user)).toEqual({ item: user, truncated: false })
+    const second = itemDetail(big)!
     expect(JSON.stringify(second.item)).not.toContain('AAAA')
     expect(second.truncated).toBe(false)
-    const long = itemDetail(snapshot, 'a1')!
+    const long = itemDetail(assistant(1, 'w'.repeat(300_000)))!
     expect((long.item as { text: string }).text).toHaveLength(256 * 1024)
-    expect(itemDetail(snapshot, 'missing')).toBeNull()
+    expect(itemDetail(null)).toBeNull()
   })
 
   it('slims events the same way', () => {

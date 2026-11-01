@@ -24,7 +24,6 @@ import { useI18n } from '@/i18n/I18nProvider'
 import { tr, translateMessage } from '@/i18n/core'
 import { isDemo, projects as demoProjects } from '@/data'
 import { bridge, isLive, useEngineState } from '@/features/engine'
-import { openSession } from '@/features/engine/store'
 import { machineOf, useMachines } from '@/features/machines/store'
 import { setPage, showWorkbench } from '@/features/layout/page'
 import { channelActions, useChannels } from '@/features/channels/store'
@@ -81,8 +80,6 @@ const STATUS_KEY = {
   review: 'projectTools.review',
   completed: 'projectTools.completed',
 } as const
-/** 「等你」列里还没打开过的会话，后台读一次快照好显示审批内容（和「待处理」一样最多 20 个） */
-const MAX_PREFETCH = 20
 const DRAG_TYPE = 'application/x-pixelsky-board-task'
 
 // 事项的负责人、验收标准（一行一条）也在编辑里（docs/ui/channels-collab-v2.md §9）
@@ -120,7 +117,6 @@ export function TaskBoardPage() {
   const { tasks, error: loadError } = useBoardTasks()
   const sessions = useSessionCards()
   const engineProjects = useEngineState(s => s.projects)
-  const snapshots = useEngineState(s => s.snapshots)
   const machine = useMachines().currentId
   const projects = useMemo(
     () =>
@@ -201,21 +197,6 @@ export function TaskBoardPage() {
   }, [canSchedule, kind, query, channels, filterProjects])
   const historyTask = historyId ? tasks.find(t => t.id === historyId) : undefined
   const showSchedule = canSchedule && (kind === 'schedule' || scheduled.length > 0 || flows.length > 0)
-
-  // 等你处理但还没打开过的会话：后台读一次快照，好显示审批内容
-  const fetched = useRef(new Set<string>())
-  useEffect(() => {
-    if (isDemo) return
-    // 不再等你处理的会话忘掉：快照可能已被释放，下次又等你处理时要再读一次
-    const waiting = new Set(sessions.filter(card => card.lane === 'waiting').map(card => card.id))
-    for (const id of fetched.current) if (!waiting.has(id)) fetched.current.delete(id)
-    for (const card of sessions) {
-      if (card.lane !== 'waiting' || snapshots[card.id] || fetched.current.has(card.id)) continue
-      if (fetched.current.size >= MAX_PREFETCH) break
-      fetched.current.add(card.id)
-      void openSession(card.id).catch(() => {})
-    }
-  }, [sessions, snapshots])
 
   // Ctrl+N 新任务，/ 聚焦搜索（输入框里不抢）
   useEffect(() => {

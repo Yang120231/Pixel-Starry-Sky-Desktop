@@ -121,6 +121,8 @@ export interface SidebarData {
   projects: Project[]
   /** 不用项目的对话（侧栏「对话」分组） */
   chats: Session[]
+  /** 归档了的不用项目的对话（「对话」分组底下的「已归档 N 个」） */
+  chatsArchived: Session[]
   /** 置顶的会话（侧栏最上面的「置顶」分组），后置顶的在前 */
   pinned: PinnedSession[]
   recent: Array<RecentItem & { status?: SessionStatus }>
@@ -1069,19 +1071,20 @@ export function useStatusBar(sessionId: string | null, draftKey?: string): Statu
   const pid = chosen?.projectId ?? snap?.record.projectId ?? (sessionId ? null : currentProjectId)
   const project = projects.find(p => p.id === pid) ?? null
   return {
-    project: chosen
-      ? { id: chosen.projectId, name: chosen.name, path: chosen.path }
-      : project
-        ? {
-            id: project.id,
-            name:
-              snap && snap.record.cwd.toLowerCase() !== project.path.toLowerCase()
-                ? project.name + ' / ' + (snap.record.cwd.split(/[\\/]/).pop() || '')
-                : project.name,
-            path: snap?.record.cwd ?? project.path,
-          }
-        : isChatProject(pid)
-          ? { id: pid!, name: tr('sidebar.Sidebar.chatLabel'), path: snap?.record.cwd ?? '' }
+    // 对话排在最前：草稿里存的名字是空的，按当前语言显示
+    project: isChatProject(pid)
+      ? { id: pid!, name: tr('sidebar.Sidebar.chatLabel'), path: snap?.record.cwd ?? '' }
+      : chosen
+        ? { id: chosen.projectId, name: chosen.name, path: chosen.path }
+        : project
+          ? {
+              id: project.id,
+              name:
+                snap && snap.record.cwd.toLowerCase() !== project.path.toLowerCase()
+                  ? project.name + ' / ' + (snap.record.cwd.split(/[\\/]/).pop() || '')
+                  : project.name,
+              path: snap?.record.cwd ?? project.path,
+            }
           : snap
             ? {
                 id: snap.record.projectId,

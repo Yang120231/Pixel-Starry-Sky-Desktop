@@ -323,13 +323,16 @@ export class SshConnection implements RemoteLink {
 
 /**
  * Windows 远端的终端命令：OpenSSH 默认用 cmd 或 PowerShell 执行，没有 `cd -- … && exec`。
- * PowerShell 用 -EncodedCommand 进目录（UTF-16LE base64，不经任何 shell 转义）；
- * cmd 用 /k 进目录，Windows 路径本就不能含双引号，百分号去掉免得被当成变量
+ * 都用 PowerShell 的 -EncodedCommand 进目录（UTF-16LE base64，不经任何 shell 转义，路径里的 `'`、`%`、`$` 都原样）。
+ * 要 cmd 时由 PowerShell 进目录后再起 cmd（PowerShell 起外部程序时把当前目录交给它），cmd 退出 PowerShell 也跟着退出；
+ * 不用 `cmd /k cd /d "…"`，那样路径里的 % 会被 cmd 当成变量展开
  */
 export function windowsShellCommand(cwd: string, shell: string): string {
   const name = win32.basename(shell).toLowerCase()
-  if (name === 'cmd.exe' || name === 'cmd') return `cmd.exe /d /k cd /d "${cwd.replace(/["%]/g, '')}"`
+  const enter = "Set-Location -LiteralPath '" + cwd.replaceAll("'", "''") + "'"
+  const encode = (script: string) => Buffer.from(script, 'utf16le').toString('base64')
+  if (name === 'cmd.exe' || name === 'cmd')
+    return `powershell.exe -NoLogo -NoProfile -EncodedCommand ${encode(enter + '; & cmd.exe /d; exit $LASTEXITCODE')}`
   const exe = name === 'pwsh.exe' || name === 'pwsh' ? 'pwsh.exe' : 'powershell.exe'
-  const script = "Set-Location -LiteralPath '" + cwd.replaceAll("'", "''") + "'"
-  return `${exe} -NoLogo -NoExit -EncodedCommand ${Buffer.from(script, 'utf16le').toString('base64')}`
+  return `${exe} -NoLogo -NoExit -EncodedCommand ${encode(enter)}`
 }

@@ -221,7 +221,7 @@ describe('SSH trust and loopback transport', () => {
     expect(command).not.toMatch(/[$%`\\]/)
     expect(decodeNodeScript(command)).toBe(script)
   })
-  it('Windows 终端：PowerShell 用 -EncodedCommand 进目录，cmd 用 /k cd /d', () => {
+  it('Windows 终端：PowerShell 用 -EncodedCommand 进目录，cmd 也由 PowerShell 进目录后再起', () => {
     const ps = windowsShellCommand("C:\\Users\\a'b\\proj", 'powershell.exe')
     const encoded = /-EncodedCommand (\S+)$/.exec(ps)![1]
     expect(ps.startsWith('powershell.exe -NoLogo -NoExit ')).toBe(true)
@@ -229,8 +229,12 @@ describe('SSH trust and loopback transport', () => {
     expect(windowsShellCommand('C:\\proj', 'C:\\Program Files\\PowerShell\\7\\pwsh.exe').startsWith('pwsh.exe ')).toBe(
       true,
     )
-    expect(windowsShellCommand('C:\\my proj', 'C:\\Windows\\system32\\cmd.exe')).toBe(
-      'cmd.exe /d /k cd /d "C:\\my proj"',
+    // 路径里的 % 不能被 cmd 当成变量：整段编码交给 PowerShell，命令行里只有 base64
+    const cmd = windowsShellCommand("C:\\my %PATH% a'b", 'C:\\Windows\\system32\\cmd.exe')
+    expect(cmd.startsWith('powershell.exe -NoLogo -NoProfile -EncodedCommand ')).toBe(true)
+    expect(cmd).not.toContain('%')
+    expect(Buffer.from(/-EncodedCommand (\S+)$/.exec(cmd)![1], 'base64').toString('utf16le')).toBe(
+      "Set-Location -LiteralPath 'C:\\my %PATH% a''b'; & cmd.exe /d; exit $LASTEXITCODE",
     )
   })
   it('连 Windows 远端：上传 helper、装命令行，helper 用 node -e 设好参数再加载', async () => {

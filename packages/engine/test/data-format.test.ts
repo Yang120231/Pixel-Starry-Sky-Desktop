@@ -1,11 +1,11 @@
 // 磁盘格式兼容：test/fixtures/data-v1 是按当前格式手写的最小数据目录，改格式时这里先报警。
 // 夹具只读：每个用例先复制到临时目录再用（EngineHost 构造时会整理用量文件）。
-import { cpSync } from 'node:fs'
+import { cpSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EngineHost } from '../src/host'
-import { Store } from '../src/store'
+import { eachLine, Store } from '../src/store'
 import { UsageStore } from '../src/usage'
 import { makeTmp, removeTmp } from './helpers/tmp'
 
@@ -85,6 +85,17 @@ describe('Store 读取 data-v1', () => {
     expect(store.loadItems(S2)).toEqual([])
   })
 
+  it('按行读：一块一块读，行和中文跨块也完整；空行、结尾没换行、比一块还长的行都照常', () => {
+    const file = join(data(), 'lines.txt')
+    const lines = ['第一行', '', 'abc对话条目xyz', '很长'.repeat(20), '最后一行没换行']
+    writeFileSync(file, lines.join('\n'))
+    for (const chunk of [1, 2, 3, 5, 7, 64]) {
+      const got: string[] = []
+      eachLine(file, l => got.push(l), chunk)
+      expect(got).toEqual(lines)
+    }
+  })
+
   it('对话条目：开始时写的位置为准；没等到完成的（包括后台子智能体的）读出时标成已中断', () => {
     const store = new Store(data())
     const S3 = '33333333-3333-4333-8333-333333333333'
@@ -107,6 +118,19 @@ describe('Store 读取 data-v1', () => {
     const items = store.loadItems(S3)
     expect(items.map(i => i.id)).toEqual(['task', 'sub', 'quick'])
     expect(items.map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['completed', 'interrupted', 'completed'])
+  })
+
+  it('整个重写条目：一条一条写、攒够约 1 MB 写一次，读出和写入的一致', () => {
+    const store = new Store(data())
+    const S5 = '55555555-5555-4555-8555-555555555555'
+    // 每条 40 万字：第三条时攒过 1 MB 写一次，第四条留到最后写
+    const items = [0, 1, 2, 3].map(
+      i => ({ kind: 'assistant', id: `a${i}`, text: `${i}${'字'.repeat(400_000)}`, status: 'completed' }) as const,
+    )
+    store.replaceItems(S5, items)
+    expect(store.loadItems(S5)).toEqual(items)
+    store.replaceItems(S5, items.slice(0, 1))
+    expect(store.loadItems(S5)).toEqual(items.slice(0, 1))
   })
 
   it('对话条目：以前存下的 Codex 配置类警告（警告或灰色提示）读出时去掉；别的警告不变', () => {

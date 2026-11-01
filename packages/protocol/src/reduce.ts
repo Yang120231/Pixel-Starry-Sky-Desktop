@@ -103,7 +103,12 @@ export function reduce(s: SessionSnapshot, e: EngineEvent): SessionSnapshot {
       let next: Item
       if (e.field === 'text' && (item.kind === 'assistant' || item.kind === 'reasoning')) {
         next = { ...item, text: item.text + e.delta }
-      } else if (e.field === 'output' && (item.kind === 'command' || item.kind === 'tool')) {
+      } else if (
+        e.field === 'output' &&
+        (item.kind === 'command' || item.kind === 'tool') &&
+        item.cutChars === undefined
+      ) {
+        // 输出截过的（cutItem，已不在跑）只留头尾，接上去就不是原文；增量本来也不落盘，完整的以磁盘为准
         next = { ...item, output: item.output + e.delta }
       } else {
         return s

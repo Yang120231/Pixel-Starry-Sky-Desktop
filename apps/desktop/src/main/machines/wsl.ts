@@ -230,10 +230,16 @@ export class WslConnection implements RemoteLink {
     let probe: WslProbe | null = null
     let startError: string | undefined
     try {
-      const out = await this.capture(probeArgs(distro, nodePath), Buffer.from(PROBE_SCRIPT), PROBE_TIMEOUT)
-      probe = parseProbe(decodeWslOutput(out.stdout))
-      if (!probe) {
-        startError = (decodeWslOutput(out.stderr).trim() || decodeWslOutput(out.stdout).trim()).slice(0, 2000)
+      // wsl.exe 偶尔什么都不输出就退出（机器忙、发行版刚唤醒）：只有完全没输出时再试一次，有报错就照实返回
+      for (let attempt = 0; attempt < 2 && !probe; attempt++) {
+        const out = await this.capture(probeArgs(distro, nodePath), Buffer.from(PROBE_SCRIPT), PROBE_TIMEOUT)
+        probe = parseProbe(decodeWslOutput(out.stdout))
+        if (probe) startError = undefined
+        else {
+          const text = (decodeWslOutput(out.stderr).trim() || decodeWslOutput(out.stdout).trim()).slice(0, 2000)
+          startError = text || `WSL_PROBE_EMPTY (exit ${out.code ?? '?'})`
+          if (text) break
+        }
       }
     } catch (error) {
       startError = (error as Error).message

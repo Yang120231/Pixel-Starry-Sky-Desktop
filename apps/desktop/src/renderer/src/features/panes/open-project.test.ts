@@ -86,3 +86,29 @@ describe('在指定项目下新建会话', () => {
     expect(engine.state.currentProjectId).toBe('p1')
   })
 })
+
+describe('不用项目的对话', () => {
+  beforeEach(() => {
+    engine.state.currentProjectId = 'p1'
+    engine.state.sessions = []
+  })
+
+  it.each(['chat', 'ssh-1a2b~chat'])('还没写东西的项目新标签换成对话（%s）：草稿记成对话、没有目录', chat => {
+    paneActions.open(null, { project: 'p1' })
+    const tab = focused()
+    paneActions.open(null, { project: chat })
+    expect(focused()).toBe(tab)
+    expect(draftWorkspace(tab)).toMatchObject({ projectId: chat, name: '', path: '' })
+    expect(engine.state.currentProjectId).toBe(chat)
+  })
+
+  it('从对话会话里开新标签：新标签也是对话，不沿用那个对话的文件夹', () => {
+    engine.state.sessions = [{ record: { id: 's-chat', projectId: 'chat', cwd: 'D:/chats/s-chat' } }]
+    paneActions.open('s-chat')
+    paneActions.open(null)
+    const tab = focused()
+    expect(isNewTab(tab)).toBe(true)
+    expect(draftWorkspace(tab)).toMatchObject({ projectId: 'chat', path: '' })
+    expect(draftWorkspace(tab)?.sessionId).toBeUndefined()
+  })
+})

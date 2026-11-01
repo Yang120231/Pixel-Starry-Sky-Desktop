@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectRecord, SessionSummary } from '@pixelsky/protocol'
-import { filterTasks, projectGroups, sessionList, sessionStatus, taskProjects } from './tasks'
+import { filterTasks, projectGroups, projectNameOf, sessionList, sessionStatus, taskProjects } from './tasks'
 
 const task = (
   id: string,
@@ -79,6 +79,18 @@ describe('任务搜索和筛选', () => {
     expect(groups[1].archived.map(s => s.record.id)).toEqual(['d'])
     expect(groups[3].sessions.map(s => s.record.id)).toEqual(['x'])
     expect(groups[3].archived.map(s => s.record.id)).toEqual(['y'])
+  })
+
+  it('项目分组：不用项目的对话自成「对话」组，排在「其他」前面，不进「其他」；行里的项目名写「对话」', () => {
+    const all = [...sessions, task('x', '孤儿', 'gone', 4), task('q', '随便问问', 'chat', 20)]
+    const groups = projectGroups(all, projects, () => 10)
+    expect(groups.map(g => g.project?.id ?? null)).toEqual(['app', 'web', 'empty', 'chat', null])
+    expect(groups[3].project?.name).toBe('对话')
+    expect(groups[3].sessions.map(s => s.record.id)).toEqual(['q'])
+    expect(groups[4].sessions.map(s => s.record.id)).toEqual(['x'])
+    expect(projectNameOf(projects, 'chat')).toBe('对话')
+    expect(projectNameOf(projects, 'web')).toBe('Website')
+    expect(projectNameOf(projects, 'gone')).toBe('')
   })
 
   it('项目分组：每组按自己的上限截断；只有归档会话的项目排在没有活动的位置；没有孤儿时没有「其他」', () => {

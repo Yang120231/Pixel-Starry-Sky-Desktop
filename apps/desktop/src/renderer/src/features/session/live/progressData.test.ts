@@ -37,6 +37,24 @@ describe('currentPlan', () => {
     expect(currentPlan(finished, true)).toBeNull()
   })
 
+  it('没做完的计划只延续到下一轮：再往后的对话不再显示（额度用完、中断后没勾完的旧计划）', () => {
+    const stale = [user('u1'), todo('t1', steps('pending', 'pending')), user('u2'), reply('a'), user('u3')]
+    expect(currentPlan(stale, true)).toBeNull()
+  })
+
+  it('自动发的「继续」（断线重连、额度恢复）和没送达的消息不算新的一轮', () => {
+    const auto: Item[] = [
+      user('u1'),
+      todo('t1', steps('completed', 'pending')),
+      user('u2'),
+      { kind: 'user', id: 'r1', text: '继续', createdAt: 0, reconnect: 1 },
+      { kind: 'user', id: 'l1', text: '继续', createdAt: 0, reconnect: 1, limit: { since: 0, at: 1 } },
+      { kind: 'user', id: 'd1', text: '没送到', createdAt: 0, dismissed: true },
+    ]
+    expect(currentPlan(auto, true)?.id).toBe('t1')
+    expect(turnKey(auto)).toBe('u2')
+  })
+
   it('空的待办跳过，没有待办时为 null', () => {
     expect(currentPlan([user('u1'), todo('t1', steps('pending')), todo('t2', [])], false)?.id).toBe('t1')
     expect(currentPlan([user('u1'), reply('a')], true)).toBeNull()

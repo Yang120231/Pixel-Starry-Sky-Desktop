@@ -7,6 +7,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { historyRead, historyTurns } from '@pixelsky/engine'
 import {
   ENGINES,
+  isChatProject,
   type EngineConfig,
   type Item,
   type PeekScope,
@@ -106,13 +107,17 @@ const oneLine = (value: string, max: number): string => {
   return flat.length > max ? `${flat.slice(0, max)}…` : flat
 }
 
-const scopeName = (scope: PeekScope, project: ProjectRecord | undefined): string =>
-  scope === 'all' ? '本机所有项目' : `同一个项目「${project?.name ?? '未知项目'}」`
-
 interface Caller {
   record: SessionRecord
   scope: PeekScope
 }
+
+const scopeName = (caller: Caller, project: ProjectRecord | undefined): string =>
+  caller.scope === 'all'
+    ? '本机所有项目'
+    : isChatProject(caller.record.projectId)
+      ? '这个对话'
+      : `同一个项目「${project?.name ?? '未知项目'}」`
 
 type Engine = NonNullable<ThreadsContext['engine']>
 
@@ -125,7 +130,9 @@ function visible(engine: Engine, caller: Caller): SessionSummary[] {
         s.record.id !== caller.record.id &&
         !s.record.archivedAt &&
         machineOf(s.record.id) === 'local' &&
-        (caller.scope === 'all' || s.record.projectId === caller.record.projectId),
+        // 不用项目的对话互不相干：「同一个项目」时每个对话只算它自己
+        (caller.scope === 'all' ||
+          (s.record.projectId === caller.record.projectId && !isChatProject(caller.record.projectId))),
     )
     .sort((a, b) => b.record.updatedAt - a.record.updatedAt)
 }
@@ -149,7 +156,7 @@ function listThreads(engine: Engine, caller: Caller, args: ToolArgs, now: number
   const limit = Math.min(Math.max(integer(args, 'limit') ?? LIST_DEFAULT, 1), LIST_MAX)
   const projects = new Map(engine.projects().map(p => [p.id, p]))
   const all = visible(engine, caller).filter(s => !q || s.record.title.toLowerCase().includes(q))
-  const range = scopeName(caller.scope, projects.get(caller.record.projectId))
+  const range = scopeName(caller, projects.get(caller.record.projectId))
   if (all.length === 0) return q ? `${range}里没有标题包含「${query.trim()}」的其他会话。` : `${range}里没有其他会话。`
   const shown = all.slice(0, limit)
   return [
@@ -167,7 +174,7 @@ async function readThread(engine: Engine, caller: Caller, args: ToolArgs, now: n
   if (!target)
     throw new Error(
       `看不到会话 ${id}：不存在、已归档，或不在用户允许查看的范围（${scopeName(
-        caller.scope,
+        caller,
         engine.projects().find(p => p.id === caller.record.projectId),
       )}）里。先用 list_threads 看能看哪些。`,
     )

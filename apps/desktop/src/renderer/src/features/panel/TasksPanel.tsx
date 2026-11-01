@@ -1,3 +1,4 @@
+import { isChatProject } from '@pixelsky/protocol'
 import { scrollInPane } from '@/ui/scrollInPane'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, Circle, Copy, ListChecks, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
@@ -44,10 +45,10 @@ export function TasksPanel() {
       <div className="shrink-0 px-3 pt-3">
         <TaskInbox />
       </div>
-      {context.projectId ? (
+      {context.projectId && !isChatProject(context.projectId) ? (
         <TasksBody key={context.projectId} projectId={context.projectId} name={context.name} demo={context.demo} />
       ) : (
-        <NoProject />
+        <NoProject chat={isChatProject(context.projectId)} />
       )}
     </div>
   )

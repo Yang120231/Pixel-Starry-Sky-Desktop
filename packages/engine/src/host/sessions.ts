@@ -1,15 +1,17 @@
 // 会话：创建、打开（懒创建运行时）、改设置、改名、置底、回退、归档、删除
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import {
   CHAT_PROJECT_ID,
+  cutItem,
   EFFORT_PANEL_KEYS,
   emptySnapshot,
   normalizeSessionTitle,
   PROVIDER_ID,
   sourceKey,
   type EngineId,
+  type Item,
   type OpenedSession,
   type SessionRecord,
   type SessionSettings,
@@ -24,6 +26,9 @@ import { NEW_TITLE } from './title'
 export class HostSessions {
   constructor(private readonly ctx: HostContext) {}
 
+  /** prepare 进行中的分块读 */
+  private readonly preparing = new Map<string, Promise<void>>()
+
   sessions(): SessionSummary[] {
     const { ctx } = this
     return [...ctx.records.values()]
@@ -32,11 +37,13 @@ export class HostSessions {
         const queue = ctx.m.queue.queueSummary(record.id)
         const snapshot = ctx.runtimes.get(record.id)?.snapshot
         const background = snapshot?.background ?? 0
+        const pending = snapshot?.pending[0]
         return {
           record,
           state: snapshot?.state ?? 'idle',
           ...(background ? { background } : {}),
           ...(queue ? { queue } : {}),
+          ...(pending ? { pending, pendingIds: snapshot.pending.map(p => p.requestId) } : {}),
         }
       })
   }
@@ -105,17 +112,51 @@ export class HostSessions {
   /** 会话的运行时；第一次访问时从磁盘读条目和队列，并排期续跑未完成的结算 */
   runtime(id: string): Runtime {
     const { ctx } = this
-    let rt = ctx.runtimes.get(id)
+    const rt = ctx.runtimes.get(id)
     if (rt) return rt
     const record = ctx.records.get(id)
     if (!record) throw new Error('会话不存在')
-    const snapshot = emptySnapshot(record, ctx.store.loadItems(id))
+    return this.build(record, ctx.store.loadItems(id))
+  }
+
+  /**
+   * 打开前先分块读条目、不卡主进程（docs/session-memory.md 第 4 期），读完建运行时；已载入的直接返回，同一会话同时只读一次。
+   * 读的期间别的同步调用建了运行时就丢掉读到的；文件大小和读到的对不上（期间被追加、换掉）就同步重读
+   */
+  prepare(id: string): Promise<void> {
+    const { ctx } = this
+    if (ctx.runtimes.has(id)) return Promise.resolve()
+    if (!ctx.records.has(id)) return Promise.reject(new Error('会话不存在'))
+    let reading = this.preparing.get(id)
+    if (!reading) {
+      reading = ctx.store
+        .loadItemsAsync(id)
+        .then(({ items, bytes }) => {
+          // 期间删掉了：交给之后的 openSession 报「会话不存在」
+          const record = ctx.records.get(id)
+          if (ctx.runtimes.has(id) || !record) return
+          if (ctx.store.itemsSize(id) !== bytes) this.runtime(id)
+          else this.build(record, items)
+        })
+        .finally(() => this.preparing.delete(id))
+      this.preparing.set(id, reading)
+    }
+    return reading
+  }
+
+  /** 用读出的条目建运行时（runtime 同步读、prepare 分块读共用）：补出来的条目、平台计费、队列、追踪数据、续跑结算 */
+  private build(record: SessionRecord, items: Item[]): Runtime {
+    const { ctx } = this
+    const id = record.id
+    const snapshot = emptySnapshot(record, items)
     const adapter = ctx.adapters[record.engine]
+    // 补出来的条目（Codex 旧版只存路径的看图条目）落盘完整的，内存里留截过的
     if (adapter?.restoreItem)
       snapshot.items = snapshot.items.map(item => {
         const restored = adapter.restoreItem!(record, item)
-        if (restored !== item) ctx.store.appendItem(id, restored)
-        return restored
+        if (restored === item) return item
+        ctx.store.appendItem(id, restored)
+        return cutItem(restored)
       })
     if (record.platform)
       snapshot.items = snapshot.items.map(item =>
@@ -143,7 +184,7 @@ export class HostSessions {
     } catch {
       // 读不到以前的追踪数据不影响打开会话
     }
-    rt = {
+    const rt: Runtime = {
       snapshot,
       seq: 0,
       session: null,
@@ -170,6 +211,21 @@ export class HostSessions {
     return this.runtime(id).snapshot
   }
 
+  /**
+   * 按 id 取一条完整条目（截掉的图片数据、长输出从磁盘补回）：已载入的从快照里找，补不回来给截过的那条；
+   * 没载入的从磁盘读，不建运行时。没有这一条为 null
+   */
+  item(id: string, itemId: string): Item | null {
+    const { ctx } = this
+    const items = ctx.runtimes.get(id)?.snapshot.items
+    if (!items) {
+      if (!ctx.records.has(id)) throw new Error('会话不存在')
+      return ctx.store.readItem(id, itemId)
+    }
+    const item = items.findLast(i => i.id === itemId)
+    return item ? (ctx.store.body(id, item) ?? item) : null
+  }
+
   openSession(id: string): OpenedSession {
     const rt = this.runtime(id)
     // 重启后还标着终端模式：当作已切回（docs/ui/tui-toggle.md §3.4）；补轮次异步做，先清标记让界面显示
@@ -179,6 +235,13 @@ export class HostSessions {
     }
     this.ctx.m.usage.resumeSettlements(id, rt.snapshot.items)
     return { snapshot: this.runtime(id).snapshot, seq: this.runtime(id).seq }
+  }
+
+  /** 会话记录（载入时和 snapshot.record 是同一份，apply 'record' 两边一起写）；不存在时报错，不创建运行时 */
+  stored(id: string): SessionRecord {
+    const record = this.ctx.records.get(id)
+    if (!record) throw new Error('会话不存在')
+    return record
   }
 
   /** 正在执行的设置（含运行中改过的）；没有运行时用会话记录。不创建运行时 */
@@ -323,10 +386,10 @@ export class HostSessions {
 
   renameSession(id: string, title: unknown): SessionRecord {
     if (this.ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
-    const name = normalizeSessionTitle(title),
-      rt = this.runtime(id)
+    const name = normalizeSessionTitle(title)
     const record = this.ctx.m.events.patchRecord(id, { title: name, titleEdited: true })
-    if (rt.execution) rt.execution = { ...rt.execution, title: name, titleEdited: true }
+    const rt = this.ctx.runtimes.get(id)
+    if (rt?.execution) rt.execution = { ...rt.execution, title: name, titleEdited: true }
     return record
   }
 
@@ -335,15 +398,22 @@ export class HostSessions {
    * 还没有任何条目的会话不加：加了它就不再算「没开始过」，之后换引擎会走接力而不是直接改（update 里的判断）
    */
   addNotice(id: string, level: 'info' | 'warn' | 'error', text: string): void {
-    const rt = this.runtime(id)
-    if (rt.snapshot.items.length === 0) return
-    this.ctx.m.events.apply(id, { type: 'item_completed', item: { kind: 'notice', id: randomUUID(), level, text } })
+    const { ctx } = this
+    const item = { kind: 'notice', id: randomUUID(), level, text } as const
+    const rt = ctx.runtimes.get(id)
+    if (rt) {
+      if (rt.snapshot.items.length > 0) ctx.m.events.apply(id, { type: 'item_completed', item })
+      return
+    }
+    if (!ctx.records.has(id)) throw new Error('会话不存在')
+    // 没载入的会话：只追加到磁盘（没人在看它，打开时读到），不为一条提示整份载入
+    if (ctx.store.hasItems(id)) ctx.store.appendItem(id, item)
   }
 
   setSessionBottom(id: string, bottomed: boolean): SessionRecord {
     if (this.ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
-    const rt = this.runtime(id)
-    if (Boolean(rt.snapshot.record.bottomedAt) === bottomed) return rt.snapshot.record
+    const current = this.stored(id)
+    if (Boolean(current.bottomedAt) === bottomed) return current
     const stamp = bottomed
       ? [...this.ctx.records.values()].reduce(
           (latest, record) => Math.max(latest, (record.bottomedAt ?? 0) + 1),
@@ -353,14 +423,15 @@ export class HostSessions {
     // 置底和置顶互斥：置底时取消置顶
     const patch = { bottomedAt: stamp, ...(bottomed ? { pinnedAt: null } : {}) }
     const record = this.ctx.m.events.patchRecord(id, patch)
-    if (rt.execution) rt.execution = { ...rt.execution, ...patch }
+    const rt = this.ctx.runtimes.get(id)
+    if (rt?.execution) rt.execution = { ...rt.execution, ...patch }
     return record
   }
 
   setSessionPinned(id: string, pinned: boolean): SessionRecord {
     if (this.ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
-    const rt = this.runtime(id)
-    if (Boolean(rt.snapshot.record.pinnedAt) === pinned) return rt.snapshot.record
+    const current = this.stored(id)
+    if (Boolean(current.pinnedAt) === pinned) return current
     // 时间戳只增不减，同一毫秒里连着置顶几个也分得出先后
     const stamp = pinned
       ? [...this.ctx.records.values()].reduce(
@@ -370,7 +441,8 @@ export class HostSessions {
       : null
     const patch = { pinnedAt: stamp, ...(pinned ? { bottomedAt: null } : {}) }
     const record = this.ctx.m.events.patchRecord(id, patch)
-    if (rt.execution) rt.execution = { ...rt.execution, ...patch }
+    const rt = this.ctx.runtimes.get(id)
+    if (rt?.execution) rt.execution = { ...rt.execution, ...patch }
     return record
   }
 
@@ -378,8 +450,13 @@ export class HostSessions {
     const { ctx } = this
     const m = ctx.m
     if (ctx.changingSessions.has(id)) throw new Error('正在处理这个会话，请稍后重试')
-    const rt = this.runtime(id)
-    if (Boolean(rt.snapshot.record.archivedAt) === archived) return
+    if (Boolean(this.stored(id).archivedAt) === archived) return
+    const rt = ctx.runtimes.get(id)
+    // 没载入的会话没有进程和任务可停：只改记录
+    if (!rt) {
+      m.events.patchRecord(id, { archivedAt: archived ? Date.now() : null })
+      return
+    }
     if (archived && (rt.snapshot.state !== 'idle' || rt.pumping || rt.stopping) && !stopRunning)
       throw new Error('SESSION_RUNNING')
     ctx.changingSessions.add(id)
@@ -428,7 +505,27 @@ export class HostSessions {
       m.queue.forget(id)
       // 记录删掉之后：一轮结束时的快照不会再开始，等正在跑的 git 结束再删目录
       await m.checkpoints.forget(id)
+      // 不用项目的对话：文件夹跟着走。分叉共用 chats/<原会话 ID>，最后一个用它的（含归档）删了才处理
+      const folder =
+        record?.projectId === CHAT_PROJECT_ID &&
+        dirname(record.cwd) === m.projects.chatRoot() &&
+        ![...ctx.records.values()].some(r => r.cwd === record.cwd)
+          ? record.cwd
+          : null
+      let full = false
       try {
+        full = !!folder && readdirSync(folder).length > 0
+      } catch {
+        // 已经不在了
+      }
+      const trash = full ? ctx.opts.trash : undefined
+      try {
+        // 有文件先回收：回收失败就报错、会话放回列表（对话框说的是移到回收站，不能留下找不到的文件夹）
+        if (trash)
+          await trash(folder!).catch(error => {
+            // 原对话和分叉同时删：另一边已经把文件夹移走了，这边也算删成
+            if (existsSync(folder!)) throw error
+          })
         ctx.store.deleteSession(id)
       } catch (error) {
         // 目录没删掉（被别的程序占着之类）：会话放回列表，可以再删一次，不会变成「会话已不存在」
@@ -437,12 +534,11 @@ export class HostSessions {
       } finally {
         m.events.broadcastSessions()
       }
-      // 不用项目的对话：它自己的文件夹跟着删（只删 chats/<会话 ID>，删不掉不影响）
-      if (record?.projectId === CHAT_PROJECT_ID && record.cwd === join(m.projects.chatRoot(), id))
+      if (folder && !trash)
         try {
-          rmSync(record.cwd, { recursive: true, force: true, maxRetries: 2 })
+          rmSync(folder, { recursive: true, force: true, maxRetries: 2 })
         } catch {
-          // 被别的程序占着之类：留下空壳文件夹也无妨
+          // 空文件夹被占着之类：留下也无妨
         }
     } finally {
       ctx.changingSessions.delete(id)

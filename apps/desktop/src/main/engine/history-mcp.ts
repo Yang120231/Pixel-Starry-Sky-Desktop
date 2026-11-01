@@ -19,7 +19,7 @@ export const HISTORY_SERVER_NAME = 'pixelsky_history'
 
 /** 引擎宿主里这个服务用到的部分（EngineHost 满足） */
 export interface HistoryContext {
-  engine: { historyItems(id: string): Promise<readonly Item[]> } | null
+  engine: { historyItems(id: string): Promise<readonly Item[]>; body(id: string, item: Item): Item | null } | null
 }
 
 export type HistoryEntry = LocalMcpEntry
@@ -80,16 +80,17 @@ const TOOLS = [
 const INSTRUCTIONS =
   '只读地查询当前像素星空对话的历史。这段对话可能先后由不同的 AI 引擎处理过；需要更早几轮的细节时先 outline，再 read 或 search，不要凭印象猜。'
 
-function run(name: string, args: Args, items: readonly Item[]): string {
+async function run(name: string, args: Args, items: readonly Item[], body: (item: Item) => Item): Promise<string> {
   if (name === 'outline') return historyOutline(items, { page: integer(args, 'page') })
   if (name === 'read') {
     const turn = integer(args, 'turn')
     if (turn === undefined) throw new Error('缺少参数 turn')
+    // 命令输出只取末尾 2000 字，在截过的输出留下的尾巴里（CUT_EDGE），不用补
     return historyRead(items, { turn, count: integer(args, 'count') })
   }
   if (name === 'search') {
     if (typeof args.query !== 'string') throw new Error('缺少参数 query（字符串）')
-    return historySearch(items, { query: args.query, limit: integer(args, 'limit') })
+    return historySearch(items, { query: args.query, limit: integer(args, 'limit'), body })
   }
   throw new Error(`没有这个工具：${name}`)
 }
@@ -103,9 +104,12 @@ function mcpServer(ctx: HistoryContext, sessionId: string): Server {
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
   server.setRequestHandler(CallToolRequestSchema, async request => {
     try {
-      if (!ctx.engine) return text('引擎还没有就绪，稍后再试。', true)
-      const items = await ctx.engine.historyItems(sessionId)
-      return text(run(request.params.name, (request.params.arguments ?? {}) as Args, items))
+      const { engine } = ctx
+      if (!engine) return text('引擎还没有就绪，稍后再试。', true)
+      const items = await engine.historyItems(sessionId)
+      // 引擎在跑时才会调，会话已载入：按位置读一行
+      const body = (item: Item) => engine.body(sessionId, item) ?? item
+      return text(await run(request.params.name, (request.params.arguments ?? {}) as Args, items, body))
     } catch (error) {
       return text(error instanceof Error ? error.message : String(error), true)
     }

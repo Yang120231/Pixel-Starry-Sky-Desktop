@@ -6,12 +6,17 @@ import { getFiles, useFiles } from '@/features/files/store'
 import { isDemo, projects } from '@/data'
 import type { WorkspaceRef } from '../../../../shared/types/workspace'
 import { draftWorkspace } from '@/features/machines/drafts'
+import { isChatProject } from '@pixelsky/protocol'
+import { orChat } from '@/features/engine/sidebarData'
+import { tr } from '@/i18n/core'
 
 export interface ActiveWorkspace {
   ref: WorkspaceRef | null
   name: string
   path: string
   key: string
+  /** 欢迎页选了「对话」、还没发第一条消息：还没有文件夹（ref 为 null） */
+  chat?: true
 }
 
 type EngineState = ReturnType<typeof getEngineState>
@@ -62,7 +67,7 @@ function resolveWorkspace(tab: string | null, state: EngineState, files: FilesSt
         const p = state.projects.find(p => p.id === record?.projectId)
         return p && record && p.path.toLowerCase() !== record.cwd.toLowerCase()
           ? p.name + ' / ' + record.cwd.split(/[\\/]/).pop()
-          : (p?.name ?? record?.title ?? '')
+          : (orChat(p?.name, record?.projectId) ?? record?.title ?? '')
       })(),
       path: record?.cwd ?? '',
       key: tab,
@@ -70,6 +75,9 @@ function resolveWorkspace(tab: string | null, state: EngineState, files: FilesSt
   }
   const project = state.projects.find(p => p.id === state.currentProjectId)
   const draft = tab ? draftWorkspace(tab) : null
+  // 对话没有工作目录：不给 ref，面板、终端不会拿 { projectId: 'chat' } 去主进程解析（解析不了）
+  if (isChatProject(draft ? draft.projectId : !project ? state.currentProjectId : null))
+    return { ref: null, name: tr('sidebar.Sidebar.chat'), path: '', key: tab ?? '', chat: true }
   if (draft)
     return {
       ref: draft.sessionId ? { sessionId: draft.sessionId } : { projectId: draft.projectId },
@@ -95,5 +103,8 @@ export function projectOfTab(tab: string): string | null {
     state.snapshots[ref.sessionId!]?.record ?? state.sessions.find(s => s.record.id === ref.sessionId)?.record
   return record?.projectId ?? null
 }
+
+/** 欢迎页选了「对话」、还没发第一条消息：面板显示「这个对话还没有文件夹」 */
+export const useFolderlessChat = (): boolean => useActiveWorkspace().chat === true
 
 export { keyRef, refKey } from './refKey'
